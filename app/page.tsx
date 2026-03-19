@@ -9,6 +9,10 @@ export default function Home() {
   const router = useRouter();
   return (
     <div className={styles.page}>
+      <main style={{ textAlign: "center", marginTop: "100px" }}>
+        <h1>SoPra FS26</h1>
+        <h2>Group 11</h2>
+      </main>
       <main className={styles.main}>
         <Image
           className={styles.logo}
