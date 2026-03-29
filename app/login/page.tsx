@@ -22,10 +22,10 @@ const Login: React.FC = () => {
 
   const handleLogin = async (values: FormFieldProps) => {
     try {
-      const response = await apiService.post<User>("/users", values);
+      const response = await apiService.post<User>("/login", values);
 
       if (response.token) setToken(response.token);
-      router.push("/users");
+      router.replace("/users");
     } catch (error) {
       if (error instanceof Error) {
         alert(`Something went wrong during the login:\n${error.message}`);
@@ -85,7 +85,7 @@ const Login: React.FC = () => {
         
         {/* Sign Up Text */}
         <p className={styles["sign-up-text"]}>
-          Don't have an account yet?{" "}
+          Don&apos;t have an account yet?{" "}
           <span
             className={styles["sign-up-link"]}
             onClick={() => router.push("/register")}
