@@ -9,7 +9,6 @@ export class ApiService {
     this.baseURL = getApiDomain();
     this.defaultHeaders = {
       "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
     };
   }
 
@@ -64,7 +63,7 @@ export class ApiService {
     const url = `${this.baseURL}${endpoint}`;
     const res = await fetch(url, {
       method: "GET",
-      headers: this.defaultHeaders,
+      headers: this.getAuthHeaders(),
     });
     return this.processResponse<T>(
       res,
@@ -101,7 +100,7 @@ export class ApiService {
     const url = `${this.baseURL}${endpoint}`;
     const res = await fetch(url, {
       method: "PUT",
-      headers: this.defaultHeaders,
+      headers: this.getAuthHeaders(),
       body: JSON.stringify(data),
     });
     return this.processResponse<T>(
@@ -119,11 +118,27 @@ export class ApiService {
     const url = `${this.baseURL}${endpoint}`;
     const res = await fetch(url, {
       method: "DELETE",
-      headers: this.defaultHeaders,
+      headers: this.getAuthHeaders(),
     });
     return this.processResponse<T>(
       res,
       "An error occurred while deleting the data.\n",
     );
+  }
+
+  private getAuthHeaders(): HeadersInit {
+    let token: string | null = null;
+
+    try {
+      const raw = localStorage.getItem("token");
+      token = raw ? (JSON.parse(raw) as string) : null;
+    } catch {
+      token = null;
+    }
+
+    return {
+      ...this.defaultHeaders,
+      ...(token ? { Authorization: token }  : {})
+    };
   }
 }
