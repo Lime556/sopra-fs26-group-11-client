@@ -34,8 +34,8 @@ reason).
 
 | **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
-| **@Gresay** | 29.03. | 2bc1e58d112cbd625750ea20aaaae5a83d9aa3be | Static gameboard Description | Having a baselayer for the game to be implemented on |
-|                    | 29.03. | 2bc1e58d112cbd625750ea20aaaae5a83d9aa3be | Numbering values of boardstate | Giving context for each hexagon for later dice action |
+| **@Gresay** | 24.03. | 16e79d227b4f9f8db841d0f41466ce736258d81a | Static gameboard Description(#96)| Having a baselayer for the game to be implemented on |
+|                    | 24.03. | 2bc1e58d112cbd625750ea20aaaae5a83d9aa3be | Numbering values of boardstate(#97) | Giving context for each hexagon for later dice action |
 | **[@githubUser2]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
