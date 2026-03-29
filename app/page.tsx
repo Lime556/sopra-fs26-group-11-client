@@ -80,9 +80,9 @@ export default function Home() {
           <Button
             type="primary"
             variant="solid"
-            onClick={() => router.push("/login")}
+            onClick={() => router.push("/register")}
           >
-            Go to login
+            Go to register
           </Button>
         </div>
       </main>
