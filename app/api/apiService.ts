@@ -81,7 +81,7 @@ export class ApiService {
     const url = `${this.baseURL}${endpoint}`;
     const res = await fetch(url, {
       method: "POST",
-      headers: this.defaultHeaders,
+      headers: this.getAuthHeaders(),
       body: JSON.stringify(data),
     });
     return this.processResponse<T>(
