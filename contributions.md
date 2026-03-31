@@ -36,11 +36,13 @@ reason).
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
 | **@Gresay** | 24.03. | 16e79d227b4f9f8db841d0f41466ce736258d81a | Static gameboard Description(#96)| Having a baselayer for the game to be implemented on |
 |                    | 24.03. | 2bc1e58d112cbd625750ea20aaaae5a83d9aa3be | Numbering values of boardstate(#97) | Giving context for each hexagon for later dice action |
-| **[@githubUser2]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **@ayleenmr** | 28.03.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/0e6d5701b75b24df50fa7e0605f5cb70e1150a41#diff-d2ddb22581eade88ed6c44d09735a2127cc51719a53aa0cbdb4238fe7c15f932 https://github.com/Lime556/sopra-fs26-group-11-client/commit/81a68682187c11404716ca76dd30d9a9172ef956 | Implemented Login UI (#7), added login functionality (#36) in the backend and added test coverage. | As part of user story 2, it is essential for users to be able to log in via the login interface, so that they can play the game. |
+|                    | 31.03.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/2bccff6b0073e051680d6cf02f486d5dd39795de https://github.com/Lime556/sopra-fs26-group-11-server/commit/5e08b75bc03e590d80087991ccb87c91595c75ab | Implemented logout functionality (#39) and added test coverage (#44). | As part of user story 2, users need to be able to log out of their accounts. This ensures that tokens are handled correctly and authentication is ensured. |    
 | **@CaroAW** | [29.03.]   | https://github.com/Lime556/sopra-fs26-group-11-server/pull/217/changes/954e541a7c39a50e9fbd02d56499146ab91e975f | [Implement lobby join functionality (#66)] | A functional lobby is a big part of our game. It is the whole purpose of the game to be able to play with other, so a lobby is needed to join others. |
 |                    | [29.03]   | https://github.com/Lime556/sopra-fs26-group-11-server/pull/217/changes/954e541a7c39a50e9fbd02d56499146ab91e975f | Validate lobby capacity and handle join errors (#67) | There is a fixed amount of players in one game and that capacity must be validated. Join errors must occur in certeain instances. |
 | **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
+|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **[@githubUser5]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 
 ---
