@@ -6,7 +6,7 @@ import useLocalStorage from "@/hooks/useLocalStorage";
 import { User } from "@/types/user";
 import { Button, Form, Input } from "antd";
 import { UserOutlined, LockOutlined } from "@ant-design/icons";
-import styles from "@/styles/login.module.css";
+import styles from "@/styles/login-register.module.css";
 
 interface FormFieldProps {
   username: string;
@@ -36,7 +36,7 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className={styles["login-container"]}>
+    <div className={styles["login-register-container"]}>
       <div className={styles.card}>
         <h1>Settlers of Catan</h1>
         <p>Welcome back!</p>
@@ -76,7 +76,7 @@ const Login: React.FC = () => {
           <Form.Item>
             <Button
               htmlType="submit"
-              className={styles["login-button"]}
+              className={styles["login-register-button"]}
             >
               Login
             </Button>
@@ -84,10 +84,10 @@ const Login: React.FC = () => {
         </Form>
         
         {/* Sign Up Text */}
-        <p className={styles["sign-up-text"]}>
+        <p className={styles["sign-up-login-text"]}>
           Don&apos;t have an account yet?{" "}
           <span
-            className={styles["sign-up-link"]}
+            className={styles["sign-up-login-link"]}
             onClick={() => router.push("/register")}
           >
             Sign up
