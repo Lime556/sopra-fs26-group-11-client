@@ -42,8 +42,13 @@ reason).
 |                    | [29.03]   | https://github.com/Lime556/sopra-fs26-group-11-server/pull/217/changes/954e541a7c39a50e9fbd02d56499146ab91e975f | Validate lobby capacity and handle join errors (#67) | There is a fixed amount of players in one game and that capacity must be validated. Join errors must occur in certeain instances. |
 | **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
-| **[@githubUser5]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **[@Lime556]** | [26.03]   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/a06a83124d352af324a3a318dc7e9b6fe2913df8 | Create POST /users endpoint to handle user registration requests (#29) | [Why this contribution is relevant] |
+|                    | [27.3]   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/99b4fc200b64c5d7d4ea1408c6c12673f0f6ac21 | Validate input (username, password) and store new user in the database (#30) | [Why this contribution is relevant] |
+|                    | [27.3]   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/506379b7ca6a8faad9b272f4e383b2f8b50e3824 | Automatically authenticate user after successful registration (#31) | [Why this contribution is relevant] |
+|                    | [29.3]   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/a8df270dc7f9da492e5704e2774613a07f87e27f | Create registration form with input fields (#4) | [Why this contribution is relevant] |
+|                    | [29.3]   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/de26fe3b6d37da1f6bee9e3ebc088f701db0accc | Send registration request to backend and handle response (#4) | [Why this contribution is relevant] |
+|                    | [29.3]   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/b24cbdb767a036cf4945145d753b3d88b8273030 | Handle registration errors and feedback in UI (#6) | [Why this contribution is relevant] |
+|                    | [31.3]   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/552d804538112b332173ce6ff4bed1a82813507e | Add email functionality, as well as register page redesign (#51) | [Why this contribution is relevant] |
 
 ---
 
