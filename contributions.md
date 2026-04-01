@@ -42,6 +42,11 @@ reason).
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **@Ziske11** | 29.03.   | (https://github.com/Lime556/sopra-fs26-group-11-server/commit/b3813dda3d87de7e9f637bb48b5584b27e549be2) | Added Lobby creation functionality | We need to be able to join a lobyy to even start a Game |
 |                    | 29.03.  | (https://github.com/Lime556/sopra-fs26-group-11-server/commit/f0b61d609ff77d36269c782cb2ceb356be5082dd) | Added lobby persistance to database | We want to be able to add lobbies to a database, so that we can keep track of all lobbies and players can join a chosen lobby and play a game |
+|                    | 31.03.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/2bccff6b0073e051680d6cf02f486d5dd39795de https://github.com/Lime556/sopra-fs26-group-11-server/commit/5e08b75bc03e590d80087991ccb87c91595c75ab | Implemented logout functionality (#39) and added test coverage (#44). | As part of user story 2, users need to be able to log out of their accounts. This ensures that tokens are handled correctly and authentication is ensured. |    
+| **@CaroAW** | [29.03.]   | https://github.com/Lime556/sopra-fs26-group-11-server/pull/217/changes/954e541a7c39a50e9fbd02d56499146ab91e975f | [Implement lobby join functionality (#66)] | A functional lobby is a big part of our game. It is the whole purpose of the game to be able to play with other, so a lobby is needed to join others. |
+|                    | [29.03]   | https://github.com/Lime556/sopra-fs26-group-11-server/pull/217/changes/954e541a7c39a50e9fbd02d56499146ab91e975f | Validate lobby capacity and handle join errors (#67) | There is a fixed amount of players in one game and that capacity must be validated. Join errors must occur in certeain instances. |
+| **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
+|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser5]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 
