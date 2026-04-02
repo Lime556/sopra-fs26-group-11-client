@@ -50,7 +50,7 @@ const Dashboard: React.FC = () => {
 
       // Clear frontend auth data
       localStorage.removeItem("token");
-      localStorage.removeItem("userId"); // optional, if you store it
+      localStorage.removeItem("userId");
 
       router.push("/login");
     } catch (error: unknown) {
