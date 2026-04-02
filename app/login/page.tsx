@@ -25,7 +25,7 @@ const Login: React.FC = () => {
       const response = await apiService.post<User>("/login", values);
 
       if (response.token) setToken(response.token);
-      router.replace("/users");
+      router.replace("/lobby");
     } catch (error) {
       if (error instanceof Error) {
         alert(`Something went wrong during the login:\n${error.message}`);

@@ -46,7 +46,7 @@ export default function Register() {
       if (response.token) setToken(response.token);
       if (response.id) setUserId(String(response.id));
 
-      router.replace("/users")
+      router.replace("/login")
       return;
     } catch (error) {
       if (error instanceof Error) {
