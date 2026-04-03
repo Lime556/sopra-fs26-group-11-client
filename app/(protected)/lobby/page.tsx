@@ -64,7 +64,7 @@ export default function Lobby() {
   const handleLogout = async () => {
     try {
       if (userId) {
-        await apiService.put(`/users/${userId}/logout`, null);
+        await apiService.post("/logout", null);
       }
     } catch (error: unknown) {
       if (error instanceof Error) {
