@@ -7,7 +7,7 @@ import { User } from "@/types/user";
 import { Button, Form, Input } from "antd";
 import { mapApiErrorToFields } from "@/utils/mapApiErrorToFields";
 import { useState } from "react";
-import { UserOutlined, LockOutlined } from "@ant-design/icons";
+import { UserOutlined, MailOutlined, LockOutlined } from "@ant-design/icons";
 import styles from "@/styles/login-register.module.css";
 // Optionally, you can import a CSS module or file for additional styling:
 // import styles from "@/styles/page.module.css";
@@ -105,7 +105,7 @@ export default function Register() {
             rules={[{ required: true, message: "Enter an email!" }]}
           >
             <div className={styles["input-wrapper"]}>
-              <UserOutlined className={styles["input-icon"]} />
+              <MailOutlined className={styles["input-icon"]} />
               <Input placeholder="Enter an email" />
             </div>
           </Form.Item>
