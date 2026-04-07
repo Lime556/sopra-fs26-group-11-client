@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
@@ -15,7 +15,6 @@ import FriendsTab, { FriendRequest } from "@/components/lobby/FriendsTab";
 import FriendDetailTab, { Friend } from "@/components/lobby/FriendDetailTab";
 import {
   mockFriendRequests,
-  mockLobbies,
   mockFriends,
 } from "@/components/lobby/mockData";
 
@@ -23,6 +22,25 @@ import styles from "@/styles/lobby.module.css";
 
 
 export default function Lobby() {
+  interface LobbyGetDTO {
+    id: number;
+    name: string;
+    capacity: number;
+    currentPlayers: number;
+    privateLobby: boolean;
+  }
+
+  interface LobbyPostDTO {
+    name?: string;
+    capacity?: number;
+    password?: string;
+  }
+
+  interface LobbyJoinDTO {
+    lobbyId: number;
+    password?: string;
+  }
+
   const apiService = useApi();
   const router = useRouter();
 
@@ -58,8 +76,33 @@ export default function Lobby() {
   
   // Mock friend requests
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>(mockFriendRequests);
-  const [lobbies] = useState<LobbyItem[]>(mockLobbies);
+  const [lobbies, setLobbies] = useState<LobbyItem[]>([]);
   const [friends] = useState<Friend[]>(mockFriends);
+
+  const mapLobbyFromApi = (lobby: LobbyGetDTO): LobbyItem => ({
+    id: lobby.id,
+    name: lobby.name,
+    capacity: lobby.capacity,
+    currentPlayers: lobby.currentPlayers,
+    privateLobby: lobby.privateLobby,
+  });
+
+  const loadLobbies = async () => {
+    try {
+      const lobbyData = await apiService.get<LobbyGetDTO[]>("/lobbies");
+      setLobbies(lobbyData.map(mapLobbyFromApi));
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Failed to load lobbies:", error.message);
+      } else {
+        console.error("Failed to load lobbies:", error);
+      }
+    }
+  };
+
+  useEffect(() => {
+    void loadLobbies();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -80,7 +123,7 @@ export default function Lobby() {
   };
 
   const handleJoinClick = (lobby: LobbyItem) => {
-    if (lobby.isPrivate) {
+    if (lobby.privateLobby) {
       setSelectedLobby(lobby);
       setShowPasswordModal(true);
       setPassword("");
@@ -90,7 +133,7 @@ export default function Lobby() {
     }
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!password) {
@@ -98,14 +141,22 @@ export default function Lobby() {
       return;
     }
 
-    // Mock password validation (in real app, this would be server-side)
-    const correctPassword = "catan123"; // Demo password
-    if (password === correctPassword) {
+    if (!selectedLobby) {
+      return;
+    }
+
+    try {
+      const payload: LobbyJoinDTO = {
+        lobbyId: selectedLobby.id,
+        password,
+      };
+
+      await apiService.post<LobbyGetDTO>(`/lobbies/${selectedLobby.id}/join`, payload);
       setShowPasswordModal(false);
-      if (selectedLobby) {
-        joinLobby(selectedLobby.id);
-      }
-    } else {
+      setPassword("");
+      setSelectedLobby(null);
+      await loadLobbies();
+    } catch {
       setPasswordError("Incorrect password");
     }
   };
@@ -117,9 +168,18 @@ export default function Lobby() {
     setSelectedLobby(null);
   };
 
-  const joinLobby = (lobbyId: number) => {
-    console.log("Joining lobby", lobbyId);
-    router.push(`/gameboard?gameId=${lobbyId}`);
+  const joinLobby = async (lobbyId: number) => {
+    try {
+      const payload: LobbyJoinDTO = { lobbyId };
+      await apiService.post<LobbyGetDTO>(`/lobbies/${lobbyId}/join`, payload);
+      await loadLobbies();
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Joining lobby failed:", error.message);
+      } else {
+        console.error("Joining lobby failed:", error);
+      }
+    }
   };
 
   const handleSearchFriend = () => {
@@ -165,7 +225,7 @@ export default function Lobby() {
     setCreateLobbyError("");
   };
 
-  const handleCreateLobbySubmit = (e: React.FormEvent) => {
+  const handleCreateLobbySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!newLobbyName.trim()) {
@@ -178,15 +238,23 @@ export default function Lobby() {
       return;
     }
 
-    // In real app, this would create lobby on backend
-    console.log("Creating lobby:", {
-      name: newLobbyName,
-      isPrivate: newLobbyIsPrivate,
-      password: newLobbyPassword
-    });
+    try {
+      const payload: LobbyPostDTO = {
+        name: newLobbyName.trim(),
+        capacity: 4,
+        password: newLobbyIsPrivate ? newLobbyPassword.trim() : undefined,
+      };
 
-    setShowCreateLobbyModal(false);
-    router.push("/gameboard");
+      const createdLobby = await apiService.post<LobbyGetDTO>("/lobbies", payload);
+      setLobbies((prev) => [mapLobbyFromApi(createdLobby), ...prev]);
+      handleCloseCreateLobbyModal();
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setCreateLobbyError(error.message);
+      } else {
+        setCreateLobbyError("Failed to create lobby");
+      }
+    }
   };
 
   const renderContent = () => {
