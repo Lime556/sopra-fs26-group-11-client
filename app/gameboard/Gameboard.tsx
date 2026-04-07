@@ -39,10 +39,20 @@ export interface Player {
 
 export interface GameState {
 	hexes: HexTile[];
+	ports: PortVisual[];
 	players: Player[];
 	currentPlayerId: number;
 	diceResult: [number, number] | null;
 	robberHexId: number | null;
+}
+
+type PortType = "3:1" | ResourceType;
+
+interface PortVisual {
+	id: number;
+	type: PortType;
+	hexId: number;
+	corners: [number, number];
 }
 
 type TradeMode = "bank" | "player";
@@ -53,7 +63,16 @@ interface BoardGetDTO {
 	intersections: boolean[];
 	edges: boolean[];
 	ports: string[];
+	boats?: BoatGetDTO[];
 	hexTile_DiceNumbers: number[];
+}
+
+interface BoatGetDTO {
+	id?: number;
+	boatType?: string;
+	hexId?: number;
+	firstCorner?: number;
+	secondCorner?: number;
 }
 
 interface GameGetDTO {
@@ -105,7 +124,7 @@ const bankResourceColorByType: Record<ResourceType, string> = {
 
 const developmentCardsRemaining = 21;
 
-// Follows the board layout from the src guideline component (game-board.tsx).
+
 const boardCoordinatesById: Record<number, { x: number; y: number }> = {
 	1: { x: 1, y: 0 },
 	2: { x: 2, y: 0 },
@@ -157,10 +176,116 @@ function calculateHexPoints(centerX: number, centerY: number) {
 function createInitialGameState(): GameState {
 	return {
 		hexes: [],
+		ports: [],
 		currentPlayerId: 0,
 		diceResult: null,
 		players: [],
 		robberHexId: null,
+	};
+}
+
+function mapServerPortType(type: string | undefined): PortType {
+	if (!type) {
+		return "3:1";
+	}
+
+	switch (type.toUpperCase()) {
+		case "WOOD":
+			return "wood";
+		case "BRICK":
+			return "brick";
+		case "SHEEP":
+			return "wool";
+		case "WHEAT":
+			return "grain";
+			case "STONE":
+		case "ORE":
+			return "ore";
+			case "STANDARD":
+				return "3:1";
+		case "3:1":
+		case "THREE_TO_ONE":
+		case "ANY":
+			return "3:1";
+		default:
+			return "3:1";
+	}
+}
+
+function mapBoardDtoToPorts(boardDto: BoardGetDTO): PortVisual[] {
+	if (!Array.isArray(boardDto.boats)) {
+		return [];
+	}
+
+	return boardDto.boats
+		.filter((boat): boat is BoatGetDTO =>
+			boat !== undefined
+			&& boat !== null
+			&& typeof boat.hexId === "number"
+			&& typeof boat.firstCorner === "number"
+			&& typeof boat.secondCorner === "number"
+		)
+		.map((boat, index) => ({
+			id: boat.id ?? index + 1,
+			type: mapServerPortType(boat.boatType),
+			hexId: boat.hexId as number,
+			corners: [boat.firstCorner as number, boat.secondCorner as number],
+		}));
+}
+
+function getPortColor(type: PortType): string {
+	if (type === "3:1") {
+		return "#8b4513";
+	}
+
+	const colors: Record<ResourceType, string> = {
+		wood: "#22c55e",
+		brick: "#ef4444",
+		wool: "#a3e635",
+		grain: "#fbbf24",
+		ore: "#64748b",
+	};
+
+	return colors[type];
+}
+
+function getPortLabel(type: PortType): string {
+	return type === "3:1" ? "3:1" : "2:1";
+}
+
+function getPortIcon(type: PortType): string {
+	switch (type) {
+		case "wood":
+			return "🌲";
+		case "brick":
+			return "🧱";
+		case "wool":
+			return "🐑";
+		case "grain":
+			return "🌾";
+		case "ore":
+			return "⛰️";
+		default:
+			return "?";
+	}
+}
+
+function calculatePortPosition(centerX: number, centerY: number, corner1Index: number, corner2Index: number, distance: number) {
+	const corner1 = getCornerPoint(centerX, centerY, corner1Index);
+	const corner2 = getCornerPoint(centerX, centerY, corner2Index);
+
+	const midX = (corner1.x + corner2.x) / 2;
+	const midY = (corner1.y + corner2.y) / 2;
+
+	const dx = midX - centerX;
+	const dy = midY - centerY;
+	const length = Math.sqrt(dx * dx + dy * dy);
+
+	return {
+		portX: centerX + (dx / length) * (length + distance),
+		portY: centerY + (dy / length) * (length + distance),
+		corner1,
+		corner2,
 	};
 }
 
@@ -227,6 +352,16 @@ export default function Gameboard() {
 	const [targetPlayerId, setTargetPlayerId] = useState<number | null>(null);
 	const [showTradePopup, setShowTradePopup] = useState<boolean>(false);
 	const [chatMessage, setChatMessage] = useState<string>("");
+	const ports = Array.isArray(state.ports) ? state.ports : [];
+
+	useEffect(() => {
+		if (!Array.isArray(state.ports)) {
+			setState((previousState) => ({
+				...previousState,
+				ports: [],
+			}));
+		}
+	}, [state.ports]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -240,9 +375,11 @@ export default function Gameboard() {
 
 				if (!cancelled && boardDto?.hexTiles && boardDto?.hexTile_DiceNumbers) {
 					const mappedHexes = mapBoardDtoToHexes(boardDto);
+					const mappedPorts = mapBoardDtoToPorts(boardDto);
 					setState((previousState) => ({
 						...previousState,
 						hexes: mappedHexes,
+						ports: mappedPorts,
 						robberHexId: gameDto?.robberTileIndex ?? findDesertHexId(mappedHexes),
 					}));
 					setBoardStatus("");
@@ -287,9 +424,11 @@ export default function Gameboard() {
 
 			if (createdGame.board?.hexTiles && createdGame.board?.hexTile_DiceNumbers && !cancelled) {
 				const mappedHexes = mapBoardDtoToHexes(createdGame.board as BoardGetDTO);
+				const mappedPorts = mapBoardDtoToPorts(createdGame.board as BoardGetDTO);
 				setState((previousState) => ({
 					...previousState,
 					hexes: mappedHexes,
+					ports: mappedPorts,
 					robberHexId: createdGame.robberTileIndex ?? findDesertHexId(mappedHexes),
 				}));
 				setBoardStatus("");
@@ -665,6 +804,74 @@ export default function Gameboard() {
 								);
 							})}
 						</g>
+
+						{ports.map((port) => {
+							const connectedHex = hexById.get(port.hexId);
+							if (!connectedHex) {
+								return null;
+							}
+
+							const { cx: hexCenterX, cy: hexCenterY } = toPixel(connectedHex);
+							const portDistance = 45;
+							const { portX, portY, corner1, corner2 } = calculatePortPosition(
+								hexCenterX,
+								hexCenterY,
+								port.corners[0],
+								port.corners[1],
+								portDistance
+							);
+
+							let edgeAngle = (Math.atan2(corner2.y - corner1.y, corner2.x - corner1.x) * 180) / Math.PI;
+							if (port.id === 1 || port.id === 2) {
+								edgeAngle += 180;
+							}
+
+							const outwardX = portX - hexCenterX;
+							const outwardY = portY - hexCenterY;
+							const edgeX = corner2.x - corner1.x;
+							const edgeY = corner2.y - corner1.y;
+							const perpX = -edgeY;
+							const perpY = edgeX;
+							const dotProduct = perpX * outwardX + perpY * outwardY;
+							const sailSide = dotProduct < 0 ? 1 : -1;
+
+							return (
+								<g key={`port-${port.id}`}>
+									<line x1={portX} y1={portY} x2={corner1.x} y2={corner1.y} stroke="#654321" strokeWidth={3} strokeLinecap="round" />
+									<line x1={portX} y1={portY} x2={corner2.x} y2={corner2.y} stroke="#654321" strokeWidth={3} strokeLinecap="round" />
+
+									<g transform={`translate(${portX}, ${portY}) rotate(${edgeAngle})`}>
+										<path d="M-20,5 L-15,15 L15,15 L20,5 L15,-5 L-15,-5 Z" fill="#8b5a3c" stroke="#654321" strokeWidth={2} />
+										<rect x={-15} y={-5} width={30} height={10} fill="#a0826d" stroke="#654321" strokeWidth={1} />
+										<line x1={0} y1={-5} x2={0} y2={-40} stroke="#654321" strokeWidth={2} />
+										<path
+											d={sailSide > 0 ? "M0,-40 L20,-25 L20,-10 L0,-5 Z" : "M0,-40 L-20,-25 L-20,-10 L0,-5 Z"}
+											fill={getPortColor(port.type)}
+											stroke="#fff"
+											strokeWidth={2}
+											opacity={0.9}
+										/>
+
+										{port.type === "3:1" ? (
+											<text x={sailSide * 10} y={-18} textAnchor="middle" fill="#fff" fontSize={22} fontWeight={800} style={{ textShadow: "1px 1px 2px rgba(0,0,0,0.8)" }}>
+												?
+											</text>
+										) : (
+											<>
+												<circle cx={sailSide * 10} cy={-22} r={8} fill="#fff" opacity={0.3} />
+												<text x={sailSide * 10} y={-18} textAnchor="middle" fill="#fff" fontSize={12} fontWeight={800} style={{ textShadow: "1px 1px 2px rgba(0,0,0,0.5)" }}>
+													{getPortIcon(port.type)}
+												</text>
+											</>
+										)}
+
+										<text x={0} y={28} textAnchor="middle" fill="#fff" fontSize={14} fontWeight={800} style={{ textShadow: "1px 1px 3px rgba(0,0,0,0.9)" }}>
+											{getPortLabel(port.type)}
+										</text>
+									</g>
+								</g>
+							);
+						})}
 
 						<g>
 							{state.players.flatMap((player) =>
