@@ -7,10 +7,9 @@ import styles from "@/styles/lobby.module.css";
 export interface LobbyItem {
   id: number;
   name: string;
-  host: string;
-  players: number;
-  maxPlayers: number;
-  isPrivate: boolean;
+  capacity: number;
+  currentPlayers: number;
+  privateLobby: boolean;
 }
 
 interface LobbiesTabProps {
@@ -39,20 +38,20 @@ export default function LobbiesTab({
           <div key={lobby.id} className={styles.lobbyCard}>
             <div className={styles.lobbyTitleRow}>
               <h3 className={styles.lobbyTitle}>{lobby.name}</h3>
-              {lobby.isPrivate ? (
+              {lobby.privateLobby ? (
                 <Lock size={18} color="#98A2B3" />
               ) : (
                 <Unlock size={18} color="#22c55e" />
               )}
             </div>
 
-            <p className={styles.hostText}>Host: {lobby.host}</p>
+            <p className={styles.hostText}>ID: {lobby.id}</p>
 
             <div className={styles.lobbyFooter}>
               <div className={styles.playersText}>
                 <Users size={18} />
                 <span>
-                  {lobby.players}/{lobby.maxPlayers} Players
+                  {lobby.currentPlayers}/{lobby.capacity} Players
                 </span>
               </div>
 
