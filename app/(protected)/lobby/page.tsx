@@ -119,7 +119,7 @@ export default function Lobby() {
 
   const joinLobby = (lobbyId: number) => {
     console.log("Joining lobby", lobbyId);
-    router.push("/lobby-room");
+    router.push(`/gameboard?gameId=${lobbyId}`);
   };
 
   const handleSearchFriend = () => {
@@ -186,7 +186,7 @@ export default function Lobby() {
     });
 
     setShowCreateLobbyModal(false);
-    router.push("/lobby-room");
+    router.push("/gameboard");
   };
 
   const renderContent = () => {
