@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { useApi } from "@/hooks/useApi";
+import { Castle, Home, LogOut, Minus, Send } from "lucide-react";
 import styles from "@/styles/gameboard.module.css";
+import { ApplicationError } from "@/types/error";
 
 export type ResourceType = "wood" | "brick" | "wool" | "grain" | "ore";
 
@@ -40,6 +42,7 @@ export interface GameState {
 	players: Player[];
 	currentPlayerId: number;
 	diceResult: [number, number] | null;
+	robberHexId: number | null;
 }
 
 type TradeMode = "bank" | "player";
@@ -56,6 +59,7 @@ interface BoardGetDTO {
 interface GameGetDTO {
 	id: number;
 	board?: BoardGetDTO | null;
+	robberTileIndex?: number | null;
 }
 
 const hexSize = 58;
@@ -90,6 +94,16 @@ const bankResources: Resources = {
 	grain: 19,
 	ore: 19,
 };
+
+const bankResourceColorByType: Record<ResourceType, string> = {
+	wood: "#16a34a",
+	brick: "#dc2626",
+	wool: "#84cc16",
+	grain: "#eab308",
+	ore: "#475569",
+};
+
+const developmentCardsRemaining = 21;
 
 // Follows the board layout from the src guideline component (game-board.tsx).
 const boardCoordinatesById: Record<number, { x: number; y: number }> = {
@@ -146,6 +160,7 @@ function createInitialGameState(): GameState {
 		currentPlayerId: 0,
 		diceResult: null,
 		players: [],
+		robberHexId: null,
 	};
 }
 
@@ -183,6 +198,11 @@ function mapBoardDtoToHexes(boardDto: BoardGetDTO): HexTile[] {
 	});
 }
 
+function findDesertHexId(hexes: HexTile[]): number | null {
+	const desertHex = hexes.find((hex) => hex.type === "desert");
+	return desertHex?.id ?? null;
+}
+
 function parseGameId(rawValue: string | null): number | null {
 	if (!rawValue) {
 		return null;
@@ -206,30 +226,58 @@ export default function Gameboard() {
 	const [tradeAmount, setTradeAmount] = useState<number>(1);
 	const [targetPlayerId, setTargetPlayerId] = useState<number | null>(null);
 	const [showTradePopup, setShowTradePopup] = useState<boolean>(false);
+	const [chatMessage, setChatMessage] = useState<string>("");
 
 	useEffect(() => {
 		let cancelled = false;
 
-		const syncGameState = async (gameId: number) => {
+		const syncGameState = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
 			try {
-				const boardDto = await apiService.get<BoardGetDTO>(`/games/${gameId}/board`);
+				const [boardDto, gameDto] = await Promise.all([
+					apiService.get<BoardGetDTO>(`/games/${gameId}/board`),
+					apiService.get<GameGetDTO>(`/games/${gameId}`),
+				]);
 
 				if (!cancelled && boardDto?.hexTiles && boardDto?.hexTile_DiceNumbers) {
+					const mappedHexes = mapBoardDtoToHexes(boardDto);
 					setState((previousState) => ({
 						...previousState,
-						hexes: mapBoardDtoToHexes(boardDto),
+						hexes: mappedHexes,
+						robberHexId: gameDto?.robberTileIndex ?? findDesertHexId(mappedHexes),
 					}));
 					setBoardStatus("");
 				}
-			} catch {
+
+				return "ok";
+			} catch (error) {
+				const status = (error as Partial<ApplicationError>)?.status;
+				if (status === 401) {
+					return "unauthorized";
+				}
+				if (status === 404) {
+					return "notfound";
+				}
+
 				if (!cancelled) {
 					setBoardStatus("Could not load board data from server.");
 				}
+
+				return "error";
 			}
 		};
 
 		const createGameIfNeeded = async (): Promise<number | null> => {
-			const createdGame = await apiService.post<GameGetDTO>("/games", {});
+			let createdGame: GameGetDTO | null = null;
+			try {
+				createdGame = await apiService.post<GameGetDTO>("/games", {});
+			} catch (error) {
+				const status = (error as Partial<ApplicationError>)?.status;
+				if (!cancelled && status === 401) {
+					setBoardStatus("Session expired. Please log in again.");
+					router.replace("/login");
+				}
+				return null;
+			}
 
 			if (!createdGame?.id) {
 				return null;
@@ -238,9 +286,11 @@ export default function Gameboard() {
 			localStorage.setItem("gameId", JSON.stringify(createdGame.id));
 
 			if (createdGame.board?.hexTiles && createdGame.board?.hexTile_DiceNumbers && !cancelled) {
+				const mappedHexes = mapBoardDtoToHexes(createdGame.board as BoardGetDTO);
 				setState((previousState) => ({
 					...previousState,
-					hexes: mapBoardDtoToHexes(createdGame.board as BoardGetDTO),
+					hexes: mappedHexes,
+					robberHexId: createdGame.robberTileIndex ?? findDesertHexId(mappedHexes),
 				}));
 				setBoardStatus("");
 			}
@@ -270,9 +320,57 @@ export default function Gameboard() {
 				return;
 			}
 
-			await syncGameState(gameId);
+			let syncStatus = await syncGameState(gameId);
+			if (syncStatus === "unauthorized") {
+				if (!cancelled) {
+					setBoardStatus("Session expired. Please log in again.");
+					router.replace("/login");
+				}
+				return;
+			}
+
+			if (syncStatus === "notfound") {
+				localStorage.removeItem("gameId");
+				const newGameId = await createGameIfNeeded();
+				if (!newGameId) {
+					if (!cancelled) {
+						setBoardStatus("Could not recover game state. Please rejoin the lobby.");
+					}
+					return;
+				}
+				syncStatus = await syncGameState(newGameId);
+				if (syncStatus !== "ok") {
+					if (!cancelled) {
+						setBoardStatus("Could not load board data from server.");
+					}
+					return;
+				}
+				gameId = newGameId;
+			}
+
 			const poll = window.setInterval(() => {
-				void syncGameState(gameId as number);
+				void syncGameState(gameId as number).then((status) => {
+					if (cancelled || status === "ok") {
+						return;
+					}
+
+					if (status === "unauthorized") {
+						setBoardStatus("Session expired. Please log in again.");
+						router.replace("/login");
+						window.clearInterval(poll);
+						return;
+					}
+
+					if (status === "notfound") {
+						setBoardStatus("Game no longer exists. Recreating board...");
+						localStorage.removeItem("gameId");
+						void createGameIfNeeded().then((newGameId) => {
+							if (newGameId) {
+								void syncGameState(newGameId);
+							}
+						});
+					}
+				});
 			}, 6000);
 
 			if (cancelled) {
@@ -320,6 +418,9 @@ export default function Gameboard() {
 	const addToLog = (message: string) => {
 		setGameLog((previous) => [message, ...previous].slice(0, 12));
 	};
+
+	const getPlayerTotalResources = (player: Player): number =>
+		resourceTypes.reduce((sum, resource) => sum + player.resources[resource], 0);
 
 	const handleBankTrade = () => {
 		if (currentPlayerIndex < 0 || !currentPlayer) {
@@ -409,6 +510,25 @@ export default function Gameboard() {
 
 	const handleActionPlaceholder = (actionName: string) => {
 		addToLog(`Action clicked: ${actionName} (implementation pending).`);
+	};
+
+	const handleSendTradeRequest = () => {
+		if (!currentPlayer) {
+			addToLog("No active player for trade requests.");
+			return;
+		}
+
+		setShowTradePopup(true);
+		addToLog(`${currentPlayer.name} opened trade requests.`);
+	};
+
+	const handleSendChatMessage = () => {
+		if (!chatMessage.trim()) {
+			return;
+		}
+
+		addToLog(`[CHAT] ${currentPlayer ? currentPlayer.name : "Player"}: ${chatMessage.trim()}`);
+		setChatMessage("");
 	};
 
 	return (
@@ -629,17 +749,60 @@ export default function Gameboard() {
 								})
 							)}
 						</g>
+
+						{(() => {
+							const fallbackRobberHexId = findDesertHexId(state.hexes);
+							const robberHex = hexById.get(state.robberHexId ?? fallbackRobberHexId ?? -1);
+							if (!robberHex) {
+								return null;
+							}
+
+							const { cx, cy } = toPixel(robberHex);
+							return (
+								<g key="robber">
+									<circle cx={cx} cy={cy + 10} r={12} fill="#1a1a1a" stroke="#000" strokeWidth={2} />
+									<ellipse cx={cx} cy={cy - 5} rx={10} ry={15} fill="#1a1a1a" stroke="#000" strokeWidth={2} />
+									<circle cx={cx} cy={cy - 20} r={8} fill="#1a1a1a" stroke="#000" strokeWidth={2} />
+								</g>
+							);
+						})()}
 					</svg>
 				</main>
 
 				<div className={styles.actionStrip}>
-					<button type="button" className={styles.actionButton} onClick={() => handleActionPlaceholder("Roll Dice")}>Roll Dice</button>
-					<button type="button" className={styles.actionButton} onClick={() => handleActionPlaceholder("Knight")}>Knight</button>
-					<button type="button" className={styles.actionButton} onClick={() => handleActionPlaceholder("Build Road")}>Road</button>
-					<button type="button" className={styles.actionButton} onClick={() => handleActionPlaceholder("Build Settlement")}>Settlement</button>
-					<button type="button" className={styles.actionButton} onClick={() => handleActionPlaceholder("Build City")}>City</button>
-					<button type="button" className={styles.actionButton} onClick={() => handleActionPlaceholder("Development Card")}>Development Card</button>
-					<button type="button" className={`${styles.actionButton} ${styles.endTurnButton}`} onClick={() => handleActionPlaceholder("End Turn")}>End Turn</button>
+					<div className={styles.actionBox}>
+						<button type="button" className={styles.rollDiceButton} onClick={() => handleActionPlaceholder("Roll Dice")}>
+							<span className={styles.actionEmoji}>🎲</span>
+							<span>Roll Dice</span>
+						</button>
+
+						<div className={styles.actionGrid}>
+							<button type="button" className={`${styles.actionSquareButton} ${styles.knightButton}`} onClick={() => handleActionPlaceholder("Knight")}>
+								<span className={styles.actionEmoji}>⚔️</span>
+								<span className={styles.actionLabel}>Knight</span>
+							</button>
+							<button type="button" className={`${styles.actionSquareButton} ${styles.roadButton}`} onClick={() => handleActionPlaceholder("Build Road")}>
+								<Minus size={26} />
+								<span className={styles.actionLabel}>Road</span>
+							</button>
+							<button type="button" className={`${styles.actionSquareButton} ${styles.settlementButton}`} onClick={() => handleActionPlaceholder("Build Settlement")}>
+								<Home size={24} />
+								<span className={styles.actionLabel}>Settlement</span>
+							</button>
+							<button type="button" className={`${styles.actionSquareButton} ${styles.cityButton}`} onClick={() => handleActionPlaceholder("Build City")}>
+								<Castle size={24} />
+								<span className={styles.actionLabel}>City</span>
+							</button>
+							<button type="button" className={`${styles.actionSquareButton} ${styles.devCardButton}`} onClick={() => handleActionPlaceholder("Development Card")}>
+								<span className={styles.actionEmoji}>🎴</span>
+								<span className={styles.actionLabel}>Development Card</span>
+							</button>
+						</div>
+
+						<button type="button" className={styles.endTurnButton} onClick={() => handleActionPlaceholder("End Turn")}>
+							End Turn
+						</button>
+					</div>
 				</div>
 			</div>
 
@@ -648,20 +811,35 @@ export default function Gameboard() {
 					<h2 className={styles.panelTitle}>Players</h2>
 					<ul className={styles.playerList}>
 						{state.players.map((player) => (
-							<li key={player.id} className={styles.playerCard}>
+							<li
+								key={player.id}
+								className={`${styles.playerCard} ${player.id === state.currentPlayerId ? styles.playerCardCurrent : ""}`}
+							>
 								<div className={styles.playerHeader}>
 									<div className={styles.playerName}>
 										<span className={styles.colorDot} style={{ backgroundColor: player.color }} />
 										<span>{player.name}</span>
 									</div>
-									<span className={styles.vpTag}>{player.victoryPoints} VP</span>
+									<span className={styles.playerVpBadge}>{player.victoryPoints}</span>
 								</div>
-								<div className={styles.resourceRow}>
-									{resourceTypes.map((resource) => (
-										<span key={resource} className={styles.resourceChip}>
-											{resourceEmojiByType[resource]} {player.resources[resource]}
-										</span>
-									))}
+
+								<div className={styles.playerStatsGrid}>
+									<div className={`${styles.playerStatCell} ${styles.totalResourceCell}`}>
+										<span className={styles.playerStatIcon}>?</span>
+										<span className={styles.playerStatValue}>{getPlayerTotalResources(player)}</span>
+									</div>
+									<div className={`${styles.playerStatCell} ${styles.devCardCell}`}>
+										<span className={styles.playerStatIcon}>🎴</span>
+										<span className={styles.playerStatValue}>0</span>
+									</div>
+									<div className={`${styles.playerStatCell} ${styles.knightCell}`}>
+										<span className={styles.playerStatIcon}>⚔️</span>
+										<span className={styles.playerStatValue}>0</span>
+									</div>
+									<div className={`${styles.playerStatCell} ${styles.roadCell}`}>
+										<span className={styles.playerStatIcon}>🛣️</span>
+										<span className={styles.playerStatValue}>{player.roadsOnEdges.length}</span>
+									</div>
 								</div>
 							</li>
 						))}
@@ -673,9 +851,9 @@ export default function Gameboard() {
 					{currentPlayer ? (
 						<>
 							<div className={styles.currentPlayerLine}>{currentPlayer.name} · Total {totalCurrentResources}</div>
-							<div className={styles.resourceGrid}>
+							<div className={styles.resourcePanelGrid}>
 								{resourceTypes.map((resource) => (
-									<div key={`res-${resource}`} className={styles.resourceTile}>
+									<div key={`res-${resource}`} className={`${styles.resourcePanelTile} ${styles[`resourcePanelTile${resource.charAt(0).toUpperCase() + resource.slice(1)}`]}`}>
 										<span>{resourceEmojiByType[resource]}</span>
 										<strong>{currentPlayer.resources[resource]}</strong>
 									</div>
@@ -688,32 +866,67 @@ export default function Gameboard() {
 				</section>
 
 				<section className={styles.sidebarCard}>
-					<h2 className={styles.panelTitle}>Bank</h2>
-					<div className={styles.resourceGrid}>
-						{resourceTypes.map((resource) => (
-							<div key={`bank-${resource}`} className={styles.resourceTile}>
-								<span>{resourceEmojiByType[resource]}</span>
-								<strong>{bankResources[resource]}</strong>
+					<div className={styles.bankHeaderVisual}>
+						<svg viewBox="0 0 100 100" className={styles.bankHeaderIcon} xmlns="http://www.w3.org/2000/svg">
+							<path d="M50 10 L90 30 L90 35 L10 35 L10 30 Z" />
+							<rect x="15" y="40" width="12" height="35" />
+							<rect x="32" y="40" width="12" height="35" />
+							<rect x="56" y="40" width="12" height="35" />
+							<rect x="73" y="40" width="12" height="35" />
+							<rect x="10" y="77" width="80" height="8" />
+							<rect x="10" y="87" width="80" height="5" />
+							<circle cx="50" cy="20" r="8" fill="#FCD34D" />
+							<text x="50" y="26" fontSize="12" fontWeight="bold" fill="#92400E" textAnchor="middle">$</text>
+						</svg>
+					</div>
+
+					<div className={styles.bankPanel}>
+						<div className={styles.bankGrid}>
+							<div className={styles.devCardSlot}>
+								<div className={styles.devCardIcon}>🎴</div>
+								<div className={styles.devCardValue}>{developmentCardsRemaining}</div>
 							</div>
-						))}
+
+							{resourceTypes.map((resource) => (
+								<div key={`bank-${resource}`} className={styles.bankResourceCell} style={{ backgroundColor: bankResourceColorByType[resource] }}>
+									<span className={styles.bankResourceIcon}>{resourceEmojiByType[resource]}</span>
+									<span className={styles.bankResourceValue}>{bankResources[resource]}</span>
+								</div>
+							))}
+						</div>
 					</div>
 				</section>
 
 				<section className={styles.sidebarCard}>
-					<h2 className={styles.panelTitle}>Trading</h2>
-					<button type="button" className={styles.tradeActionButton} onClick={() => setShowTradePopup(true)}>
-						Open Trade Popup
+					<button type="button" className={styles.tradeRequestButton} onClick={handleSendTradeRequest}>
+						Send Trade Request
 					</button>
-				</section>
-
-				<section className={styles.sidebarCard}>
-					<h2 className={styles.panelTitle}>Game Log</h2>
 					<div className={styles.logBox}>
 						{gameLog.map((entry, index) => (
 							<p key={`log-${index}`}>{entry}</p>
 						))}
 					</div>
-					<button className={styles.leaveButton} onClick={() => router.push("/lobby")}>Leave Lobby</button>
+					<div className={styles.chatRow}>
+						<input
+							type="text"
+							className={styles.chatInput}
+							placeholder="Type a message..."
+							value={chatMessage}
+							onChange={(event) => setChatMessage(event.target.value)}
+							onKeyDown={(event) => {
+								if (event.key === "Enter") {
+									handleSendChatMessage();
+								}
+							}}
+						/>
+						<button type="button" className={styles.chatSendButton} onClick={handleSendChatMessage} aria-label="Send message">
+							<Send size={16} />
+						</button>
+					</div>
+					<button className={styles.leaveButton} onClick={() => router.push("/lobby")}>
+						<LogOut size={16} />
+						<span>Leave Lobby</span>
+					</button>
 				</section>
 			</aside>
 			</div>

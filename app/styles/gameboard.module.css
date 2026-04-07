@@ -16,7 +16,7 @@
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 1rem;
   padding: 1rem;
-  background: radial-gradient(circle at 15% 25%, #4f9a81 0%, #315d4f 24%, #1e2f2f 58%, #142226 100%);
+  background: #5baee2;
   color: var(--text-main);
 }
 
@@ -47,6 +47,11 @@
   background: #d8d1bf;
 }
 
+.playerCardCurrent {
+  background: #f3dfaa;
+  border-color: #b8862f;
+}
+
 .playerHeader {
   display: flex;
   align-items: center;
@@ -73,6 +78,60 @@
   font-weight: 700;
   font-size: 0.8rem;
   color: var(--text-muted);
+}
+
+.playerVpBadge {
+  min-width: 24px;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #764d1e;
+  background: #f1d98b;
+  border: 1px solid #b8892d;
+  border-radius: 5px;
+  padding: 0.1rem 0.25rem;
+}
+
+.playerStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.28rem;
+}
+
+.playerStatCell {
+  min-height: 38px;
+  border: 2px solid rgba(45, 35, 20, 0.45);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.playerStatIcon {
+  font-size: 0.72rem;
+}
+
+.playerStatValue {
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.totalResourceCell {
+  background: linear-gradient(90deg, #16a34a 0 20%, #dc2626 20% 40%, #84cc16 40% 60%, #eab308 60% 80%, #475569 80% 100%);
+  color: #fff;
+}
+
+.devCardCell {
+  background: #fff;
+}
+
+.knightCell {
+  background: #fff;
+}
+
+.roadCell {
+  background: #d0cec9;
 }
 
 .resourceRow {
@@ -154,6 +213,24 @@
   dominant-baseline: middle;
 }
 
+.robberGroup {
+  pointer-events: none;
+}
+
+.robberIcon {
+  fill: rgba(25, 23, 27, 0.9);
+  stroke: rgba(255, 255, 255, 0.88);
+  stroke-width: 2;
+}
+
+.robberText {
+  fill: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
 .resourceBar {
   display: none;
 }
@@ -208,6 +285,121 @@
   font-size: 0.78rem;
 }
 
+.resourcePanelGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.resourcePanelTile {
+  border: 2px solid rgba(0, 0, 0, 0.32);
+  border-radius: 8px;
+  min-height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.resourcePanelTile strong {
+  font-size: 0.8rem;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.resourcePanelTileWood {
+  background: #16a34a;
+}
+
+.resourcePanelTileBrick {
+  background: #dc2626;
+}
+
+.resourcePanelTileWool {
+  background: #84cc16;
+}
+
+.resourcePanelTileGrain {
+  background: #eab308;
+}
+
+.resourcePanelTileOre {
+  background: #475569;
+}
+
+.bankHeaderVisual {
+  height: 64px;
+  margin-bottom: 0.5rem;
+  border-radius: 8px;
+  background: #b37222;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bankHeaderIcon {
+  width: 46px;
+  height: 46px;
+  fill: #f4e4a7;
+}
+
+.bankPanel {
+  background: #ece9df;
+  border: 2px solid #7b6a50;
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.bankGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.devCardSlot {
+  min-height: 52px;
+  border: 2px solid #1f4ca0;
+  border-radius: 6px;
+  background: #2768cf;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.12rem;
+}
+
+.devCardIcon {
+  font-size: 0.95rem;
+}
+
+.devCardValue {
+  font-size: 0.8rem;
+  color: #fff;
+  font-weight: 800;
+}
+
+.bankResourceCell {
+  min-height: 52px;
+  border: 2px solid rgba(0, 0, 0, 0.28);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.12rem;
+}
+
+.bankResourceIcon {
+  font-size: 0.95rem;
+}
+
+.bankResourceValue {
+  font-size: 0.8rem;
+  color: #fff;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.42);
+}
+
 .currentPlayerLine {
   margin-bottom: 0.5rem;
   font-size: 0.82rem;
@@ -227,6 +419,50 @@
   gap: 0.35rem;
 }
 
+.tradeRequestButton {
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  background: #b67828;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.74rem;
+  padding: 0.45rem;
+  cursor: pointer;
+  margin-bottom: 0.45rem;
+}
+
+.chatRow {
+  margin-top: 0.45rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.35rem;
+}
+
+.chatInput {
+  border: 2px solid rgba(80, 62, 34, 0.45);
+  border-radius: 8px;
+  background: #f7f2e6;
+  color: #3d2a1a;
+  font-size: 0.74rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.chatSendButton {
+  border: none;
+  border-radius: 8px;
+  background: #97703b;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.72rem;
+  padding: 0.45rem;
+  min-width: 36px;
+  cursor: pointer;
+}
+
 .leaveButton {
   margin-top: 0.55rem;
   width: 100%;
@@ -234,6 +470,10 @@
   border-radius: 8px;
   background: #b7332d;
   color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   font-weight: 700;
   padding: 0.5rem;
   cursor: pointer;
@@ -241,30 +481,95 @@
 
 .actionStrip {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.55rem;
 }
 
-.actionButton {
-  background: linear-gradient(180deg, #f1dfb2, #ddbf7f);
-  border: 2px solid rgba(104, 78, 39, 0.6);
-  border-radius: 10px;
-  padding: 0.55rem;
-  text-align: center;
-  font-weight: 800;
-  font-size: 0.72rem;
-  color: #3f2f1d;
-  cursor: pointer;
+.actionBox {
+  background: rgba(236, 203, 132, 0.88);
+  border: 3px solid rgba(112, 81, 38, 0.66);
+  border-radius: 14px;
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.55rem;
 }
 
-.actionButton:hover {
-  filter: brightness(1.04);
+.rollDiceButton {
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  padding: 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+  background: linear-gradient(90deg, #e9b320, #b7781f);
+}
+
+.actionGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.5rem;
 }
 
 .endTurnButton {
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  padding: 0.62rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
   background: linear-gradient(180deg, #cf4a3e, #a5302b);
-  border-color: rgba(111, 33, 28, 0.72);
   color: #fff;
+}
+
+.actionSquareButton {
+  min-height: 66px;
+  border: none;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  color: #fff;
+  cursor: pointer;
+}
+
+.actionEmoji {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.actionLabel {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.knightButton {
+  background: #b73631;
+}
+
+.roadButton {
+  background: #bb6b27;
+}
+
+.settlementButton {
+  background: #7d3db0;
+}
+
+.cityButton {
+  background: #c2458b;
+}
+
+.devCardButton {
+  background: #2d60c2;
 }
 
 .tradeRow {
@@ -389,6 +694,10 @@
   }
 
   .actionStrip {
+    gap: 0.45rem;
+  }
+
+  .actionGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
