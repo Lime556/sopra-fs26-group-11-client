@@ -38,7 +38,11 @@ export default function Register() {
       { name: "passwordConfirm", errors: [] },
     ]);
 
-    const { passwordConfirm: _passwordConfirm, ...payload } = values;
+    const payload = {
+      username: values.username,
+      email: values.email,
+      password: values.password,
+    };
 
     try {
       const response = await apiService.post<User>("/users", payload);
@@ -46,7 +50,7 @@ export default function Register() {
       if (response.token) setToken(response.token);
       if (response.id) setUserId(String(response.id));
 
-      router.replace("/login")
+      router.replace("/lobby")
       return;
     } catch (error) {
       if (error instanceof Error) {
