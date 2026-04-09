@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import Gameboard from "./Gameboard";
 
 export default function GameboardPage() {
-  return <Gameboard />;
+  return (
+    <Suspense fallback={null}>
+      <Gameboard />
+    </Suspense>
+  );
 }

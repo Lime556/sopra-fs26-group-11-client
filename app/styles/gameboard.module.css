@@ -1,4 +1,4 @@
-:root {
+.layout {
   --board-bg-ocean-a: #205b76;
   --board-bg-ocean-b: #17364a;
   --panel-bg: #e4d8b4;
@@ -8,9 +8,6 @@
   --card-bg: rgba(255, 248, 225, 0.86);
   --highlight: #f5b13d;
   --shadow: rgba(17, 12, 6, 0.32);
-}
-
-.layout {
   min-height: 100vh;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;

@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
@@ -79,15 +79,15 @@ export default function Lobby() {
   const [lobbies, setLobbies] = useState<LobbyItem[]>([]);
   const [friends] = useState<Friend[]>(mockFriends);
 
-  const mapLobbyFromApi = (lobby: LobbyGetDTO): LobbyItem => ({
+  const mapLobbyFromApi = useCallback((lobby: LobbyGetDTO): LobbyItem => ({
     id: lobby.id,
     name: lobby.name,
     capacity: lobby.capacity,
     currentPlayers: lobby.currentPlayers,
     privateLobby: lobby.privateLobby,
-  });
+  }), []);
 
-  const loadLobbies = async () => {
+  const loadLobbies = useCallback(async () => {
     try {
       const lobbyData = await apiService.get<LobbyGetDTO[]>("/lobbies");
       setLobbies(lobbyData.map(mapLobbyFromApi));
@@ -98,11 +98,11 @@ export default function Lobby() {
         console.error("Failed to load lobbies:", error);
       }
     }
-  };
+  }, [apiService, mapLobbyFromApi]);
 
   useEffect(() => {
     void loadLobbies();
-  }, []);
+  }, [loadLobbies]);
 
   const handleLogout = async () => {
     try {
@@ -248,6 +248,7 @@ export default function Lobby() {
       const createdLobby = await apiService.post<LobbyGetDTO>("/lobbies", payload);
       setLobbies((prev) => [mapLobbyFromApi(createdLobby), ...prev]);
       handleCloseCreateLobbyModal();
+      router.push(`/gameboard?lobbyId=${createdLobby.id}`);
     } catch (error: unknown) {
       if (error instanceof Error) {
         setCreateLobbyError(error.message);

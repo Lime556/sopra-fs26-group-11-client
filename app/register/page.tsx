@@ -38,7 +38,11 @@ export default function Register() {
       { name: "passwordConfirm", errors: [] },
     ]);
 
-    const { passwordConfirm: _passwordConfirm, ...payload } = values;
+    const payload = {
+      username: values.username,
+      email: values.email,
+      password: values.password,
+    };
 
     try {
       const response = await apiService.post<User>("/users", payload);
