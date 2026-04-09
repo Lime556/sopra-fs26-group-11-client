@@ -24,7 +24,7 @@ import styles from "@/styles/lobby.module.css";
 export default function Lobby() {
   interface LobbyGetDTO {
     id: number;
-    name: string;
+    name?: string;
     capacity: number;
     currentPlayers: number;
     privateLobby: boolean;
@@ -81,7 +81,7 @@ export default function Lobby() {
 
   const mapLobbyFromApi = useCallback((lobby: LobbyGetDTO): LobbyItem => ({
     id: lobby.id,
-    name: lobby.name,
+    name: lobby.name?.trim() ? lobby.name : `Lobby ${lobby.id}`,
     capacity: lobby.capacity,
     currentPlayers: lobby.currentPlayers,
     privateLobby: lobby.privateLobby,
