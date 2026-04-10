@@ -92,7 +92,7 @@ const tileImageByType: Record<HexTile["type"], string> = {
 	wood: "/Wood.png",
 	brick: "/Brick.png",
 	wool: "/Sheep.png",
-	grain: "/Wheet.png",
+	grain: "/Wheat.png",
 	ore: "/Stone.png",
 	desert: "/Desert.png",
 };

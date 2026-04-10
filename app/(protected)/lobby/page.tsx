@@ -61,6 +61,10 @@ export default function Lobby() {
   const [showFriendRequests, setShowFriendRequests] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{ id: string; username: string }[]>([]);
+  const [showLobbySearch, setShowLobbySearch] = useState(false);
+  const [searchLobbyQuery, setSearchLobbyQuery] = useState("");
+  const [searchLobbyResult, setSearchLobbyResult] = useState<LobbyItem | null>(null);
+  const [searchLobbyError, setSearchLobbyError] = useState("");
   
   // Create Lobby Modal
   const [showCreateLobbyModal, setShowCreateLobbyModal] = useState(false);
@@ -130,6 +134,43 @@ export default function Lobby() {
       setPasswordError("");
     } else {
       joinLobby(lobby.id);
+    }
+  };
+
+  const handleToggleLobbySearch = () => {
+    setShowLobbySearch((prev) => !prev);
+    if (showLobbySearch) {
+      setSearchLobbyQuery("");
+      setSearchLobbyResult(null);
+      setSearchLobbyError("");
+    }
+  };
+
+  const handleSearchLobby = async () => {
+    const query = searchLobbyQuery.trim();
+    if (!query) {
+      setSearchLobbyError("Please enter a lobby ID");
+      setSearchLobbyResult(null);
+      return;
+    }
+
+    const lobbyId = Number(query);
+    if (Number.isNaN(lobbyId) || lobbyId <= 0) {
+      setSearchLobbyError("Enter a valid numeric lobby ID");
+      setSearchLobbyResult(null);
+      return;
+    }
+
+    try {
+      setSearchLobbyError("");
+      const lobby = await apiService.get<LobbyGetDTO>(`/lobbies/${lobbyId}`);
+      setSearchLobbyResult(mapLobbyFromApi(lobby));
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Lobby search failed:", error.message);
+      }
+      setSearchLobbyResult(null);
+      setSearchLobbyError("Lobby not found");
     }
   };
 
@@ -264,7 +305,14 @@ export default function Lobby() {
         return (
           <LobbiesTab
             lobbies={lobbies}
+            showLobbySearch={showLobbySearch}
+            searchLobbyQuery={searchLobbyQuery}
+            searchLobbyResult={searchLobbyResult}
+            searchLobbyError={searchLobbyError}
             onCreateLobby={handleCreateLobby}
+            onToggleLobbySearch={handleToggleLobbySearch}
+            onSearchLobbyQueryChange={setSearchLobbyQuery}
+            onSearchLobby={handleSearchLobby}
             onJoinLobby={handleJoinClick}
           />
         );
