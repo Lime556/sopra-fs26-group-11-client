@@ -79,6 +79,23 @@ interface GameGetDTO {
 	id: number;
 	board?: BoardGetDTO | null;
 	robberTileIndex?: number | null;
+	players?: PlayerGetDTO[];
+	winner?: PlayerGetDTO | null;
+	leaderboard?: PlayerGetDTO[];
+	targetVictoryPoints?: number | null;
+	finishedAt?: string | null;
+	gameFinished?: boolean | null;
+}
+
+interface PlayerGetDTO {
+	id: number;
+	name: string;
+	victoryPoints?: number | null;
+	settlementPoints?: number | null;
+	cityPoints?: number | null;
+	developmentCardVictoryPoints?: number | null;
+	hasLongestRoad?: boolean | null;
+	hasLargestArmy?: boolean | null;
 }
 
 const hexSize = 58;
@@ -338,6 +355,22 @@ function parseGameId(rawValue: string | null): number | null {
 	return Number.isFinite(value) ? value : null;
 }
 
+const fallbackPlayerColors = ["#d13f34", "#2e7ccf", "#e0a120", "#3f9e56"];
+
+function fallbackColorForPlayer(index: number): string {
+	return fallbackPlayerColors[index % fallbackPlayerColors.length];
+}
+
+function createEmptyResources(): Resources {
+	return {
+		wood: 0,
+		brick: 0,
+		wool: 0,
+		grain: 0,
+		ore: 0,
+	};
+}
+
 export default function Gameboard() {
 	const router = useRouter();
 	const apiService = useApi();
@@ -352,6 +385,10 @@ export default function Gameboard() {
 	const [targetPlayerId, setTargetPlayerId] = useState<number | null>(null);
 	const [showTradePopup, setShowTradePopup] = useState<boolean>(false);
 	const [chatMessage, setChatMessage] = useState<string>("");
+	const [targetVictoryPoints, setTargetVictoryPoints] = useState<number>(10);
+	const [winnerPlayerId, setWinnerPlayerId] = useState<number | null>(null);
+	const [winnerPlayerName, setWinnerPlayerName] = useState<string | null>(null);
+	const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
 	const ports = Array.isArray(state.ports) ? state.ports : [];
 
 	useEffect(() => {
@@ -376,12 +413,40 @@ export default function Gameboard() {
 				if (!cancelled && boardDto?.hexTiles && boardDto?.hexTile_DiceNumbers) {
 					const mappedHexes = mapBoardDtoToHexes(boardDto);
 					const mappedPorts = mapBoardDtoToPorts(boardDto);
+					const serverPlayers = Array.isArray(gameDto?.players) ? gameDto.players : [];
 					setState((previousState) => ({
 						...previousState,
 						hexes: mappedHexes,
 						ports: mappedPorts,
 						robberHexId: gameDto?.robberTileIndex ?? findDesertHexId(mappedHexes),
+						players:
+							serverPlayers.length > 0
+								? serverPlayers.map((serverPlayer, index) => {
+									const previousPlayer = previousState.players.find((player) => player.id === serverPlayer.id);
+									return {
+										id: serverPlayer.id,
+										name: serverPlayer.name,
+										color: previousPlayer?.color ?? fallbackColorForPlayer(index),
+										resources: previousPlayer?.resources ?? createEmptyResources(),
+										victoryPoints: serverPlayer.victoryPoints ?? 0,
+										settlementsOnCorners: previousPlayer?.settlementsOnCorners ?? [],
+										citiesOnCorners: previousPlayer?.citiesOnCorners ?? [],
+										roadsOnEdges: previousPlayer?.roadsOnEdges ?? [],
+									};
+								})
+								: previousState.players,
+						currentPlayerId:
+							serverPlayers.length > 0
+								? previousState.currentPlayerId && serverPlayers.some((player) => player.id === previousState.currentPlayerId)
+									? previousState.currentPlayerId
+									: serverPlayers[0].id
+								: previousState.currentPlayerId,
 					}));
+
+					setTargetVictoryPoints(gameDto?.targetVictoryPoints ?? 10);
+					setWinnerPlayerId(gameDto?.winner?.id ?? null);
+					setWinnerPlayerName(gameDto?.winner?.name ?? null);
+					setIsGameFinished(Boolean(gameDto?.gameFinished) || Boolean(gameDto?.finishedAt));
 					setBoardStatus("");
 				}
 
