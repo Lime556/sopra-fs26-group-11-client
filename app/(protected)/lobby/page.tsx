@@ -28,6 +28,8 @@ export default function Lobby() {
     capacity: number;
     currentPlayers: number;
     privateLobby: boolean;
+    hostId: number;
+    gameId?: number | null;
   }
 
   interface LobbyPostDTO {
@@ -155,7 +157,7 @@ export default function Lobby() {
       setShowPasswordModal(false);
       setPassword("");
       setSelectedLobby(null);
-      await loadLobbies();
+      router.push(`/lobby/${selectedLobby.id}`);
     } catch {
       setPasswordError("Incorrect password");
     }
@@ -172,7 +174,7 @@ export default function Lobby() {
     try {
       const payload: LobbyJoinDTO = { lobbyId };
       await apiService.post<LobbyGetDTO>(`/lobbies/${lobbyId}/join`, payload);
-      await loadLobbies();
+      router.push(`/lobby/${lobbyId}`);
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error("Joining lobby failed:", error.message);
@@ -246,8 +248,8 @@ export default function Lobby() {
       };
 
       const createdLobby = await apiService.post<LobbyGetDTO>("/lobbies", payload);
-      setLobbies((prev) => [mapLobbyFromApi(createdLobby), ...prev]);
       handleCloseCreateLobbyModal();
+      router.push(`/lobby/${createdLobby.id}`);
     } catch (error: unknown) {
       if (error instanceof Error) {
         setCreateLobbyError(error.message);
