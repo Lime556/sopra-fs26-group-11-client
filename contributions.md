@@ -62,6 +62,7 @@ reason).
 |                    |  10.04.  | https://github.com/Lime556/sopra-fs26-group-11-client/commit/ae43fca865db9910b4a3c15b404a1c72f119e168 | Added lobby search bar and button (#21). The search request and possible errors are handled correctly (#22) and the results are displayed (#23). | Players need to be able to search for a lobby so that they can join it. |
 | **@Gresay**        | 07.04.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/cf608e52159ce43eeb294a9fac78338cac8f47d3 | Boardgame storrage as well as support for the frontend design with boat(#98,#99,#101,#102) and robber| Support frontend as well as crutials game components |
 |                    | 07.04.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/65de378aa394b2071290ade774354273d9c66335 | Boardgame UI frontend #30 | First visual part of the imlemention of the game. |
+|                    | 13.04.   | https://github.com/Lime556/sopra-fs26-group-11-server/pull/235/changes/eed333a188156dcc69e96a697dcf5d636bfa47ea | implemented victory points backend (#158,#159,#160,#161,#163) | Vp are the goal of the game |
 | **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
