@@ -55,8 +55,10 @@ reason).
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
-| **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **CaroAW** | [14.04]   | https://github.com/Lime556/sopra-fs26-group-11-server/pull/237/changes/6b0b684b538415c65472a2f89e174a0244cfe888 | Synchronize lobby states for all players(#70) | So that the lobby is always updated and that you don't have to manualy refresh the window every time |
+|                    | [14.04]   | https://github.com/Lime556/sopra-fs26-group-11-server/pull/237/changes/8aac9f7ac56b726662fe9c43646bfbef78dc0b78 | Test lobby join flow (#71) | So that we don't have to test everything by trial and error. |
+|                    | [14.04]   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/493aa2cbff35f164f936efbfd726b17f3f289f32 | Create lobby list UI with player count (S6, #19) | [Why this contribution is relevant] |
+|                    | [14.04]   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/8fba1acddc939d098d9de088e2b0ceb453d3052a | Implement joining a lobby from the UI (S6, #20) | [Why this contribution is relevant] |
 
 ---
 
