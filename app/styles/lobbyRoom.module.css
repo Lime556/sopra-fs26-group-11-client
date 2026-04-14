@@ -1,0 +1,262 @@
+.page {
+    min-height: 100vh;
+    position: relative;
+    overflow: hidden;
+    background: url("/background_image.png") center/cover no-repeat;
+  }
+  
+  .backgroundOverlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      rgba(28, 57, 142, 0.35) 0%,
+      rgba(0, 95, 120, 0.35) 50%,
+      rgba(11, 79, 74, 0.35) 100%
+    );
+    z-index: 0;
+  }
+  
+  .header {
+    position: relative;
+    z-index: 10;
+    background: rgba(202, 138, 4, 0.7);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    border-bottom: 1px solid rgba(161, 98, 7, 0.5);
+  }
+  
+  .headerInner {
+    max-width: 80rem;
+    margin: 0 auto;
+    padding: 1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .backButton {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: white;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    transition: color 0.2s ease;
+  }
+  
+  .backButton:hover {
+    color: rgb(254, 249, 195);
+  }
+  
+  .headerTitle {
+    font-size: 1.875rem;
+    font-weight: 700;
+    color: white;
+    margin: 0;
+  }
+  
+  .headerSpacer {
+    width: 8rem;
+  }
+  
+  .main {
+    position: relative;
+    z-index: 10;
+    max-width: 56rem;
+    margin: 0 auto;
+    padding: 3rem 1.5rem;
+  }
+  
+  .card {
+    background: rgba(202, 138, 4, 0.7);
+    backdrop-filter: blur(8px);
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.18);
+    padding: 2rem;
+  }
+  
+  .topRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+  }
+  
+  .titleGroup {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  
+  .title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: white;
+    margin: 0;
+  }
+  
+  .addBotButton {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    border: none;
+    border-radius: 0.5rem;
+    font: inherit;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+  
+  .addBotButtonEnabled {
+    background: rgb(37, 99, 235);
+    color: white;
+  }
+  
+  .addBotButtonEnabled:hover {
+    background: rgb(29, 78, 216);
+  }
+  
+  .addBotButtonDisabled {
+    background: rgb(156, 163, 175);
+    color: rgb(229, 231, 235);
+    cursor: not-allowed;
+  }
+  
+  .participantList {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  
+  .participantCard {
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .participantInfo {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  .avatar {
+    width: 3rem;
+    height: 3rem;
+    background: rgb(59, 130, 246);
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+    font-size: 1.125rem;
+    flex-shrink: 0;
+  }
+  
+  .participantText {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .nameRow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .participantName {
+    font-weight: 600;
+    color: rgb(31, 41, 55);
+    margin: 0;
+  }
+  
+  .hostBadge {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: rgb(161, 98, 7);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  
+  .participantRole {
+    font-size: 0.875rem;
+    color: rgb(107, 114, 128);
+    margin: 0.125rem 0 0;
+  }
+  
+  .emptySlot {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px dashed rgba(255, 255, 255, 0.5);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .emptySlotText {
+    color: white;
+    font-size: 0.875rem;
+    margin: 0;
+  }
+  
+  .startSection {
+    display: flex;
+    justify-content: center;
+  }
+  
+  .startButton {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 2rem;
+    border: none;
+    border-radius: 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.18);
+    transition: background-color 0.2s ease;
+  }
+  
+  .startButtonEnabled {
+    background: rgb(22, 163, 74);
+    color: white;
+    cursor: pointer;
+  }
+  
+  .startButtonEnabled:hover {
+    background: rgb(21, 128, 61);
+  }
+  
+  .startButtonDisabled {
+    background: rgb(156, 163, 175);
+    color: rgb(229, 231, 235);
+    cursor: not-allowed;
+  }
+  
+  .waitingText {
+    margin-top: 1rem;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.875rem;
+  }
+  
+  .stateMessage {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgb(17, 24, 39);
+    color: white;
+    font-size: 1.125rem;
+    padding: 2rem;
+  }
