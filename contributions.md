@@ -63,8 +63,8 @@ reason).
 | **@Gresay**        | 07.04.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/cf608e52159ce43eeb294a9fac78338cac8f47d3 | Boardgame storrage as well as support for the frontend design with boat(#98,#99,#101,#102) and robber| Support frontend as well as crutials game components |
 |                    | 07.04.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/65de378aa394b2071290ade774354273d9c66335 | Boardgame UI frontend #30 | First visual part of the imlemention of the game. |
 |                    | 13.04.   | https://github.com/Lime556/sopra-fs26-group-11-server/pull/235/changes/eed333a188156dcc69e96a697dcf5d636bfa47ea | implemented victory points backend (#158,#159,#160,#161,#163) | Vp are the goal of the game |
-| **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **Ziske11** | 7.4.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/06cf783a6934ac280d1c9376e510f9a68eb1c8c3 | Added Lobby Creation UI and display actual Lobbys in Main Page (#17, #18) | We need the Lobbys to be displayed in the UI to be able to Join a game. |
+|                    | 7.4.   | (https://github.com/Lime556/sopra-fs26-group-11-server/commit/f7923ef39c317b23cfc47e7fc35ba9d395f34469) | Corrected and Completed Lobby Test functionality (Already added in my other Commit, not in this one) | We want to be able to test the Lobby Functionality. |
 | **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 
