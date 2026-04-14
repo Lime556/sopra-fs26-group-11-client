@@ -16,6 +16,9 @@ import {
   UnlockOutlined,
 } from "@ant-design/icons";
 import { Input, Modal } from "antd";
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
+import { getApiDomain } from "@/utils/domain";
 import { ApplicationError } from "@/types/error";
 import styles from "@/styles/lobbies.module.css";
 
@@ -74,6 +77,25 @@ export default function Lobbies() {
   useEffect(() => {
     void loadLobbies();
   }, [loadLobbies]);
+
+  useEffect(() => {
+    if (!token) return;
+    const client = new Client({
+      webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`),
+      onConnect: () => {
+        client.subscribe("/topic/lobbies", (msg) => {
+          const updated: LobbyGetDTO = JSON.parse(msg.body) as LobbyGetDTO;
+          setLobbies((prev) =>
+            prev.some((l) => l.id === updated.id)
+              ? prev.map((l) => (l.id === updated.id ? updated : l))
+              : [...prev, updated]
+          );
+        });
+      },
+    });
+    client.activate();
+    return () => { void client.deactivate(); };
+  }, [token]);
 
   const handleLogout = () => {
     clearToken();
