@@ -138,7 +138,7 @@ export class ApiService {
 
     return {
       ...this.defaultHeaders,
-      ...(token ? { Authorization: token }  : {})
+      ...(token ? { Authorization: `Bearer ${token}` }  : {})
     };
   }
 }

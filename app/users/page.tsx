@@ -5,7 +5,6 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApi } from "@/hooks/useApi";
-import useLocalStorage from "@/hooks/useLocalStorage";
 import { User } from "@/types/user";
 import { Button, Card, Table } from "antd";
 import type { TableProps } from "antd"; // antd component library allows imports of types
@@ -35,19 +34,25 @@ const Dashboard: React.FC = () => {
   const router = useRouter();
   const apiService = useApi();
   const [users, setUsers] = useState<User[] | null>(null);
-  // useLocalStorage hook example use
-  // The hook returns an object with the value and two functions
-  // Simply choose what you need from the hook:
-  const {
-    // value: token, // is commented out because we dont need to know the token value for logout
-    // set: setToken, // is commented out because we dont need to set or update the token value
-    clear: clearToken, // all we need in this scenario is a method to clear the token
-  } = useLocalStorage<string>("token", ""); // if you wanted to select a different token, i.e "lobby", useLocalStorage<string>("lobby", "");
 
-  const handleLogout = (): void => {
-    // Clear token using the returned function 'clear' from the hook
-    clearToken();
-    router.push("/login");
+  const handleLogout = async () => {
+    try {
+      await apiService.post("/logout", null);
+
+      // Clear frontend auth data
+      localStorage.removeItem("token");
+      localStorage.removeItem("userId");
+
+      router.push("/login");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Logout failed:", error.message);
+      } else {
+        console.error("Logout failed:", error);
+      }
+
+      alert("Could not log out. Please try again.");
+    }
   };
 
   useEffect(() => {

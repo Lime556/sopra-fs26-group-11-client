@@ -7,7 +7,7 @@ import { User } from "@/types/user";
 import { Button, Form, Input } from "antd";
 import { mapApiErrorToFields } from "@/utils/mapApiErrorToFields";
 import { useState } from "react";
-import { UserOutlined, LockOutlined } from "@ant-design/icons";
+import { UserOutlined, MailOutlined, LockOutlined } from "@ant-design/icons";
 import styles from "@/styles/login-register.module.css";
 // Optionally, you can import a CSS module or file for additional styling:
 // import styles from "@/styles/page.module.css";
@@ -28,18 +28,13 @@ export default function Register() {
   const { set: setUserId } = useLocalStorage<string>("userId", "");
   const { set: setUsername } = useLocalStorage<string>("username", "");
 
-  const [generalMessage, setGeneralMessage] = useState<string | null>(null);
-
   const handleRegister = async (values: FormFieldProps) => {
-    setGeneralMessage(null);
-    form.setFields([
-      { name: "username", errors: [] },
-      { name: "email", errors: [] },
-      { name: "password", errors: [] },
-      { name: "passwordConfirm", errors: [] },
-    ]);
 
-    const { passwordConfirm: _passwordConfirm, ...payload } = values;
+    const payload = {
+      username: values.username,
+      email: values.email,
+      password: values.password,
+    };
 
     try {
       const response = await apiService.post<User>("/users", payload);
@@ -52,25 +47,10 @@ export default function Register() {
       return;
     } catch (error) {
       if (error instanceof Error) {
-        const { fieldErrors, generalMessage: gm } = mapApiErrorToFields(error);
-
-        if (fieldErrors) {
-          form.setFields(
-            Object.entries(fieldErrors).map(([name, message]) => ({
-              name: [name],
-              errors: [message as string],
-            }))
-          );
-        }
-
-        if (gm) {
-          setGeneralMessage(gm);
-        }
-
+        alert(`Something went wrong during registration:\n${error.message}`);
       } else {
-        form.setFields([{ name: ["username"], errors: ["Something went wrong"] }]);
+        console.error("Unknown error during registration");
       }
-      return;
     }
   };
 
@@ -79,8 +59,6 @@ export default function Register() {
       <div className={styles.card}>
         <h1>Settlers of Catan</h1>
         <p>Create your account!</p>
-
-
 
         <Form
           form={form}
@@ -92,7 +70,7 @@ export default function Register() {
             name="username"
             label="Username"
             className={styles["form-item"]}
-            rules={[{ required: true, message: "Chose a username" }]}
+            rules={[{ required: true, message: "Choose a username" }]}
           >
             <div className={styles["input-wrapper"]}>
               <UserOutlined className={styles["input-icon"]} />
@@ -107,7 +85,7 @@ export default function Register() {
             rules={[{ required: true, message: "Enter an email!" }]}
           >
             <div className={styles["input-wrapper"]}>
-              <UserOutlined className={styles["input-icon"]} />
+              <MailOutlined className={styles["input-icon"]} />
               <Input placeholder="Enter an email" />
             </div>
           </Form.Item>
@@ -116,7 +94,7 @@ export default function Register() {
             name="password"
             label="Password"
             className={styles["form-item"]}
-            rules={[{ required: true, message: "Please input your Password!" }]}
+            rules={[{ required: true, message: "Please input your password!" }]}
           >
             <div className={styles["input-wrapper"]}>
               <LockOutlined className={styles["input-icon"]} />
@@ -126,7 +104,7 @@ export default function Register() {
 
           <Form.Item
             name="passwordConfirm"
-            label="Confirm your Password"
+            label="Confirm your password"
             dependencies={["password"]}
             className={styles["form-item"]}
             rules={[
@@ -145,19 +123,6 @@ export default function Register() {
               <Input.Password placeholder="Repeat your password" />
             </div>
           </Form.Item>
-
-          <div
-            style={{
-              color: "red",
-              textAlign: "center",
-              marginTop: 8,
-              marginBottom: 16,
-              fontSize: "14px",
-              fontWeight: 500,
-            }}
-          >
-            {generalMessage}
-          </div>
 
           <Form.Item>
             <Button
