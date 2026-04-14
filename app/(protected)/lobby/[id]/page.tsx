@@ -2,9 +2,10 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { ArrowLeft, Users, Bot, Crown, Play } from "lucide-react";
-import catanBg from "figma:asset/a3d5e0e01f9dba8936ad89072a0382297571bf96.png";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
+
+import styles from "@/styles/lobbyRoom.module.css";
 
 interface LobbyParticipantGetDTO {
   id: number;
@@ -32,7 +33,7 @@ interface GameStartGetDTO {
 export default function LobbyRoom() {
   const router = useRouter();
   const params = useParams();
-  const lobbyId = params.lobbyId as string;
+  const lobbyId = params.id as string;
 
   const apiService = useApi();
   const { value: userId } = useLocalStorage<string>("userId", "");
@@ -40,7 +41,7 @@ export default function LobbyRoom() {
   const [error, setError] = useState("");
   const [starting, setStarting] = useState(false);
 
-
+  // Load lobby details on component mount
   useEffect(() => {
     const loadLobby = async () => {
       try {
@@ -55,7 +56,27 @@ export default function LobbyRoom() {
       if (lobbyId) {
         void loadLobby();
       }
-    }, [apiService, lobbyId]);  
+    }, [apiService, lobbyId]);
+  
+  // Polling for lobby updates every 1.5 seconds
+  useEffect(() => {
+    if (!lobbyId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const updatedLobby = await apiService.get<LobbyGetDTO>(`/lobbies/${lobbyId}`);
+        setLobby(updatedLobby);
+
+        if (updatedLobby.gameId) {
+          router.push(`/game/${updatedLobby.gameId}`);
+        }
+      } catch (err) {
+        console.error("Failed to refresh lobby.", err);
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [apiService, lobbyId, router]);
 
   const currentParticipants = lobby?.currentParticipants ?? 0;
   const maxPlayers = lobby?.capacity ?? 4;
@@ -87,59 +108,47 @@ export default function LobbyRoom() {
   };
 
   if (error) {
-    return <div className="p-8 text-white">{error}</div>;
+    return <div className={styles.stateMessage}>{error}</div>;
   }
   
   if (!lobby) {
-    return <div className="p-8 text-white">Loading lobby...</div>;
+    return <div className={styles.stateMessage}>Loading lobby...</div>;
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
-      {/* Background Image */}
-      <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{
-          backgroundImage: `url(${catanBg})`,
-          filter: "brightness(0.7)",
-        }}
-      />
-
-      {/* Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-900/40 via-cyan-800/40 to-teal-900/40" />
-
+    <div className={styles.page}>
+      <div className={styles.backgroundOverlay} />
       {/* Header */}
-      <div className="bg-yellow-600/70 backdrop-blur-sm shadow-sm border-b border-yellow-700/50 relative z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+      <div className={styles.header}>
+        <div className={styles.headerInner}>
           <button
             onClick={() => router.push("/lobby")}
-            className="flex items-center gap-2 text-white hover:text-yellow-100"
+            className={styles.backButton}
           >
             <ArrowLeft className="w-5 h-5" />
             Back to Lobbies
           </button>
-          <h1 className="text-3xl font-bold text-white">Epic Game</h1>
-          <div className="w-32"></div> {/* Spacer for centering */}
+          <h1 className={styles.headerTitle}>{lobby.name}</h1>
+          <div className={styles.headerSpacer} />
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-6 py-12 relative z-10">
-        <div className="bg-yellow-600/70 backdrop-blur-sm rounded-lg shadow-lg p-8">
-          <div className="flex justify-between items-center mb-8">
-            <div className="flex items-center gap-3">
+      <div className={styles.main}>
+        <div className={styles.card}>
+          <div className={styles.topRow}>
+            <div className={styles.titleGroup}>
               <Users className="w-8 h-8 text-white" />
-              <h2 className="text-2xl font-bold text-white">
+              <h2 className={styles.title}>
                 Lobby ({currentParticipants}/{maxPlayers})
               </h2>
             </div>
+
             <button
               onClick={() => alert("Add Bot functionality not implemented yet.")}
               disabled={!canAddBot}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                canAddBot
-                  ? "bg-blue-600 hover:bg-blue-700 text-white"
-                  : "bg-gray-400 text-gray-200 cursor-not-allowed"
+              className={`${styles.addBotButton} ${
+                canAddBot ? styles.addBotButtonEnabled : styles.addBotButtonDisabled
               }`}
             >
               <Bot className="w-5 h-5" />
@@ -147,27 +156,26 @@ export default function LobbyRoom() {
             </button>
           </div>
 
-          <div className="space-y-4 mb-8">
+          <div className={styles.participantList}>
             {lobby?.participants.map((participant) => (
-              <div
-                key={participant.id}
-                className="bg-white/90 rounded-lg p-4 flex items-center justify-between"
-              >
-                <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+              <div key={participant.id} className={styles.participantCard}>
+                <div className={styles.participantInfo}>
+                  <div className={styles.avatar}>
                     {participant.bot ? <Bot className="w-6 h-6" /> : participant.username[0]}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-gray-800">{participant.username}</p>
+
+                  <div className={styles.participantText}>
+                    <div className={styles.nameRow}>
+                      <p className={styles.participantName}>{participant.username}</p>
                       {participant.host && (
-                        <>
+                        <span className={styles.hostBadge}>
                           <Crown className="w-4 h-4 text-yellow-600" />
-                          <span className="text-xs text-yellow-700">Host</span>
-                        </>
+                          Host
+                        </span>
                       )}
                     </div>
-                    <p className="text-sm text-gray-500">
+
+                    <p className={styles.participantRole}>
                       {participant.bot ? "AI Player" : "Human Player"}
                     </p>
                   </div>
@@ -177,33 +185,31 @@ export default function LobbyRoom() {
 
             {/* Empty slots */}
             {Array.from({ length: maxPlayers - currentParticipants }).map((_, index) => (
-              <div
-                key={`empty-${index}`}
-                className="bg-white/30 rounded-lg p-4 border-2 border-dashed border-white/50 flex items-center justify-center"
-              >
-                <p className="text-white text-sm">Waiting for player...</p>
+              <div key={`empty-${index}`} className={styles.emptySlot}>
+                <p className={styles.emptySlotText}>Waiting for player...</p>
               </div>
             ))}
           </div>
+
           {isHost && (
-          <div className="flex justify-center">
-            <button
-              onClick={startGame}
-              disabled={starting || currentParticipants < 2}
-              className={`flex items-center gap-3 px-8 py-4 rounded-lg text-xl font-bold transition-colors shadow-lg ${
-                starting || currentParticipants < 2
-                  ? "bg-gray-400 text-gray-200 cursor-not-allowed"
-                  : "bg-green-600 hover:bg-green-700 text-white"
-              }`}
-            >
-              <Play className="w-6 h-6" />
-              {starting ? "Starting..." : "Start Game"}
-            </button>
-          </div>
+            <div className={styles.startSection}>
+              <button
+                onClick={startGame}
+                disabled={starting || currentParticipants < 2}
+                className={`${styles.startButton} ${
+                  starting || currentParticipants < 2
+                    ? styles.startButtonDisabled
+                    : styles.startButtonEnabled
+                }`}
+              >
+                <Play className="w-6 h-6" />
+                {starting ? "Starting..." : "Start Game"}
+              </button>
+            </div>
           )}
 
           {!isHost && (
-            <p className="text-center text-white/80 text-sm mt-4">
+            <p className={styles.waitingText}>
               Waiting for host to start the game...
             </p>
           )}
