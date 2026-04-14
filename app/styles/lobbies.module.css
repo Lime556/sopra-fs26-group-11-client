@@ -1,0 +1,295 @@
+/* ── Page root ── */
+.page {
+  min-height: 100vh;
+  font-family: 'Segoe UI Emoji', sans-serif;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(28, 57, 142, 0.4) 0%,
+      rgba(0, 95, 120, 0.4) 50%,
+      rgba(11, 79, 74, 0.4) 100%
+    ),
+    url('/background_image.png') center / cover no-repeat;
+}
+
+/* ── Header ── */
+.header {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 24px;
+  height: 92px;
+  background: rgba(208, 135, 0, 0.7);
+  border-bottom: 0.8px solid #000000;
+  box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.1), 0px 1px 2px -1px rgba(0, 0, 0, 0.1);
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.headerTitle {
+  font-family: 'Segoe UI Emoji', sans-serif;
+  font-size: 30px;
+  line-height: 36px;
+  color: #ffffff;
+  margin: 0;
+}
+
+.headerWelcome {
+  font-family: 'Segoe UI Emoji', sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+  color: #FEF9C2;
+  margin: 0;
+}
+
+.logoutButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  background: #E7000B;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Segoe UI Emoji', sans-serif;
+  font-size: 16px;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.logoutButton:hover {
+  background: #c20009;
+}
+
+/* ── Main layout ── */
+.main {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  padding: 32px 24px 24px;
+  gap: 24px;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 16px 16px 8px;
+  gap: 8px;
+  width: 247px;
+  flex-shrink: 0;
+  background: rgba(208, 135, 0, 0.7);
+  box-shadow: 0px 10px 15px -3px rgba(0, 0, 0, 0.1), 0px 4px 6px -4px rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+}
+
+.navButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: 215px;
+  height: 48px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Segoe UI Emoji', sans-serif;
+  font-size: 16px;
+  color: #ffffff;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.navButton:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.navButtonActive {
+  background: #973C00;
+}
+
+.navButtonActive:hover {
+  background: #7a3000;
+}
+
+/* ── Content panel ── */
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  gap: 24px;
+  background: rgba(208, 135, 0, 0.7);
+  box-shadow: 0px 10px 15px -3px rgba(0, 0, 0, 0.1), 0px 4px 6px -4px rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  min-height: 387px;
+}
+
+.contentHeader {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.contentTitle {
+  font-family: 'Segoe UI Emoji', sans-serif;
+  font-size: 24px;
+  line-height: 32px;
+  color: #1E2939;
+  margin: 0;
+}
+
+.createButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  background: #E17100;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Segoe UI Emoji', sans-serif;
+  font-size: 16px;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.createButton:hover {
+  background: #c06200;
+}
+
+/* ── Status / error text ── */
+.statusText {
+  font-family: 'Segoe UI Emoji', sans-serif;
+  font-size: 14px;
+  color: #ffffff;
+  margin: 0;
+}
+
+.errorText {
+  font-family: 'Segoe UI Emoji', sans-serif;
+  font-size: 14px;
+  color: #ffe0e0;
+  margin: 0;
+}
+
+/* ── Lobby grid ── */
+.lobbyGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+/* ── Lobby card ── */
+.lobbyCard {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px 16px 12px;
+  gap: 12px;
+  background: #ffffff;
+  border: 0.8px solid #E5E7EB;
+  border-radius: 10px;
+  min-height: 130px;
+}
+
+.lobbyCardFull {
+  opacity: 0.65;
+}
+
+/* Card top */
+.lobbyCardTop {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lobbyNameRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.lobbyName {
+  font-family: 'Segoe UI Emoji', sans-serif;
+  font-size: 18px;
+  line-height: 28px;
+  color: #1E2939;
+}
+
+.lockIconOpen {
+  font-size: 16px;
+  color: #00C950;
+}
+
+.lockIconClosed {
+  font-size: 16px;
+  color: #6A7282;
+}
+
+.lobbyHost {
+  font-family: 'Segoe UI Emoji', sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+  color: #4A5565;
+}
+
+/* Card bottom */
+.lobbyCardBottom {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.playerCount {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Segoe UI Emoji', sans-serif;
+  font-size: 14px;
+  color: #4A5565;
+}
+
+.playerCountIcon {
+  font-size: 16px;
+  color: #4A5565;
+}
+
+.joinButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 80px;
+  height: 36px;
+  padding: 0 12px;
+  background: #00A63E;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Segoe UI Emoji', sans-serif;
+  font-size: 14px;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.joinButton:hover:not(:disabled) {
+  background: #008c33;
+}
+
+.joinButtonFull {
+  background: #9ca3af;
+  cursor: not-allowed;
+}

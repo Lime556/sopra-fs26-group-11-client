@@ -26,6 +26,7 @@ export default function Register() {
 
   const { set: setToken } = useLocalStorage<string>("token", ""); // note that the key we are selecting is "token" and the default value we are setting is an empty string
   const { set: setUserId } = useLocalStorage<string>("userId", "");
+  const { set: setUsername } = useLocalStorage<string>("username", "");
 
   const [generalMessage, setGeneralMessage] = useState<string | null>(null);
 
@@ -45,8 +46,9 @@ export default function Register() {
 
       if (response.token) setToken(response.token);
       if (response.id) setUserId(String(response.id));
+      if (response.username) setUsername(response.username);
 
-      router.replace("/users")
+      router.replace("/lobbies")
       return;
     } catch (error) {
       if (error instanceof Error) {
