@@ -1,0 +1,700 @@
+.layout {
+  --board-bg-ocean-a: #205b76;
+  --board-bg-ocean-b: #17364a;
+  --panel-bg: #e4d8b4;
+  --panel-border: #8a6f44;
+  --text-main: #2f2417;
+  --text-muted: #5f4c34;
+  --card-bg: rgba(255, 248, 225, 0.86);
+  --highlight: #f5b13d;
+  --shadow: rgba(17, 12, 6, 0.32);
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 1rem;
+  padding: 1rem;
+  background: #5baee2;
+  color: var(--text-main);
+}
+
+.boardColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.panelTitle {
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 0.6rem;
+}
+
+.playerList {
+  list-style: none;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.playerCard {
+  border: 2px solid rgba(68, 50, 26, 0.4);
+  border-radius: 8px;
+  padding: 0.55rem;
+  background: #d8d1bf;
+}
+
+.playerCardCurrent {
+  background: #f3dfaa;
+  border-color: #b8862f;
+}
+
+.playerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.playerName {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+}
+
+.colorDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+}
+
+.vpTag {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.playerVpBadge {
+  min-width: 24px;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #764d1e;
+  background: #f1d98b;
+  border: 1px solid #b8892d;
+  border-radius: 5px;
+  padding: 0.1rem 0.25rem;
+}
+
+.playerStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.28rem;
+}
+
+.playerStatCell {
+  min-height: 38px;
+  border: 2px solid rgba(45, 35, 20, 0.45);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.playerStatIcon {
+  font-size: 0.72rem;
+}
+
+.playerStatValue {
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.totalResourceCell {
+  background: linear-gradient(90deg, #16a34a 0 20%, #dc2626 20% 40%, #84cc16 40% 60%, #eab308 60% 80%, #475569 80% 100%);
+  color: #fff;
+}
+
+.devCardCell {
+  background: #fff;
+}
+
+.knightCell {
+  background: #fff;
+}
+
+.roadCell {
+  background: #d0cec9;
+}
+
+.resourceRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.resourceChip {
+  border-radius: 999px;
+  border: 1px solid rgba(67, 46, 19, 0.45);
+  padding: 0.12rem 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(255, 249, 234, 0.9);
+}
+
+.boardViewport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  border: 4px solid rgba(213, 181, 111, 0.55);
+  border-radius: 16px;
+  min-height: 70vh;
+  background:
+    radial-gradient(circle at 50% 30%, #489ec6 0%, #2f759d 32%, #244d72 64%, #162d44 100%),
+    linear-gradient(180deg, var(--board-bg-ocean-a), var(--board-bg-ocean-b));
+}
+
+.boardViewport::before {
+  content: "";
+  position: absolute;
+  width: 140%;
+  height: 140%;
+  background:
+    radial-gradient(circle at 35% 15%, rgba(255, 255, 255, 0.22) 0, rgba(255, 255, 255, 0) 42%),
+    radial-gradient(circle at 75% 80%, rgba(255, 255, 255, 0.12) 0, rgba(255, 255, 255, 0) 38%);
+  pointer-events: none;
+}
+
+.board {
+  width: min(1020px, 96%);
+  height: min(760px, 95%);
+  filter: drop-shadow(0 18px 28px var(--shadow));
+  animation: boardEnter 560ms ease-out;
+}
+
+.boardStatus {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  background: rgba(18, 42, 63, 0.68);
+  color: #f7f5e7;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  z-index: 2;
+}
+
+.hex {
+  stroke: rgba(40, 26, 11, 0.58);
+  stroke-width: 3;
+}
+
+.hexLabel {
+  fill: #1f1408;
+  font-size: 22px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: rgba(249, 239, 208, 0.95);
+  stroke-width: 4px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.robberGroup {
+  pointer-events: none;
+}
+
+.robberIcon {
+  fill: rgba(25, 23, 27, 0.9);
+  stroke: rgba(255, 255, 255, 0.88);
+  stroke-width: 2;
+}
+
+.robberText {
+  fill: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.resourceBar {
+  display: none;
+}
+
+.resourceTitle {
+  font-weight: 800;
+  color: #412e1d;
+}
+
+.turnChip {
+  margin-left: 0;
+  border: 2px solid rgba(92, 61, 30, 0.46);
+  border-radius: 999px;
+  padding: 0.15rem 0.7rem;
+  font-weight: 700;
+  background: #fff2d8;
+}
+
+.rightPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.sidebarCard {
+  background: #dfd8c5;
+  border: 4px solid #6f5a3a;
+  border-radius: 12px;
+  padding: 0.65rem;
+  box-shadow: 0 8px 18px rgba(15, 11, 6, 0.2);
+}
+
+.resourceGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.resourceTile {
+  border: 2px solid rgba(36, 31, 24, 0.4);
+  border-radius: 8px;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #f4ecda;
+  font-size: 0.95rem;
+}
+
+.resourceTile strong {
+  font-size: 0.78rem;
+}
+
+.resourcePanelGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.resourcePanelTile {
+  border: 2px solid rgba(0, 0, 0, 0.32);
+  border-radius: 8px;
+  min-height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.resourcePanelTile strong {
+  font-size: 0.8rem;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.resourcePanelTileWood {
+  background: #16a34a;
+}
+
+.resourcePanelTileBrick {
+  background: #dc2626;
+}
+
+.resourcePanelTileWool {
+  background: #84cc16;
+}
+
+.resourcePanelTileGrain {
+  background: #eab308;
+}
+
+.resourcePanelTileOre {
+  background: #475569;
+}
+
+.bankHeaderVisual {
+  height: 64px;
+  margin-bottom: 0.5rem;
+  border-radius: 8px;
+  background: #b37222;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bankHeaderIcon {
+  width: 46px;
+  height: 46px;
+  fill: #f4e4a7;
+}
+
+.bankPanel {
+  background: #ece9df;
+  border: 2px solid #7b6a50;
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.bankGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.devCardSlot {
+  min-height: 52px;
+  border: 2px solid #1f4ca0;
+  border-radius: 6px;
+  background: #2768cf;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.12rem;
+}
+
+.devCardIcon {
+  font-size: 0.95rem;
+}
+
+.devCardValue {
+  font-size: 0.8rem;
+  color: #fff;
+  font-weight: 800;
+}
+
+.bankResourceCell {
+  min-height: 52px;
+  border: 2px solid rgba(0, 0, 0, 0.28);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.12rem;
+}
+
+.bankResourceIcon {
+  font-size: 0.95rem;
+}
+
+.bankResourceValue {
+  font-size: 0.8rem;
+  color: #fff;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.42);
+}
+
+.currentPlayerLine {
+  margin-bottom: 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #4f3d27;
+}
+
+.logBox {
+  border: 2px solid rgba(80, 62, 34, 0.5);
+  border-radius: 8px;
+  background: #ece7da;
+  min-height: 96px;
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  color: #433120;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.tradeRequestButton {
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  background: #b67828;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.74rem;
+  padding: 0.45rem;
+  cursor: pointer;
+  margin-bottom: 0.45rem;
+}
+
+.chatRow {
+  margin-top: 0.45rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.35rem;
+}
+
+.chatInput {
+  border: 2px solid rgba(80, 62, 34, 0.45);
+  border-radius: 8px;
+  background: #f7f2e6;
+  color: #3d2a1a;
+  font-size: 0.74rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.chatSendButton {
+  border: none;
+  border-radius: 8px;
+  background: #97703b;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.72rem;
+  padding: 0.45rem;
+  min-width: 36px;
+  cursor: pointer;
+}
+
+.leaveButton {
+  margin-top: 0.55rem;
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  background: #b7332d;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-weight: 700;
+  padding: 0.5rem;
+  cursor: pointer;
+}
+
+.actionStrip {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.actionBox {
+  background: rgba(236, 203, 132, 0.88);
+  border: 3px solid rgba(112, 81, 38, 0.66);
+  border-radius: 14px;
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.rollDiceButton {
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  padding: 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+  background: linear-gradient(90deg, #e9b320, #b7781f);
+}
+
+.actionGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.endTurnButton {
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  padding: 0.62rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+  background: linear-gradient(180deg, #cf4a3e, #a5302b);
+  color: #fff;
+}
+
+.actionSquareButton {
+  min-height: 66px;
+  border: none;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  color: #fff;
+  cursor: pointer;
+}
+
+.actionEmoji {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.actionLabel {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.knightButton {
+  background: #b73631;
+}
+
+.roadButton {
+  background: #bb6b27;
+}
+
+.settlementButton {
+  background: #7d3db0;
+}
+
+.cityButton {
+  background: #c2458b;
+}
+
+.devCardButton {
+  background: #2d60c2;
+}
+
+.tradeRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  margin-bottom: 0.45rem;
+}
+
+.tradeModeButton {
+  border: 2px solid rgba(85, 62, 35, 0.45);
+  border-radius: 8px;
+  background: #f6e7c2;
+  color: #4a3520;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.35rem;
+  cursor: pointer;
+}
+
+.tradeModeButtonActive {
+  background: #d89a2f;
+  color: #fff;
+}
+
+.tradeGrid {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.tradeSelect,
+.tradeInput {
+  border: 2px solid rgba(78, 58, 32, 0.4);
+  border-radius: 8px;
+  background: #f7efdc;
+  color: #3b2a19;
+  padding: 0.35rem 0.45rem;
+  font-size: 0.75rem;
+}
+
+.tradeActionButton {
+  margin-top: 0.5rem;
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #d79d36, #b57a26);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.74rem;
+  padding: 0.5rem;
+  cursor: pointer;
+}
+
+.tradeActionButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 15, 22, 0.58);
+  backdrop-filter: blur(2px);
+}
+
+.tradeModal {
+  width: min(440px, 92vw);
+  background: #dfd8c5;
+  border: 4px solid #6f5a3a;
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(10, 7, 4, 0.35);
+  padding: 0.7rem;
+}
+
+.tradeModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.tradeCloseButton {
+  border: none;
+  border-radius: 8px;
+  background: #b7332d;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.35rem 0.6rem;
+  cursor: pointer;
+}
+
+@keyframes boardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 960px) {
+  .layout {
+    grid-template-columns: 1fr;
+    padding: 0.6rem;
+  }
+
+  .board {
+    width: min(920px, 100%);
+    height: min(680px, 66vh);
+  }
+
+  .rightPanel {
+    order: 2;
+  }
+
+  .actionStrip {
+    gap: 0.45rem;
+  }
+
+  .actionGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

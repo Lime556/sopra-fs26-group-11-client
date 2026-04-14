@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
@@ -24,7 +24,7 @@ import styles from "@/styles/lobby.module.css";
 export default function Lobby() {
   interface LobbyGetDTO {
     id: number;
-    name: string;
+    name?: string;
     capacity: number;
     currentPlayers: number;
     privateLobby: boolean;
@@ -63,6 +63,10 @@ export default function Lobby() {
   const [showFriendRequests, setShowFriendRequests] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{ id: string; username: string }[]>([]);
+  const [showLobbySearch, setShowLobbySearch] = useState(false);
+  const [searchLobbyQuery, setSearchLobbyQuery] = useState("");
+  const [searchLobbyResult, setSearchLobbyResult] = useState<LobbyItem | null>(null);
+  const [searchLobbyError, setSearchLobbyError] = useState("");
   
   // Create Lobby Modal
   const [showCreateLobbyModal, setShowCreateLobbyModal] = useState(false);
@@ -81,15 +85,15 @@ export default function Lobby() {
   const [lobbies, setLobbies] = useState<LobbyItem[]>([]);
   const [friends] = useState<Friend[]>(mockFriends);
 
-  const mapLobbyFromApi = (lobby: LobbyGetDTO): LobbyItem => ({
+  const mapLobbyFromApi = useCallback((lobby: LobbyGetDTO): LobbyItem => ({
     id: lobby.id,
-    name: lobby.name,
+    name: lobby.name?.trim() ? lobby.name : `Lobby ${lobby.id}`,
     capacity: lobby.capacity,
     currentPlayers: lobby.currentPlayers,
     privateLobby: lobby.privateLobby,
-  });
+  }), []);
 
-  const loadLobbies = async () => {
+  const loadLobbies = useCallback(async () => {
     try {
       const lobbyData = await apiService.get<LobbyGetDTO[]>("/lobbies");
       setLobbies(lobbyData.map(mapLobbyFromApi));
@@ -100,11 +104,11 @@ export default function Lobby() {
         console.error("Failed to load lobbies:", error);
       }
     }
-  };
+  }, [apiService, mapLobbyFromApi]);
 
   useEffect(() => {
     void loadLobbies();
-  }, []);
+  }, [loadLobbies]);
 
   const handleLogout = async () => {
     try {
@@ -132,6 +136,43 @@ export default function Lobby() {
       setPasswordError("");
     } else {
       joinLobby(lobby.id);
+    }
+  };
+
+  const handleToggleLobbySearch = () => {
+    setShowLobbySearch((prev) => !prev);
+    if (showLobbySearch) {
+      setSearchLobbyQuery("");
+      setSearchLobbyResult(null);
+      setSearchLobbyError("");
+    }
+  };
+
+  const handleSearchLobby = async () => {
+    const query = searchLobbyQuery.trim();
+    if (!query) {
+      setSearchLobbyError("Please enter a lobby ID");
+      setSearchLobbyResult(null);
+      return;
+    }
+
+    const lobbyId = Number(query);
+    if (Number.isNaN(lobbyId) || lobbyId <= 0) {
+      setSearchLobbyError("Enter a valid numeric lobby ID");
+      setSearchLobbyResult(null);
+      return;
+    }
+
+    try {
+      setSearchLobbyError("");
+      const lobby = await apiService.get<LobbyGetDTO>(`/lobbies/${lobbyId}`);
+      setSearchLobbyResult(mapLobbyFromApi(lobby));
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Lobby search failed:", error.message);
+      }
+      setSearchLobbyResult(null);
+      setSearchLobbyError("Lobby not found");
     }
   };
 
@@ -249,7 +290,7 @@ export default function Lobby() {
 
       const createdLobby = await apiService.post<LobbyGetDTO>("/lobbies", payload);
       handleCloseCreateLobbyModal();
-      router.push(`/lobby/${createdLobby.id}`);
+      router.push(`/gameboard?lobbyId=${createdLobby.id}`);
     } catch (error: unknown) {
       if (error instanceof Error) {
         setCreateLobbyError(error.message);
@@ -265,7 +306,14 @@ export default function Lobby() {
         return (
           <LobbiesTab
             lobbies={lobbies}
+            showLobbySearch={showLobbySearch}
+            searchLobbyQuery={searchLobbyQuery}
+            searchLobbyResult={searchLobbyResult}
+            searchLobbyError={searchLobbyError}
             onCreateLobby={handleCreateLobby}
+            onToggleLobbySearch={handleToggleLobbySearch}
+            onSearchLobbyQueryChange={setSearchLobbyQuery}
+            onSearchLobby={handleSearchLobby}
             onJoinLobby={handleJoinClick}
           />
         );
