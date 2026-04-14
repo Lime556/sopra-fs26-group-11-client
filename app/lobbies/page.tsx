@@ -15,6 +15,8 @@ import {
   LockOutlined,
   UnlockOutlined,
 } from "@ant-design/icons";
+import { Input, Modal } from "antd";
+import { ApplicationError } from "@/types/error";
 import styles from "@/styles/lobbies.module.css";
 
 interface LobbyGetDTO {
@@ -24,6 +26,11 @@ interface LobbyGetDTO {
   currentPlayers: number;
   playerIds: number[];
   privateLobby: boolean;
+}
+
+interface LobbyJoinDTO {
+  lobbyId: number;
+  password?: string;
 }
 
 export default function Lobbies() {
@@ -37,6 +44,12 @@ export default function Lobbies() {
   const [lobbies, setLobbies] = useState<LobbyGetDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [joinMessage, setJoinMessage] = useState<string | null>(null);
+  const [joiningLobbyId, setJoiningLobbyId] = useState<number | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [selectedLobby, setSelectedLobby] = useState<LobbyGetDTO | null>(null);
+  const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -68,9 +81,101 @@ export default function Lobbies() {
     router.push("/login");
   };
 
+  const mapJoinErrorMessage = (joinError: unknown): string => {
+    if (!(joinError instanceof Error)) {
+      return "Joining the lobby failed. Please try again.";
+    }
+
+    const appError = joinError as ApplicationError;
+    if (appError.status === 401) {
+      clearToken();
+      clearUserId();
+      router.push("/login");
+      return "Your session expired. Please log in again.";
+    }
+    if (appError.status === 403) {
+      return "Incorrect lobby password.";
+    }
+    if (appError.status === 404) {
+      return "This lobby no longer exists.";
+    }
+    if (appError.status === 409) {
+      if (joinError.message.toLowerCase().includes("already")) {
+        return "You are already in this lobby.";
+      }
+      return "This lobby is full.";
+    }
+
+    return "Joining the lobby failed. Please try again.";
+  };
+
+  const joinLobby = async (lobbyId: number, lobbyPassword?: string) => {
+    setJoiningLobbyId(lobbyId);
+    setJoinMessage(null);
+    setError(null);
+
+    try {
+      const payload: LobbyJoinDTO = {
+        lobbyId,
+        ...(lobbyPassword ? { password: lobbyPassword } : {}),
+      };
+
+      await apiService.post<LobbyGetDTO>(`/lobbies/${lobbyId}/join`, payload);
+      setJoinMessage("Successfully joined lobby.");
+      await loadLobbies();
+      return true;
+    } catch (joinError: unknown) {
+      setJoinMessage(mapJoinErrorMessage(joinError));
+      await loadLobbies();
+      return false;
+    } finally {
+      setJoiningLobbyId(null);
+    }
+  };
+
+  const handleJoinClick = (lobby: LobbyGetDTO) => {
+    if (lobby.privateLobby) {
+      setSelectedLobby(lobby);
+      setPassword("");
+      setPasswordError(null);
+      setShowPasswordModal(true);
+      return;
+    }
+
+    void joinLobby(lobby.id);
+  };
+
+  const handlePrivateJoinConfirm = async () => {
+    if (!selectedLobby) {
+      return;
+    }
+    if (!password.trim()) {
+      setPasswordError("Please enter the lobby password.");
+      return;
+    }
+
+    const success = await joinLobby(selectedLobby.id, password.trim());
+    if (success) {
+      setShowPasswordModal(false);
+      setSelectedLobby(null);
+      setPassword("");
+      setPasswordError(null);
+      return;
+    }
+
+    setPasswordError("Incorrect lobby password.");
+  };
+
+  const handlePrivateJoinCancel = () => {
+    setShowPasswordModal(false);
+    setSelectedLobby(null);
+    setPassword("");
+    setPasswordError(null);
+  };
+
   return (
     <div className={styles.page}>
-      {/* ── Header ── */}
+      {/* Header */}
       <header className={styles.header}>
         <div className={styles.headerLeft}>
           <h1 className={styles.headerTitle}>Settlers of Catan</h1>
@@ -116,6 +221,7 @@ export default function Lobbies() {
 
           {loading && <p className={styles.statusText}>Loading lobbies...</p>}
           {error && <p className={styles.errorText}>{error}</p>}
+          {joinMessage && <p className={styles.statusText}>{joinMessage}</p>}
           {!loading && !error && lobbies.length === 0 && (
             <p className={styles.statusText}>No open lobbies yet. Create one!</p>
           )}
@@ -154,11 +260,11 @@ export default function Lobbies() {
                       </div>
                       <button
                         className={`${styles.joinButton} ${isFull ? styles.joinButtonFull : ""}`}
-                        disabled={isFull}
-                        onClick={() => {}}
+                        disabled={isFull || joiningLobbyId === lobby.id}
+                        onClick={() => handleJoinClick(lobby)}
                       >
                         <LoginOutlined />
-                        {isFull ? "Full" : "Join"}
+                        {isFull ? "Full" : joiningLobbyId === lobby.id ? "Joining..." : "Join"}
                       </button>
                     </div>
                   </div>
@@ -166,6 +272,25 @@ export default function Lobbies() {
               })}
             </div>
           )}
+
+          <Modal
+            title={selectedLobby ? `Join ${selectedLobby.name}` : "Join Lobby"}
+            open={showPasswordModal}
+            onOk={() => void handlePrivateJoinConfirm()}
+            onCancel={handlePrivateJoinCancel}
+            okText="Join"
+            confirmLoading={selectedLobby !== null && joiningLobbyId === selectedLobby.id}
+          >
+            <Input.Password
+              placeholder="Enter lobby password"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setPasswordError(null);
+              }}
+            />
+            {passwordError && <p className={styles.errorText}>{passwordError}</p>}
+          </Modal>
         </section>
       </div>
     </div>
