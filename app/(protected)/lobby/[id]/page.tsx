@@ -11,7 +11,6 @@ interface LobbyParticipantGetDTO {
   id: number;
   userId: number | null;
   username: string;
-  host: boolean;
   bot: boolean;
 }
 
@@ -21,7 +20,7 @@ interface LobbyGetDTO {
   capacity: number;
   currentParticipants: number;
   participants: LobbyParticipantGetDTO[];
-  hostId: number;
+  hostParticipantId: number | null;
   gameId?: number | null;
   privateLobby: boolean;
 }
@@ -84,9 +83,11 @@ export default function LobbyRoom() {
 
   // determining current user/host
   const currentUserId = userId ? Number(userId) : null;
-  const isHost = lobby && currentUserId !== null
-    ? lobby.hostId === currentUserId
-    : false;
+  const currentParticipant = lobby?.participants.find((p) => p.userId === currentUserId);
+  const isHost = 
+    lobby !== null && 
+    currentParticipant !== undefined &&
+    currentParticipant.id === lobby.hostParticipantId;
 
   const startGame = async () => {
     if (!lobby) return;
@@ -157,7 +158,10 @@ export default function LobbyRoom() {
           </div>
 
           <div className={styles.participantList}>
-            {lobby?.participants.map((participant) => (
+            {lobby?.participants.map((participant) => {
+              const participantIsHost = participant.id === lobby.hostParticipantId;
+              
+              return (
               <div key={participant.id} className={styles.participantCard}>
                 <div className={styles.participantInfo}>
                   <div className={styles.avatar}>
@@ -167,7 +171,7 @@ export default function LobbyRoom() {
                   <div className={styles.participantText}>
                     <div className={styles.nameRow}>
                       <p className={styles.participantName}>{participant.username}</p>
-                      {participant.host && (
+                      {participantIsHost && (
                         <span className={styles.hostBadge}>
                           <Crown className="w-4 h-4 text-yellow-600" />
                           Host
@@ -181,7 +185,8 @@ export default function LobbyRoom() {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
 
             {/* Empty slots */}
             {Array.from({ length: maxPlayers - currentParticipants }).map((_, index) => (
