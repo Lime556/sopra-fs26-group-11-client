@@ -130,7 +130,9 @@ export class ApiService {
     let token: string | null = null;
 
     try {
-      const raw = localStorage.getItem("token");
+      const sessionRaw = sessionStorage.getItem("token");
+      const localRaw = localStorage.getItem("token");
+      const raw = sessionRaw ?? localRaw;
       token = raw ? (JSON.parse(raw) as string) : null;
     } catch {
       token = null;

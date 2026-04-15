@@ -46,8 +46,9 @@ export default function Lobby() {
   const apiService = useApi();
   const router = useRouter();
 
-  const { clear: clearToken } = useLocalStorage<string>("token", "");
-  const { value: userId, clear: clearUserId } = useLocalStorage<string>("userId", "");
+  const { value: token, clear: clearToken } = useLocalStorage<string>("token", "", { storage: "session" });
+  const { value: userId, clear: clearUserId } = useLocalStorage<string>("userId", "", { storage: "session" });
+  const { clear: clearUsername } = useLocalStorage<string>("username", "", { storage: "session" });
 
   const username = "Player";
   const email = "";
@@ -112,18 +113,21 @@ export default function Lobby() {
 
   const handleLogout = async () => {
     try {
-      if (userId) {
+      if (token) {
         await apiService.post("/logout", null);
       }
     } catch (error: unknown) {
       if (error instanceof Error) {
-        console.error("Logout failed:", error.message);
+        if ((error as { status?: number }).status !== 401) {
+          console.error("Logout failed:", error.message);
+        }
       } else {
         console.error("Logout failed:", error);
       }
     } finally {
       clearToken();
       clearUserId();
+      clearUsername();
       router.push("/login");
     }
   };
@@ -199,7 +203,18 @@ export default function Lobby() {
       setPassword("");
       setSelectedLobby(null);
       router.push(`/lobby/${selectedLobby.id}`);
-    } catch {
+    } catch (error: unknown) {
+      const status = error instanceof Error ? (error as { status?: number }).status : undefined;
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+
+      if (status === 409 && message.includes("already joined")) {
+        setShowPasswordModal(false);
+        setPassword("");
+        setSelectedLobby(null);
+        router.push(`/lobby/${selectedLobby.id}`);
+        return;
+      }
+
       setPasswordError("Incorrect password");
     }
   };
@@ -217,6 +232,14 @@ export default function Lobby() {
       await apiService.post<LobbyGetDTO>(`/lobbies/${lobbyId}/join`, payload);
       router.push(`/lobby/${lobbyId}`);
     } catch (error: unknown) {
+      const status = error instanceof Error ? (error as { status?: number }).status : undefined;
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+
+      if (status === 409 && message.includes("already joined")) {
+        router.push(`/lobby/${lobbyId}`);
+        return;
+      }
+
       if (error instanceof Error) {
         console.error("Joining lobby failed:", error.message);
       } else {
@@ -290,7 +313,7 @@ export default function Lobby() {
 
       const createdLobby = await apiService.post<LobbyGetDTO>("/lobbies", payload);
       handleCloseCreateLobbyModal();
-      router.push(`/gameboard?lobbyId=${createdLobby.id}`);
+      router.push(`/lobby/${createdLobby.id}`);
     } catch (error: unknown) {
       if (error instanceof Error) {
         setCreateLobbyError(error.message);

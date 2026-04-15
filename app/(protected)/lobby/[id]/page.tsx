@@ -35,9 +35,10 @@ export default function LobbyRoom() {
   const lobbyId = params.id as string;
 
   const apiService = useApi();
-  const { value: userId } = useLocalStorage<string>("userId", "");
+  const { value: userId } = useLocalStorage<string>("userId", "", { storage: "session" });
   const [lobby, setLobby] = useState<LobbyGetDTO | null>(null);
   const [error, setError] = useState("");
+  const [startInfo, setStartInfo] = useState("");
   const [starting, setStarting] = useState(false);
 
   // Load lobby details on component mount
@@ -67,7 +68,7 @@ export default function LobbyRoom() {
         setLobby(updatedLobby);
 
         if (updatedLobby.gameId) {
-          router.push(`/game/${updatedLobby.gameId}`);
+          router.push(`/gameboard?gameId=${updatedLobby.gameId}`);
         }
       } catch (err) {
         console.error("Failed to refresh lobby.", err);
@@ -91,6 +92,7 @@ export default function LobbyRoom() {
 
   const startGame = async () => {
     if (!lobby) return;
+    setStartInfo("");
     if (currentParticipants < 2) {
       alert("At least 2 players are required to start the game.");
       return;
@@ -99,8 +101,38 @@ export default function LobbyRoom() {
     try {
       setStarting(true);
       const response = await apiService.post<GameStartGetDTO>(`/lobbies/${lobby.id}/start`, {});
-      router.push(`/game/${response.gameId}`);
+      router.push(`/gameboard?gameId=${response.gameId}`);
     } catch (err) {
+      const status = err instanceof Error ? (err as { status?: number }).status : undefined;
+
+      if (status === 403) {
+        try {
+          const refreshedLobby = await apiService.get<LobbyGetDTO>(`/lobbies/${lobby.id}`);
+          setLobby(refreshedLobby);
+          if (refreshedLobby.gameId) {
+            router.push(`/gameboard?gameId=${refreshedLobby.gameId}`);
+            return;
+          }
+        } catch {
+          // Ignore refresh failures here and show a user-facing hint below.
+        }
+
+        setStartInfo("Only the host can start the game.");
+        return;
+      }
+
+      if (status === 409) {
+        try {
+          const refreshedLobby = await apiService.get<LobbyGetDTO>(`/lobbies/${lobby.id}`);
+          if (refreshedLobby.gameId) {
+            router.push(`/gameboard?gameId=${refreshedLobby.gameId}`);
+            return;
+          }
+        } catch (refreshError) {
+          console.error(refreshError);
+        }
+      }
+
       setError("Failed to start the game.");
       console.error(err);
     } finally {
@@ -217,6 +249,10 @@ export default function LobbyRoom() {
             <p className={styles.waitingText}>
               Waiting for host to start the game...
             </p>
+          )}
+
+          {startInfo && (
+            <p className={styles.waitingText}>{startInfo}</p>
           )}
         </div>
       </div>

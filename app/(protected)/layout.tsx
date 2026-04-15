@@ -9,7 +9,7 @@ export default function ProtectedLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { value: token } = useLocalStorage<string>("token", "");
+  const { value: token } = useLocalStorage<string>("token", "", { storage: "session" });
 
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);

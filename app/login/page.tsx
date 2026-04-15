@@ -18,9 +18,9 @@ const Login: React.FC = () => {
   const apiService = useApi();
   const [form] = Form.useForm();
 
-  const { set: setToken } = useLocalStorage<string>("token", "");
-  const { set: setUserId } = useLocalStorage<string>("userId", "");
-  const { set: setUsername } = useLocalStorage<string>("username", "");
+  const { set: setToken } = useLocalStorage<string>("token", "", { storage: "session" });
+  const { set: setUserId } = useLocalStorage<string>("userId", "", { storage: "session" });
+  const { set: setUsername } = useLocalStorage<string>("username", "", { storage: "session" });
 
   const handleLogin = async (values: FormFieldProps) => {
     try {
@@ -29,7 +29,7 @@ const Login: React.FC = () => {
       if (response.token) setToken(response.token);
       if (response.id) setUserId(String(response.id));
       if (response.username) setUsername(response.username);
-      router.replace("/lobbies");
+      router.replace("/lobby");
     } catch (error) {
       if (error instanceof Error) {
         alert(`Something went wrong during the login:\n${error.message}`);
