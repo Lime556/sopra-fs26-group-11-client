@@ -26,9 +26,9 @@ export default function Lobby() {
     id: number;
     name: string;
     capacity: number;
-    currentPlayers: number;
+    currentParticipants: number;
     privateLobby: boolean;
-    hostId: number;
+    hostParticipantId: number | null;
     gameId?: number | null;
   }
 
@@ -85,7 +85,7 @@ export default function Lobby() {
     id: lobby.id,
     name: lobby.name,
     capacity: lobby.capacity,
-    currentPlayers: lobby.currentPlayers,
+    currentPlayers: lobby.currentParticipants,
     privateLobby: lobby.privateLobby,
   });
 
