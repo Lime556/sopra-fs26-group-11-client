@@ -40,9 +40,9 @@ export default function Lobbies() {
   const router = useRouter();
   const apiService = useApi();
 
-  const { value: token, clear: clearToken } = useLocalStorage<string>("token", "");
-  const { clear: clearUserId } = useLocalStorage<string>("userId", "");
-  const { value: username } = useLocalStorage<string>("username", "");
+  const { value: token, clear: clearToken } = useLocalStorage<string>("token", "", { storage: "session" });
+  const { clear: clearUserId } = useLocalStorage<string>("userId", "", { storage: "session" });
+  const { value: username } = useLocalStorage<string>("username", "", { storage: "session" });
 
   const [lobbies, setLobbies] = useState<LobbyGetDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -145,6 +145,7 @@ export default function Lobbies() {
       await apiService.post<LobbyGetDTO>(`/lobbies/${lobbyId}/join`, payload);
       setJoinMessage("Successfully joined lobby.");
       await loadLobbies();
+      router.push(`/lobby/${lobbyId}`);
       return true;
     } catch (joinError: unknown) {
       setJoinMessage(mapJoinErrorMessage(joinError));
@@ -235,7 +236,7 @@ export default function Lobbies() {
         <section className={styles.content}>
           <div className={styles.contentHeader}>
             <h2 className={styles.contentTitle}>Available Lobbies</h2>
-            <button className={styles.createButton}>
+            <button className={styles.createButton} onClick={() => router.push("/lobby")}>
               <PlusOutlined />
               Create Lobby
             </button>

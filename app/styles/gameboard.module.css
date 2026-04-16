@@ -160,17 +160,6 @@
     linear-gradient(180deg, var(--board-bg-ocean-a), var(--board-bg-ocean-b));
 }
 
-.boardViewport::before {
-  content: "";
-  position: absolute;
-  width: 140%;
-  height: 140%;
-  background:
-    radial-gradient(circle at 35% 15%, rgba(255, 255, 255, 0.22) 0, rgba(255, 255, 255, 0) 42%),
-    radial-gradient(circle at 75% 80%, rgba(255, 255, 255, 0.12) 0, rgba(255, 255, 255, 0) 38%);
-  pointer-events: none;
-}
-
 .board {
   width: min(1020px, 96%);
   height: min(760px, 95%);

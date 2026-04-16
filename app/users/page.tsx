@@ -38,20 +38,24 @@ const Dashboard: React.FC = () => {
   const handleLogout = async () => {
     try {
       await apiService.post("/logout", null);
-
-      // Clear frontend auth data
-      localStorage.removeItem("token");
-      localStorage.removeItem("userId");
-
-      router.push("/login");
     } catch (error: unknown) {
       if (error instanceof Error) {
-        console.error("Logout failed:", error.message);
+        if ((error as { status?: number }).status !== 401) {
+          console.error("Logout failed:", error.message);
+        }
       } else {
         console.error("Logout failed:", error);
       }
+    } finally {
+      // Clear frontend auth data even if the server already considers the user logged out.
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("userId");
+      sessionStorage.removeItem("username");
+      localStorage.removeItem("token");
+      localStorage.removeItem("userId");
+      localStorage.removeItem("username");
 
-      alert("Could not log out. Please try again.");
+      router.push("/login");
     }
   };
 

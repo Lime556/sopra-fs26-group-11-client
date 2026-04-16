@@ -403,6 +403,21 @@ export default function Gameboard() {
 	useEffect(() => {
 		let cancelled = false;
 
+		const readStoredGameId = (): number | null => {
+			const sessionGameId = parseGameId(sessionStorage.getItem("gameId"));
+			if (sessionGameId) {
+				return sessionGameId;
+			}
+
+			const legacyGameId = parseGameId(localStorage.getItem("gameId"));
+			if (legacyGameId) {
+				sessionStorage.setItem("gameId", JSON.stringify(legacyGameId));
+				localStorage.removeItem("gameId");
+			}
+
+			return legacyGameId;
+		};
+
 		const syncGameState = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
 			try {
 				const [boardDto, gameDto] = await Promise.all([
@@ -410,9 +425,25 @@ export default function Gameboard() {
 					apiService.get<GameGetDTO>(`/games/${gameId}`),
 				]);
 
-				if (!cancelled && boardDto?.hexTiles && boardDto?.hexTile_DiceNumbers) {
-					const mappedHexes = mapBoardDtoToHexes(boardDto);
-					const mappedPorts = mapBoardDtoToPorts(boardDto);
+				const resolvedBoard = boardDto ?? gameDto?.board ?? null;
+				const hasBoardData = Boolean(
+					resolvedBoard
+					&& Array.isArray(resolvedBoard.hexTiles)
+					&& resolvedBoard.hexTiles.length >= 19
+					&& Array.isArray(resolvedBoard.hexTile_DiceNumbers)
+					&& resolvedBoard.hexTile_DiceNumbers.length >= 19
+				);
+
+				if (!hasBoardData) {
+					if (!cancelled) {
+						setBoardStatus("Board is initializing. Please wait...");
+					}
+					return "error";
+				}
+
+				if (!cancelled) {
+					const mappedHexes = mapBoardDtoToHexes(resolvedBoard as BoardGetDTO);
+					const mappedPorts = mapBoardDtoToPorts(resolvedBoard as BoardGetDTO);
 					const serverPlayers = Array.isArray(gameDto?.players) ? gameDto.players : [];
 					setState((previousState) => ({
 						...previousState,
@@ -485,7 +516,8 @@ export default function Gameboard() {
 				return null;
 			}
 
-			localStorage.setItem("gameId", JSON.stringify(createdGame.id));
+			sessionStorage.setItem("gameId", JSON.stringify(createdGame.id));
+			localStorage.removeItem("gameId");
 
 			if (createdGame.board?.hexTiles && createdGame.board?.hexTile_DiceNumbers && !cancelled) {
 				const mappedHexes = mapBoardDtoToHexes(createdGame.board as BoardGetDTO);
@@ -505,10 +537,11 @@ export default function Gameboard() {
 
 		const bootstrapBoard = async () => {
 			const queryGameId = parseGameId(searchParams.get("gameId"));
-			const storedGameId = parseGameId(localStorage.getItem("gameId"));
+			const storedGameId = readStoredGameId();
 
 			if (queryGameId) {
-				localStorage.setItem("gameId", JSON.stringify(queryGameId));
+				sessionStorage.setItem("gameId", JSON.stringify(queryGameId));
+				localStorage.removeItem("gameId");
 			}
 
 			let gameId = queryGameId ?? storedGameId;
@@ -534,6 +567,7 @@ export default function Gameboard() {
 			}
 
 			if (syncStatus === "notfound") {
+				sessionStorage.removeItem("gameId");
 				localStorage.removeItem("gameId");
 				const newGameId = await createGameIfNeeded();
 				if (!newGameId) {
@@ -567,6 +601,7 @@ export default function Gameboard() {
 
 					if (status === "notfound") {
 						setBoardStatus("Game no longer exists. Recreating board...");
+						sessionStorage.removeItem("gameId");
 						localStorage.removeItem("gameId");
 						void createGameIfNeeded().then((newGameId) => {
 							if (newGameId) {

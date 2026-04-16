@@ -24,9 +24,9 @@ export default function Register() {
   const apiService = useApi();
   const [form] = Form.useForm();
 
-  const { set: setToken } = useLocalStorage<string>("token", ""); // note that the key we are selecting is "token" and the default value we are setting is an empty string
-  const { set: setUserId } = useLocalStorage<string>("userId", "");
-  const { set: setUsername } = useLocalStorage<string>("username", "");
+  const { set: setToken } = useLocalStorage<string>("token", "", { storage: "session" }); // note that the key we are selecting is "token" and the default value we are setting is an empty string
+  const { set: setUserId } = useLocalStorage<string>("userId", "", { storage: "session" });
+  const { set: setUsername } = useLocalStorage<string>("username", "", { storage: "session" });
 
   const handleRegister = async (values: FormFieldProps) => {
 
@@ -43,7 +43,7 @@ export default function Register() {
       if (response.id) setUserId(String(response.id));
       if (response.username) setUsername(response.username);
 
-      router.replace("/lobbies")
+      router.replace("/lobby")
       return;
     } catch (error) {
       if (error instanceof Error) {

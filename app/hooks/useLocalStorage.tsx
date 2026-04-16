@@ -6,6 +6,10 @@ interface LocalStorage<T> {
   clear: () => void;
 }
 
+interface StorageOptions {
+  storage?: "local" | "session";
+}
+
 /**
  * This custom function/hook safely handles SSR by checking
  * for the window before accessing browser localStorage.
@@ -24,35 +28,55 @@ interface LocalStorage<T> {
 export default function useLocalStorage<T>(
   key: string,
   defaultValue: T,
+  options: StorageOptions = {},
 ): LocalStorage<T> {
-  const [value, setValue] = useState<T>(defaultValue);
+  const storageType = options.storage ?? "local";
 
-  // On mount, try to read the stored value
-  useEffect(() => {
-    if (typeof window === "undefined") return; // SSR safeguard
-    try {
-      const stored = globalThis.localStorage.getItem(key);
-      if (stored) {
-        setValue(JSON.parse(stored) as T);
-      }
-    } catch (error) {
-      console.error(`Error reading localStorage key "${key}":`, error);
+  const getStorage = (): Storage | null => {
+    if (typeof window === "undefined") {
+      return null;
     }
-  }, [key]);
+
+    return storageType === "session" ? globalThis.sessionStorage : globalThis.localStorage;
+  };
+
+  const readStoredValue = (): T => {
+    const storage = getStorage();
+    if (!storage) {
+      return defaultValue;
+    }
+
+    try {
+      const stored = storage.getItem(key);
+      return stored ? (JSON.parse(stored) as T) : defaultValue;
+    } catch (error) {
+      console.error(`Error reading ${storageType}Storage key "${key}":`, error);
+      return defaultValue;
+    }
+  };
+
+  const [value, setValue] = useState<T>(() => readStoredValue());
+
+  // Re-sync if the key changes
+  useEffect(() => {
+    setValue(readStoredValue());
+  }, [key, storageType]);
 
   // Simple setter that updates both state and localStorage
   const set = (newVal: T) => {
     setValue(newVal);
-    if (typeof window !== "undefined") {
-      globalThis.localStorage.setItem(key, JSON.stringify(newVal));
+    const storage = getStorage();
+    if (storage) {
+      storage.setItem(key, JSON.stringify(newVal));
     }
   };
 
   // Removes the key from localStorage and resets the state
   const clear = () => {
     setValue(defaultValue);
-    if (typeof window !== "undefined") {
-      globalThis.localStorage.removeItem(key);
+    const storage = getStorage();
+    if (storage) {
+      storage.removeItem(key);
     }
   };
 
