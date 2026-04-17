@@ -131,6 +131,12 @@
   background: #d0cec9;
 }
 
+.roadCellHolder {
+  background: linear-gradient(180deg, #f6d76c, #d4a931);
+  border-color: #8a6518;
+  color: #4f3506;
+}
+
 .resourceRow {
   display: flex;
   flex-wrap: wrap;
@@ -197,6 +203,26 @@
   stroke-width: 4px;
   text-anchor: middle;
   dominant-baseline: middle;
+}
+
+.roadEdgeSelectable {
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 8;
+  stroke-linecap: round;
+  cursor: pointer;
+  transition: stroke 120ms ease, stroke-width 120ms ease;
+}
+
+.roadEdgeSelectable:hover {
+  stroke: rgba(34, 197, 94, 0.85);
+  stroke-width: 10;
+}
+
+.roadEdgeBlocked {
+  stroke: rgba(220, 38, 38, 0.4);
+  stroke-width: 6;
+  stroke-linecap: round;
+  cursor: not-allowed;
 }
 
 .robberGroup {
@@ -305,7 +331,7 @@
   background: #84cc16;
 }
 
-.resourcePanelTileGrain {
+.resourcePanelTileWheat {
   background: #eab308;
 }
 
@@ -544,6 +570,53 @@
 
 .roadButton {
   background: #bb6b27;
+  position: relative;
+  overflow: hidden;
+}
+
+.roadButton > * {
+  position: relative;
+  z-index: 1;
+}
+
+.roadCostOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  background: rgba(34, 16, 3, 0.34);
+  opacity: 0;
+  transition: opacity 130ms ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.roadCostChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 0.82rem;
+  line-height: 1;
+}
+
+.roadCostPlus {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.roadButton:hover .roadCostOverlay {
+  opacity: 1;
+}
+
+.roadButton:disabled .roadCostOverlay {
+  display: none;
 }
 
 .settlementButton {

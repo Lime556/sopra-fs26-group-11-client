@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { useApi } from "@/hooks/useApi";
@@ -12,13 +12,13 @@ import { Castle, Home, LogOut, Minus, Send } from "lucide-react";
 import styles from "@/styles/gameboard.module.css";
 import { ApplicationError } from "@/types/error";
 
-export type ResourceType = "wood" | "brick" | "wool" | "grain" | "ore";
+export type ResourceType = "wood" | "brick" | "wool" | "wheat" | "ore";
 
 export interface Resources {
 	wood: number;
 	brick: number;
 	wool: number;
-	grain: number;
+	wheat: number;
 	ore: number;
 }
 
@@ -36,6 +36,7 @@ export interface Player {
 	color: string;
 	resources: Resources;
 	victoryPoints: number;
+	hasLongestRoad?: boolean;
 	settlementsOnCorners: { hexId: number; corner: number }[];
 	citiesOnCorners: { hexId: number; corner: number }[];
 	roadsOnEdges: { hexId: number; edge: number }[];
@@ -90,6 +91,7 @@ interface GameGetDTO {
 	targetVictoryPoints?: number | null;
 	finishedAt?: string | null;
 	gameFinished?: boolean | null;
+	chatMessages?: string[];
 }
 
 interface PlayerGetDTO {
@@ -101,15 +103,23 @@ interface PlayerGetDTO {
 	developmentCardVictoryPoints?: number | null;
 	hasLongestRoad?: boolean | null;
 	hasLargestArmy?: boolean | null;
+	roadsOnEdges?: string[];
+	wood?: number | null;
+	brick?: number | null;
+	wool?: number | null;
+	wheat?: number | null;
+	ore?: number | null;
 }
 
 interface GameEventDTO {
-	type: "BANK_TRADE" | "PLAYER_TRADE" | "ACTION" | "TURN_END";
+	type: "BANK_TRADE" | "PLAYER_TRADE" | "ACTION" | "TURN_END" | "ROAD_BUILT";
 	sourcePlayerId?: number;
 	targetPlayerId?: number;
 	giveResource?: ResourceType;
 	receiveResource?: ResourceType;
 	amount?: number;
+	hexId?: number;
+	edge?: number;
 	nextPlayerId?: number;
 	message?: string;
 }
@@ -131,17 +141,17 @@ const tileImageByType: Record<HexTile["type"], string> = {
 	wood: "/Wood.png",
 	brick: "/Brick.png",
 	wool: "/Sheep.png",
-	grain: "/Wheat.png",
+	wheat: "/Wheat.png",
 	ore: "/Stone.png",
 	desert: "/Desert.png",
 };
 
-const resourceTypes: ResourceType[] = ["wood", "brick", "wool", "grain", "ore"];
+const resourceTypes: ResourceType[] = ["wood", "brick", "wool", "wheat", "ore"];
 const resourceEmojiByType: Record<ResourceType, string> = {
 	wood: "🌲",
 	brick: "🧱",
 	wool: "🐑",
-	grain: "🌾",
+	wheat: "🌾",
 	ore: "⛰️",
 };
 
@@ -149,7 +159,7 @@ const bankResources: Resources = {
 	wood: 19,
 	brick: 19,
 	wool: 19,
-	grain: 19,
+	wheat: 19,
 	ore: 19,
 };
 
@@ -157,7 +167,7 @@ const bankResourceColorByType: Record<ResourceType, string> = {
 	wood: "#16a34a",
 	brick: "#dc2626",
 	wool: "#84cc16",
-	grain: "#eab308",
+	wheat: "#eab308",
 	ore: "#475569",
 };
 
@@ -212,6 +222,88 @@ function calculateHexPoints(centerX: number, centerY: number) {
 	return points.join(" ");
 }
 
+function createCanonicalEdgeKey(hex: HexTile, edge: number): string {
+	const { cx, cy } = toPixel(hex);
+	const point1 = getCornerPoint(cx, cy, edge);
+	const point2 = getCornerPoint(cx, cy, (edge + 1) % 6);
+	const a = `${Math.round(point1.x)}:${Math.round(point1.y)}`;
+	const b = `${Math.round(point2.x)}:${Math.round(point2.y)}`;
+	return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+function createCanonicalCornerKey(hex: HexTile, corner: number): string {
+	const { cx, cy } = toPixel(hex);
+	const point = getCornerPoint(cx, cy, corner);
+	return `${Math.round(point.x)}:${Math.round(point.y)}`;
+}
+
+function getCanonicalRoadEndpoints(hex: HexTile, edge: number): [string, string] {
+	const from = createCanonicalCornerKey(hex, edge);
+	const to = createCanonicalCornerKey(hex, (edge + 1) % 6);
+	return from < to ? [from, to] : [to, from];
+}
+
+function computeLongestRoadLength(player: Player, hexById: Map<number, HexTile>): number {
+	const uniqueEdges = new Map<string, [string, string]>();
+
+	player.roadsOnEdges.forEach((road) => {
+		const hex = hexById.get(road.hexId);
+		if (!hex) {
+			return;
+		}
+
+		const [from, to] = getCanonicalRoadEndpoints(hex, road.edge);
+		const edgeKey = `${from}|${to}`;
+		if (!uniqueEdges.has(edgeKey)) {
+			uniqueEdges.set(edgeKey, [from, to]);
+		}
+	});
+
+	const edges = Array.from(uniqueEdges.values());
+	if (edges.length === 0) {
+		return 0;
+	}
+
+	const adjacency = new Map<string, number[]>();
+	edges.forEach(([from, to], index) => {
+		const fromList = adjacency.get(from) ?? [];
+		fromList.push(index);
+		adjacency.set(from, fromList);
+
+		const toList = adjacency.get(to) ?? [];
+		toList.push(index);
+		adjacency.set(to, toList);
+	});
+
+	const usedEdge = new Array<boolean>(edges.length).fill(false);
+
+	const dfs = (node: string): number => {
+		const connected = adjacency.get(node) ?? [];
+		let best = 0;
+
+		for (const edgeIndex of connected) {
+			if (usedEdge[edgeIndex]) {
+				continue;
+			}
+
+			usedEdge[edgeIndex] = true;
+			const [from, to] = edges[edgeIndex];
+			const nextNode = node === from ? to : from;
+			best = Math.max(best, 1 + dfs(nextNode));
+			usedEdge[edgeIndex] = false;
+		}
+
+		return best;
+	};
+
+	let longest = 0;
+	adjacency.forEach((_, node) => {
+		longest = Math.max(longest, dfs(node));
+	});
+
+	return longest;
+}
+
 function createInitialGameState(): GameState {
 	return {
 		hexes: [],
@@ -221,6 +313,41 @@ function createInitialGameState(): GameState {
 		players: [],
 		robberHexId: null,
 	};
+}
+
+function parseRoadEntry(roadEntry: string): { hexId: number; edge: number } | null {
+	const [rawHexId, rawEdge] = roadEntry.split(":");
+	const hexId = Number(rawHexId);
+	const edge = Number(rawEdge);
+	if (!Number.isInteger(hexId) || !Number.isInteger(edge)) {
+		return null;
+	}
+	return { hexId, edge };
+}
+
+function createRoadEdgeId(road: { hexId: number; edge: number }): string {
+	return `${road.hexId}:${road.edge}`;
+}
+
+function mergeRoadLists(
+	serverRoads: { hexId: number; edge: number }[],
+	localRoads: { hexId: number; edge: number }[]
+): { hexId: number; edge: number }[] {
+	const merged = new Map<string, { hexId: number; edge: number }>();
+	[...localRoads, ...serverRoads].forEach((road) => {
+		merged.set(createRoadEdgeId(road), road);
+	});
+	return Array.from(merged.values());
+}
+
+function rememberRoadsInCache(
+	roadCache: Map<number, Set<string>>,
+	playerId: number,
+	roads: { hexId: number; edge: number }[]
+) {
+	const cacheEntry = roadCache.get(playerId) ?? new Set<string>();
+	roads.forEach((road) => cacheEntry.add(createRoadEdgeId(road)));
+	roadCache.set(playerId, cacheEntry);
 }
 
 function mapServerPortType(type: string | undefined): PortType {
@@ -236,7 +363,7 @@ function mapServerPortType(type: string | undefined): PortType {
 		case "SHEEP":
 			return "wool";
 		case "WHEAT":
-			return "grain";
+			return "wheat";
 			case "STONE":
 		case "ORE":
 			return "ore";
@@ -281,7 +408,7 @@ function getPortColor(type: PortType): string {
 		wood: "#22c55e",
 		brick: "#ef4444",
 		wool: "#a3e635",
-		grain: "#fbbf24",
+		wheat: "#fbbf24",
 		ore: "#64748b",
 	};
 
@@ -300,7 +427,7 @@ function getPortIcon(type: PortType): string {
 			return "🧱";
 		case "wool":
 			return "🐑";
-		case "grain":
+		case "wheat":
 			return "🌾";
 		case "ore":
 			return "⛰️";
@@ -337,7 +464,7 @@ function mapServerTileType(type: string): HexTile["type"] {
 		case "SHEEP":
 			return "wool";
 		case "WHEAT":
-			return "grain";
+			return "wheat";
 		case "ORE":
 			return "ore";
 		default:
@@ -383,13 +510,17 @@ function fallbackColorForPlayer(index: number): string {
 	return fallbackPlayerColors[index % fallbackPlayerColors.length];
 }
 
-function createEmptyResources(): Resources {
+function safeResourceValue(value: number | null | undefined): number {
+	return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 10;
+}
+
+function mapResourcesFromServer(player: PlayerGetDTO): Resources {
 	return {
-		wood: 0,
-		brick: 0,
-		wool: 0,
-		grain: 0,
-		ore: 0,
+		wood: safeResourceValue(player.wood),
+		brick: safeResourceValue(player.brick),
+		wool: safeResourceValue(player.wool),
+		wheat: safeResourceValue(player.wheat),
+		ore: safeResourceValue(player.ore),
 	};
 }
 
@@ -403,7 +534,7 @@ export default function Gameboard() {
 	const [gameLog, setGameLog] = useState<string[]>(["Trading ready."]);
 	const [tradeMode, setTradeMode] = useState<TradeMode>("bank");
 	const [giveResource, setGiveResource] = useState<ResourceType>("wood");
-	const [receiveResource, setReceiveResource] = useState<ResourceType>("grain");
+	const [receiveResource, setReceiveResource] = useState<ResourceType>("wheat");
 	const [tradeAmount, setTradeAmount] = useState<number>(1);
 	const [targetPlayerId, setTargetPlayerId] = useState<number | null>(null);
 	const [showTradePopup, setShowTradePopup] = useState<boolean>(false);
@@ -413,7 +544,45 @@ export default function Gameboard() {
 	const [winnerPlayerName, setWinnerPlayerName] = useState<string | null>(null);
 	const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
 	const [activeGameId, setActiveGameId] = useState<number | null>(null);
+	const [isRoadPlacementMode, setIsRoadPlacementMode] = useState<boolean>(false);
+	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
+	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
 	const ports = Array.isArray(state.ports) ? state.ports : [];
+
+	useEffect(() => {
+		if (!activeGameId) {
+			return;
+		}
+
+		const storageKey = `gameLog:${activeGameId}`;
+		const stored = sessionStorage.getItem(storageKey);
+		if (!stored) {
+			return;
+		}
+
+		try {
+			const parsed = JSON.parse(stored) as unknown;
+			if (Array.isArray(parsed)) {
+				const restoredEntries = parsed
+					.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+					.slice(0, 40);
+				if (restoredEntries.length > 0) {
+					setGameLog(restoredEntries);
+				}
+			}
+		} catch {
+			// Ignore corrupted local log cache.
+		}
+	}, [activeGameId]);
+
+	useEffect(() => {
+		if (!activeGameId) {
+			return;
+		}
+
+		const storageKey = `gameLog:${activeGameId}`;
+		sessionStorage.setItem(storageKey, JSON.stringify(gameLog.slice(0, 40)));
+	}, [activeGameId, gameLog]);
 
 	useEffect(() => {
 		if (!Array.isArray(state.ports)) {
@@ -426,6 +595,8 @@ export default function Gameboard() {
 
 	useEffect(() => {
 		let cancelled = false;
+		syncedChatMessagesRef.current = new Set();
+		roadCacheRef.current = new Map();
 
 		const readStoredGameId = (): number | null => {
 			const sessionGameId = parseGameId(sessionStorage.getItem("gameId"));
@@ -469,6 +640,9 @@ export default function Gameboard() {
 					const mappedHexes = mapBoardDtoToHexes(resolvedBoard as BoardGetDTO);
 					const mappedPorts = mapBoardDtoToPorts(resolvedBoard as BoardGetDTO);
 					const serverPlayers = Array.isArray(gameDto?.players) ? gameDto.players : [];
+					const serverChatMessages = Array.isArray(gameDto?.chatMessages)
+						? gameDto.chatMessages.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+						: [];
 					setState((previousState) => ({
 						...previousState,
 						hexes: mappedHexes,
@@ -478,15 +652,22 @@ export default function Gameboard() {
 							serverPlayers.length > 0
 								? serverPlayers.map((serverPlayer, index) => {
 									const previousPlayer = previousState.players.find((player) => player.id === serverPlayer.id);
+									const cachedRoads = Array.from(roadCacheRef.current.get(serverPlayer.id) ?? []).map((entry) => parseRoadEntry(entry)).filter((entry): entry is { hexId: number; edge: number } => entry !== null);
+									const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
+										? serverPlayer.roadsOnEdges.map((entry) => parseRoadEntry(entry)).filter((entry): entry is { hexId: number; edge: number } => entry !== null)
+										: [];
+									const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
+									rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
 									return {
 										id: serverPlayer.id,
 										name: serverPlayer.name,
 										color: previousPlayer?.color ?? fallbackColorForPlayer(index),
-										resources: previousPlayer?.resources ?? createEmptyResources(),
+										resources: mapResourcesFromServer(serverPlayer),
 										victoryPoints: serverPlayer.victoryPoints ?? 0,
+										hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
 										settlementsOnCorners: previousPlayer?.settlementsOnCorners ?? [],
 										citiesOnCorners: previousPlayer?.citiesOnCorners ?? [],
-										roadsOnEdges: previousPlayer?.roadsOnEdges ?? [],
+										roadsOnEdges: mergedRoads,
 									};
 								})
 								: previousState.players,
@@ -513,6 +694,20 @@ export default function Gameboard() {
 					setWinnerPlayerId(gameDto?.winner?.id ?? null);
 					setWinnerPlayerName(gameDto?.winner?.name ?? null);
 					setIsGameFinished(Boolean(gameDto?.gameFinished) || Boolean(gameDto?.finishedAt));
+
+					if (serverChatMessages.length > 0) {
+						setGameLog((previous) => {
+							const known = syncedChatMessagesRef.current;
+							const unseen = serverChatMessages.filter((message) => !known.has(message));
+							if (unseen.length === 0) {
+								return previous;
+							}
+
+							unseen.forEach((message) => known.add(message));
+							return [...unseen.reverse(), ...previous].slice(0, 40);
+						});
+					}
+
 					setBoardStatus("");
 				}
 
@@ -684,6 +879,8 @@ export default function Gameboard() {
 	const currentPlayerIndex = state.players.findIndex((player) => player.id === state.currentPlayerId);
 	const currentPlayer = state.players.find((player) => player.id === state.currentPlayerId) ?? null;
 	const myPlayer = state.players.find((player) => player.name === sessionUsername) ?? null;
+	const myPlayerIdRef = useRef<number | null>(null);
+	myPlayerIdRef.current = myPlayer?.id ?? null;
 	const isMyTurn = myPlayer !== null && myPlayer.id === state.currentPlayerId;
 	const otherPlayers = state.players.filter((player) => player.id !== state.currentPlayerId);
 
@@ -696,14 +893,209 @@ export default function Gameboard() {
 	const diceLabel = state.diceResult ? `${state.diceResult[0]} + ${state.diceResult[1]}` : "-";
 
 	const addToLog = (message: string) => {
-		setGameLog((previous) => [message, ...previous].slice(0, 12));
+		setGameLog((previous) => {
+			if (previous[0] === message) {
+				return previous;
+			}
+			return [message, ...previous].slice(0, 12);
+		});
+	};
+
+	const parseChatEntry = (entry: string): { sender: string; message: string } | null => {
+		const normalizedEntry = entry.startsWith("[CHAT] ") ? entry.slice(7) : entry;
+		const separatorIndex = normalizedEntry.indexOf(": ");
+		if (separatorIndex <= 0) {
+			return null;
+		}
+
+		const sender = normalizedEntry.slice(0, separatorIndex).trim();
+		const message = normalizedEntry.slice(separatorIndex + 2).trim();
+		if (!sender || !message) {
+			return null;
+		}
+
+		return { sender, message };
 	};
 
 	const getPlayerTotalResources = (player: Player): number =>
 		resourceTypes.reduce((sum, resource) => sum + player.resources[resource], 0);
+	const occupiedEdgeKeys = useMemo(() => {
+		const occupied = new Set<string>();
+		state.players.forEach((player) => {
+			player.roadsOnEdges.forEach((road) => {
+				const hex = hexById.get(road.hexId);
+				if (!hex) {
+					return;
+				}
+
+				occupied.add(createCanonicalEdgeKey(hex, road.edge));
+			});
+		});
+		return occupied;
+	}, [state.players, hexById]);
+
+	const longestRoadLengthByPlayerId = useMemo(() => {
+		const lengths = new Map<number, number>();
+		state.players.forEach((player) => {
+			lengths.set(player.id, computeLongestRoadLength(player, hexById));
+		});
+		return lengths;
+	}, [state.players, hexById]);
+
+	const renderedRoadSegments = useMemo(() => {
+		return state.players.flatMap((player) => {
+			const uniqueRoads = new Map<string, { x1: number; y1: number; x2: number; y2: number }>();
+
+			player.roadsOnEdges.forEach((road) => {
+				const hex = hexById.get(road.hexId);
+				if (!hex) {
+					return;
+				}
+
+				const edgeKey = createCanonicalEdgeKey(hex, road.edge);
+				if (uniqueRoads.has(edgeKey)) {
+					return;
+				}
+
+				const { cx, cy } = toPixel(hex);
+				const p1 = getCornerPoint(cx, cy, road.edge);
+				const p2 = getCornerPoint(cx, cy, (road.edge + 1) % 6);
+				uniqueRoads.set(edgeKey, { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
+			});
+
+			return Array.from(uniqueRoads.entries()).map(([edgeKey, line]) => ({
+				key: `road-${player.id}-${edgeKey}`,
+				color: player.color,
+				...line,
+			}));
+		});
+	}, [state.players, hexById]);
+
+	const canAffordRoad = !!myPlayer && myPlayer.resources.wood >= 1 && myPlayer.resources.brick >= 1;
+
+	const isLegalRoadPlacement = (hexId: number, edge: number): boolean => {
+		if (!myPlayer) {
+			return false;
+		}
+
+		const hex = hexById.get(hexId);
+		if (!hex) {
+			return false;
+		}
+
+		const edgeKey = createCanonicalEdgeKey(hex, edge);
+		if (occupiedEdgeKeys.has(edgeKey)) {
+			return false;
+		}
+
+		const [fromCorner, toCorner] = getCanonicalRoadEndpoints(hex, edge);
+
+		const hasAdjacentOwnRoad = myPlayer.roadsOnEdges.some((road) => {
+			const roadHex = hexById.get(road.hexId);
+			if (!roadHex) {
+				return false;
+			}
+
+			const [roadFrom, roadTo] = getCanonicalRoadEndpoints(roadHex, road.edge);
+			return roadFrom === fromCorner || roadFrom === toCorner || roadTo === fromCorner || roadTo === toCorner;
+		});
+
+		const ownsCornerBuilding = (cornerKey: string): boolean => {
+			const hasSettlement = myPlayer.settlementsOnCorners.some((settlement) => {
+				const settlementHex = hexById.get(settlement.hexId);
+				return settlementHex ? createCanonicalCornerKey(settlementHex, settlement.corner) === cornerKey : false;
+			});
+
+			if (hasSettlement) {
+				return true;
+			}
+
+			return myPlayer.citiesOnCorners.some((city) => {
+				const cityHex = hexById.get(city.hexId);
+				return cityHex ? createCanonicalCornerKey(cityHex, city.corner) === cornerKey : false;
+			});
+		};
+
+		const hasAdjacentOwnBuilding = ownsCornerBuilding(fromCorner) || ownsCornerBuilding(toCorner);
+
+		if (!hasAdjacentOwnRoad || !hasAdjacentOwnBuilding) {
+			addToLog("Road must connect to your own road and one of your buildings.");
+			return false;
+		}
+
+		return true;
+	};
 
 	const applyGameEvent = (event: GameEventDTO) => {
 		if (!event?.type) {
+			return;
+		}
+
+		const localPlayerId = myPlayerIdRef.current;
+
+		if (event.type === "ROAD_BUILT") {
+			if (
+				typeof event.sourcePlayerId !== "number"
+				|| typeof event.hexId !== "number"
+				|| typeof event.edge !== "number"
+			) {
+				return;
+			}
+
+			const targetHexId = event.hexId;
+			const targetEdge = event.edge;
+
+			if (typeof localPlayerId === "number" && event.sourcePlayerId === localPlayerId) {
+				return;
+			}
+
+			setState((previousState) => {
+				const sourceIndex = previousState.players.findIndex((player) => player.id === event.sourcePlayerId);
+				if (sourceIndex < 0) {
+					return previousState;
+				}
+
+				const previousHexById = new Map<number, HexTile>();
+				previousState.hexes.forEach((hex) => previousHexById.set(hex.id, hex));
+
+				const targetHexFromState = previousHexById.get(targetHexId);
+				if (!targetHexFromState) {
+					return previousState;
+				}
+
+				const targetEdgeKey = createCanonicalEdgeKey(targetHexFromState, targetEdge);
+
+				const edgeAlreadyOccupied = previousState.players.some((player) =>
+					player.roadsOnEdges.some((road) => {
+						const roadHex = previousHexById.get(road.hexId);
+						return roadHex ? createCanonicalEdgeKey(roadHex, road.edge) === targetEdgeKey : false;
+					})
+				);
+				if (edgeAlreadyOccupied) {
+					return previousState;
+				}
+
+				const source = previousState.players[sourceIndex];
+				const alreadyPlaced = source.roadsOnEdges.some((road) => road.hexId === targetHexId && road.edge === targetEdge);
+				if (alreadyPlaced) {
+					return previousState;
+				}
+
+				const nextPlayers = [...previousState.players];
+				nextPlayers[sourceIndex] = {
+					...source,
+					roadsOnEdges: [...source.roadsOnEdges, { hexId: targetHexId, edge: targetEdge }],
+				};
+
+				return {
+					...previousState,
+					players: nextPlayers,
+				};
+			});
+
+			if (event.message) {
+				addToLog(event.message);
+			}
 			return;
 		}
 
@@ -715,14 +1107,14 @@ export default function Gameboard() {
 				}));
 			}
 
-			if (!(myPlayer && typeof event.sourcePlayerId === "number" && event.sourcePlayerId === myPlayer.id) && event.message) {
+			if (!(typeof localPlayerId === "number" && typeof event.sourcePlayerId === "number" && event.sourcePlayerId === localPlayerId) && event.message) {
 				addToLog(event.message);
 			}
 			return;
 		}
 
 		if (event.type === "ACTION") {
-			if (myPlayer && typeof event.sourcePlayerId === "number" && event.sourcePlayerId === myPlayer.id) {
+			if (typeof localPlayerId === "number" && typeof event.sourcePlayerId === "number" && event.sourcePlayerId === localPlayerId) {
 				return;
 			}
 			if (event.message) {
@@ -735,7 +1127,7 @@ export default function Gameboard() {
 			return;
 		}
 
-		if (myPlayer && event.sourcePlayerId === myPlayer.id) {
+		if (typeof localPlayerId === "number" && event.sourcePlayerId === localPlayerId) {
 			return;
 		}
 
@@ -743,30 +1135,7 @@ export default function Gameboard() {
 			return;
 		}
 
-		const giveResource = event.giveResource;
-		const receiveResource = event.receiveResource;
-		const amount = event.amount;
-
 		if (event.type === "BANK_TRADE") {
-			setState((previousState) => {
-				const sourceIndex = previousState.players.findIndex((player) => player.id === event.sourcePlayerId);
-				if (sourceIndex < 0) {
-					return previousState;
-				}
-
-				const nextPlayers = [...previousState.players];
-				const source = { ...nextPlayers[sourceIndex], resources: { ...nextPlayers[sourceIndex].resources } };
-				const giveAmount = amount * 4;
-				source.resources[giveResource] -= giveAmount;
-				source.resources[receiveResource] += amount;
-				nextPlayers[sourceIndex] = source;
-
-				return {
-					...previousState,
-					players: nextPlayers,
-				};
-			});
-
 			if (event.message) {
 				addToLog(event.message);
 			}
@@ -778,36 +1147,14 @@ export default function Gameboard() {
 				return;
 			}
 
-			setState((previousState) => {
-				const sourceIndex = previousState.players.findIndex((player) => player.id === event.sourcePlayerId);
-				const targetIndex = previousState.players.findIndex((player) => player.id === event.targetPlayerId);
-				if (sourceIndex < 0 || targetIndex < 0) {
-					return previousState;
-				}
-
-				const nextPlayers = [...previousState.players];
-				const source = { ...nextPlayers[sourceIndex], resources: { ...nextPlayers[sourceIndex].resources } };
-				const target = { ...nextPlayers[targetIndex], resources: { ...nextPlayers[targetIndex].resources } };
-
-				source.resources[giveResource] -= amount;
-				source.resources[receiveResource] += amount;
-				target.resources[receiveResource] -= amount;
-				target.resources[giveResource] += amount;
-
-				nextPlayers[sourceIndex] = source;
-				nextPlayers[targetIndex] = target;
-
-				return {
-					...previousState,
-					players: nextPlayers,
-				};
-			});
-
 			if (event.message) {
 				addToLog(event.message);
 			}
 		}
 	};
+
+	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
+	applyGameEventRef.current = applyGameEvent;
 
 	useEffect(() => {
 		if (!activeGameId) {
@@ -817,9 +1164,50 @@ export default function Gameboard() {
 		const client = new Client({
 			webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`),
 			onConnect: () => {
+				client.subscribe(`/topic/games/${activeGameId}/state`, (message) => {
+					try {
+						const gameDto = JSON.parse(message.body) as GameGetDTO;
+						if (!gameDto) {
+							return;
+						}
+
+						setState((previousState) => ({
+							...previousState,
+							players: Array.isArray(gameDto.players)
+								? gameDto.players.map((serverPlayer, index) => {
+									const previousPlayer = previousState.players.find((player) => player.id === serverPlayer.id);
+									const cachedRoads = Array.from(roadCacheRef.current.get(serverPlayer.id) ?? []).map((entry) => parseRoadEntry(entry)).filter((entry): entry is { hexId: number; edge: number } => entry !== null);
+									const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
+										? serverPlayer.roadsOnEdges.map((entry) => parseRoadEntry(entry)).filter((entry): entry is { hexId: number; edge: number } => entry !== null)
+										: [];
+									const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
+									rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
+									return {
+										id: serverPlayer.id,
+										name: serverPlayer.name,
+										color: previousPlayer?.color ?? fallbackColorForPlayer(index),
+										resources: mapResourcesFromServer(serverPlayer),
+										victoryPoints: serverPlayer.victoryPoints ?? 0,
+										hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
+										settlementsOnCorners: previousPlayer?.settlementsOnCorners ?? [],
+										citiesOnCorners: previousPlayer?.citiesOnCorners ?? [],
+										roadsOnEdges: mergedRoads,
+									};
+								})
+								: previousState.players,
+							currentPlayerId: typeof gameDto.currentTurnIndex === "number" && Array.isArray(gameDto.players) && gameDto.players.length > 0
+								? gameDto.players[((gameDto.currentTurnIndex % gameDto.players.length) + gameDto.players.length) % gameDto.players.length].id
+								: previousState.currentPlayerId,
+							robberHexId: gameDto.robberTileIndex ?? previousState.robberHexId,
+						}));
+					} catch {
+						// Ignore malformed state messages.
+					}
+				});
+
 				client.subscribe(`/topic/games/${activeGameId}/events`, (message) => {
 					try {
-						applyGameEvent(JSON.parse(message.body) as GameEventDTO);
+						applyGameEventRef.current(JSON.parse(message.body) as GameEventDTO);
 					} catch {
 						// Ignore malformed messages.
 					}
@@ -829,7 +1217,9 @@ export default function Gameboard() {
 					try {
 						const payload = JSON.parse(message.body) as GameChatMessageDTO;
 						if (payload?.text) {
-							addToLog(`[CHAT] ${payload.playerName ?? "Player"}: ${payload.text}`);
+							const logEntry = `${payload.playerName ?? "Player"}: ${payload.text}`;
+							syncedChatMessagesRef.current.add(logEntry);
+							addToLog(logEntry);
 						}
 					} catch {
 						// Ignore malformed messages.
@@ -843,7 +1233,7 @@ export default function Gameboard() {
 		return () => {
 			void client.deactivate();
 		};
-	}, [activeGameId, myPlayer]);
+	}, [activeGameId]);
 
 	const handleBankTrade = () => {
 		if (currentPlayerIndex < 0 || !currentPlayer || !activeGameId) {
@@ -863,19 +1253,6 @@ export default function Gameboard() {
 			addToLog(`${currentPlayer.name} needs ${giveAmount} ${giveResource} for this trade.`);
 			return;
 		}
-
-		setState((previousState) => {
-			const nextPlayers = [...previousState.players];
-			const nextCurrent = { ...nextPlayers[currentPlayerIndex], resources: { ...nextPlayers[currentPlayerIndex].resources } };
-			nextCurrent.resources[giveResource] -= giveAmount;
-			nextCurrent.resources[receiveResource] += tradeAmount;
-			nextPlayers[currentPlayerIndex] = nextCurrent;
-
-			return {
-				...previousState,
-				players: nextPlayers,
-			};
-		});
 
 		const logMessage = `${currentPlayer.name} trades ${giveAmount} ${giveResource} for ${tradeAmount} ${receiveResource} with bank.`;
 		addToLog(logMessage);
@@ -918,25 +1295,6 @@ export default function Gameboard() {
 			return;
 		}
 
-		setState((previousState) => {
-			const nextPlayers = [...previousState.players];
-			const nextCurrent = { ...nextPlayers[currentPlayerIndex], resources: { ...nextPlayers[currentPlayerIndex].resources } };
-			const nextTarget = { ...nextPlayers[targetIndex], resources: { ...nextPlayers[targetIndex].resources } };
-
-			nextCurrent.resources[giveResource] -= tradeAmount;
-			nextCurrent.resources[receiveResource] += tradeAmount;
-			nextTarget.resources[receiveResource] -= tradeAmount;
-			nextTarget.resources[giveResource] += tradeAmount;
-
-			nextPlayers[currentPlayerIndex] = nextCurrent;
-			nextPlayers[targetIndex] = nextTarget;
-
-			return {
-				...previousState,
-				players: nextPlayers,
-			};
-		});
-
 		const logMessage = `${currentPlayer.name} trades ${tradeAmount} ${giveResource} with ${targetPlayer.name} for ${receiveResource}.`;
 		addToLog(logMessage);
 		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
@@ -951,6 +1309,7 @@ export default function Gameboard() {
 	};
 
 	const handleActionPlaceholder = (actionName: string) => {
+		setIsRoadPlacementMode(false);
 		const message = `Action clicked: ${actionName} (implementation pending).`;
 		addToLog(message);
 		if (!activeGameId || !myPlayer) {
@@ -961,6 +1320,70 @@ export default function Gameboard() {
 			type: "ACTION",
 			sourcePlayerId: myPlayer.id,
 			message,
+		});
+	};
+
+	const handleBuildRoadAction = () => {
+		if (!isMyTurn || !myPlayer) {
+			return;
+		}
+
+		if (!canAffordRoad) {
+			addToLog("Building a road costs 1 wood and 1 brick.");
+			return;
+		}
+
+		setIsRoadPlacementMode((previous) => {
+			const nextMode = !previous;
+			addToLog(nextMode ? "Select a legal edge connected to your own road and building." : "Road placement cancelled.");
+			return nextMode;
+		});
+	};
+
+	const handleRoadEdgeClick = async (hexId: number, edge: number) => {
+		if (!isRoadPlacementMode || !isMyTurn || !myPlayer || !activeGameId) {
+			return;
+		}
+
+		const hex = hexById.get(hexId);
+		if (!hex) {
+			return;
+		}
+
+		const edgeKey = createCanonicalEdgeKey(hex, edge);
+		if (occupiedEdgeKeys.has(edgeKey)) {
+			addToLog("That edge is already occupied by another road.");
+			return;
+		}
+
+		if (!canAffordRoad) {
+			addToLog("Building a road costs 1 wood and 1 brick.");
+			return;
+		}
+
+		if (!isLegalRoadPlacement(hexId, edge)) {
+			return;
+		}
+
+		try {
+			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+				type: "ROAD_BUILT",
+				sourcePlayerId: myPlayer.id,
+				hexId,
+				edge,
+			});
+		} catch {
+			addToLog("Could not build road. Please try again.");
+			return;
+		}
+
+		setIsRoadPlacementMode(false);
+		const message = "built a road.";
+
+		void apiService.post<GameChatMessageDTO>(`/games/${activeGameId}/chat`, {
+			playerId: myPlayer.id,
+			playerName: myPlayer.name,
+			text: message,
 		});
 	};
 
@@ -976,6 +1399,7 @@ export default function Gameboard() {
 
 		const nextIndex = (currentIndex + 1) % state.players.length;
 		const nextPlayer = state.players[nextIndex];
+		setIsRoadPlacementMode(false);
 
 		setState((previousState) => ({
 			...previousState,
@@ -1123,12 +1547,12 @@ export default function Gameboard() {
 								const { cx, cy } = toPixel(hex);
 								const baseImageSize = hexSize * 2.35;
 								const imageSize =
-									hex.type === "grain"
+															hex.type === "wheat"
 										? baseImageSize + 10
 										: hex.type === "desert"
 											? baseImageSize - 12
 											: baseImageSize;
-								const imageYOffset = hex.type === "grain" ? 0 : 0;
+														const imageYOffset = hex.type === "wheat" ? 0 : 0;
 								return (
 									<g key={hex.id}>
 										<image
@@ -1227,32 +1651,46 @@ export default function Gameboard() {
 							);
 						})}
 
-						<g>
-							{state.players.flatMap((player) =>
-								player.roadsOnEdges.map((road, index) => {
-									const hex = hexById.get(road.hexId);
-									if (!hex) {
+						{isRoadPlacementMode && isMyTurn
+							? state.hexes.flatMap((hex) =>
+								Array.from({ length: 6 }, (_, edge) => {
+									const p1 = getCornerPoint(toPixel(hex).cx, toPixel(hex).cy, edge);
+									const p2 = getCornerPoint(toPixel(hex).cx, toPixel(hex).cy, (edge + 1) % 6);
+									const legal = isLegalRoadPlacement(hex.id, edge);
+									if (!legal) {
 										return null;
 									}
 
-									const { cx, cy } = toPixel(hex);
-									const p1 = getCornerPoint(cx, cy, road.edge);
-									const p2 = getCornerPoint(cx, cy, (road.edge + 1) % 6);
-
 									return (
 										<line
-											key={`road-${player.id}-${road.hexId}-${road.edge}-${index}`}
+											key={`select-road-${hex.id}-${edge}`}
 											x1={p1.x}
 											y1={p1.y}
 											x2={p2.x}
 											y2={p2.y}
-											stroke={player.color}
-											strokeWidth={9}
-											strokeLinecap="round"
+											className={styles.roadEdgeSelectable}
+											onClick={() => {
+												handleRoadEdgeClick(hex.id, edge);
+											}}
 										/>
 									);
 								})
-							)}
+							)
+							: null}
+
+						<g>
+							{renderedRoadSegments.map((segment) => (
+								<line
+									key={segment.key}
+									x1={segment.x1}
+									y1={segment.y1}
+									x2={segment.x2}
+									y2={segment.y2}
+									stroke={segment.color}
+									strokeWidth={9}
+									strokeLinecap="round"
+								/>
+							))}
 						</g>
 
 						<g>
@@ -1342,9 +1780,21 @@ export default function Gameboard() {
 								<span className={styles.actionEmoji}>⚔️</span>
 								<span className={styles.actionLabel}>Knight</span>
 							</button>
-							<button type="button" className={`${styles.actionSquareButton} ${styles.roadButton}`} onClick={() => handleActionPlaceholder("Build Road")} disabled={!isMyTurn}>
+							<button
+								type="button"
+								className={`${styles.actionSquareButton} ${styles.roadButton}`}
+								onClick={handleBuildRoadAction}
+								disabled={!isMyTurn}
+							>
 								<Minus size={26} />
-								<span className={styles.actionLabel}>Road</span>
+								<span className={styles.actionLabel}>{isRoadPlacementMode ? "Cancel Road" : "Road"}</span>
+								{!isRoadPlacementMode ? (
+									<span className={styles.roadCostOverlay} aria-hidden="true">
+										<span className={styles.roadCostChip}>🌲</span>
+										<span className={styles.roadCostPlus}>+</span>
+										<span className={styles.roadCostChip}>🧱</span>
+									</span>
+								) : null}
 							</button>
 							<button type="button" className={`${styles.actionSquareButton} ${styles.settlementButton}`} onClick={() => handleActionPlaceholder("Build Settlement")} disabled={!isMyTurn}>
 								<Home size={24} />
@@ -1397,9 +1847,9 @@ export default function Gameboard() {
 										<span className={styles.playerStatIcon}>⚔️</span>
 										<span className={styles.playerStatValue}>0</span>
 									</div>
-									<div className={`${styles.playerStatCell} ${styles.roadCell}`}>
+									<div className={`${styles.playerStatCell} ${styles.roadCell} ${player.hasLongestRoad ? styles.roadCellHolder : ""}`}>
 										<span className={styles.playerStatIcon}>🛣️</span>
-										<span className={styles.playerStatValue}>{player.roadsOnEdges.length}</span>
+										<span className={styles.playerStatValue}>{longestRoadLengthByPlayerId.get(player.id) ?? 0}</span>
 									</div>
 								</div>
 							</li>
@@ -1463,7 +1913,22 @@ export default function Gameboard() {
 					</button>
 					<div className={styles.logBox}>
 						{gameLog.map((entry, index) => (
-							<p key={`log-${index}`}>{entry}</p>
+							(() => {
+								const parsedChat = parseChatEntry(entry);
+								if (!parsedChat) {
+									return <p key={`log-${index}`}>{entry}</p>;
+								}
+
+								const senderPlayer = state.players.find((player) => player.name === parsedChat.sender);
+								const senderColor = senderPlayer?.color ?? "#f8e7bf";
+
+								return (
+									<p key={`log-${index}`}>
+										<span style={{ color: senderColor, fontWeight: 700 }}>{parsedChat.sender}</span>
+										{`: ${parsedChat.message}`}
+									</p>
+								);
+							})()
 						))}
 					</div>
 					<div className={styles.chatRow}>
