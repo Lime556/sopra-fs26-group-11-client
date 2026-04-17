@@ -82,7 +82,17 @@ export default function Register() {
             name="email"
             label="Email"
             className={styles["form-item"]}
-            rules={[{ required: true, message: "Enter an email!" }]}
+            rules={[
+              { required: true, message: "Enter an email!" },
+              {
+                validator(_, value) {
+                  if (!value || /^.+@.+$/.test(value)) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error("Email must be in format str@str"));
+                },
+              },
+            ]}
           >
             <div className={styles["input-wrapper"]}>
               <MailOutlined className={styles["input-icon"]} />

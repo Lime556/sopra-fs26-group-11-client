@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { useApi } from "@/hooks/useApi";
+import useLocalStorage from "@/hooks/useLocalStorage";
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
+import { getApiDomain } from "@/utils/domain";
 import { Castle, Home, LogOut, Minus, Send } from "lucide-react";
 import styles from "@/styles/gameboard.module.css";
 import { ApplicationError } from "@/types/error";
@@ -78,6 +82,7 @@ interface BoatGetDTO {
 interface GameGetDTO {
 	id: number;
 	board?: BoardGetDTO | null;
+	currentTurnIndex?: number | null;
 	robberTileIndex?: number | null;
 	players?: PlayerGetDTO[];
 	winner?: PlayerGetDTO | null;
@@ -96,6 +101,23 @@ interface PlayerGetDTO {
 	developmentCardVictoryPoints?: number | null;
 	hasLongestRoad?: boolean | null;
 	hasLargestArmy?: boolean | null;
+}
+
+interface GameEventDTO {
+	type: "BANK_TRADE" | "PLAYER_TRADE" | "ACTION" | "TURN_END";
+	sourcePlayerId?: number;
+	targetPlayerId?: number;
+	giveResource?: ResourceType;
+	receiveResource?: ResourceType;
+	amount?: number;
+	nextPlayerId?: number;
+	message?: string;
+}
+
+interface GameChatMessageDTO {
+	playerId?: number;
+	playerName?: string;
+	text?: string;
 }
 
 const hexSize = 58;
@@ -375,6 +397,7 @@ export default function Gameboard() {
 	const router = useRouter();
 	const apiService = useApi();
 	const searchParams = useSearchParams();
+	const { value: sessionUsername } = useLocalStorage<string>("username", "", { storage: "session" });
 	const [state, setState] = useState<GameState>(createInitialGameState);
 	const [boardStatus, setBoardStatus] = useState<string>("Loading board...");
 	const [gameLog, setGameLog] = useState<string[]>(["Trading ready."]);
@@ -389,6 +412,7 @@ export default function Gameboard() {
 	const [winnerPlayerId, setWinnerPlayerId] = useState<number | null>(null);
 	const [winnerPlayerName, setWinnerPlayerName] = useState<string | null>(null);
 	const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
+	const [activeGameId, setActiveGameId] = useState<number | null>(null);
 	const ports = Array.isArray(state.ports) ? state.ports : [];
 
 	useEffect(() => {
@@ -466,12 +490,23 @@ export default function Gameboard() {
 									};
 								})
 								: previousState.players,
-						currentPlayerId:
-							serverPlayers.length > 0
-								? previousState.currentPlayerId && serverPlayers.some((player) => player.id === previousState.currentPlayerId)
-									? previousState.currentPlayerId
-									: serverPlayers[0].id
-								: previousState.currentPlayerId,
+						currentPlayerId: (() => {
+							if (serverPlayers.length === 0) {
+								return previousState.currentPlayerId;
+							}
+
+							const serverTurnIndex = gameDto?.currentTurnIndex;
+							if (typeof serverTurnIndex === "number") {
+								const normalizedIndex = ((serverTurnIndex % serverPlayers.length) + serverPlayers.length) % serverPlayers.length;
+								return serverPlayers[normalizedIndex].id;
+							}
+
+							if (previousState.currentPlayerId && serverPlayers.some((player) => player.id === previousState.currentPlayerId)) {
+								return previousState.currentPlayerId;
+							}
+
+							return serverPlayers[0].id;
+						})(),
 					}));
 
 					setTargetVictoryPoints(gameDto?.targetVictoryPoints ?? 10);
@@ -557,6 +592,10 @@ export default function Gameboard() {
 				return;
 			}
 
+			if (!cancelled) {
+				setActiveGameId(gameId);
+			}
+
 			let syncStatus = await syncGameState(gameId);
 			if (syncStatus === "unauthorized") {
 				if (!cancelled) {
@@ -584,6 +623,9 @@ export default function Gameboard() {
 					return;
 				}
 				gameId = newGameId;
+				if (!cancelled) {
+					setActiveGameId(newGameId);
+				}
 			}
 
 			const poll = window.setInterval(() => {
@@ -641,6 +683,8 @@ export default function Gameboard() {
 
 	const currentPlayerIndex = state.players.findIndex((player) => player.id === state.currentPlayerId);
 	const currentPlayer = state.players.find((player) => player.id === state.currentPlayerId) ?? null;
+	const myPlayer = state.players.find((player) => player.name === sessionUsername) ?? null;
+	const isMyTurn = myPlayer !== null && myPlayer.id === state.currentPlayerId;
 	const otherPlayers = state.players.filter((player) => player.id !== state.currentPlayerId);
 
 	useEffect(() => {
@@ -650,9 +694,6 @@ export default function Gameboard() {
 	}, [otherPlayers, targetPlayerId]);
 
 	const diceLabel = state.diceResult ? `${state.diceResult[0]} + ${state.diceResult[1]}` : "-";
-	const totalCurrentResources = currentPlayer
-		? resourceTypes.reduce((acc, resource) => acc + currentPlayer.resources[resource], 0)
-		: 0;
 
 	const addToLog = (message: string) => {
 		setGameLog((previous) => [message, ...previous].slice(0, 12));
@@ -661,8 +702,151 @@ export default function Gameboard() {
 	const getPlayerTotalResources = (player: Player): number =>
 		resourceTypes.reduce((sum, resource) => sum + player.resources[resource], 0);
 
+	const applyGameEvent = (event: GameEventDTO) => {
+		if (!event?.type) {
+			return;
+		}
+
+		if (event.type === "TURN_END") {
+			if (typeof event.nextPlayerId === "number") {
+				setState((previousState) => ({
+					...previousState,
+					currentPlayerId: event.nextPlayerId as number,
+				}));
+			}
+
+			if (!(myPlayer && typeof event.sourcePlayerId === "number" && event.sourcePlayerId === myPlayer.id) && event.message) {
+				addToLog(event.message);
+			}
+			return;
+		}
+
+		if (event.type === "ACTION") {
+			if (myPlayer && typeof event.sourcePlayerId === "number" && event.sourcePlayerId === myPlayer.id) {
+				return;
+			}
+			if (event.message) {
+				addToLog(event.message);
+			}
+			return;
+		}
+
+		if (typeof event.sourcePlayerId !== "number") {
+			return;
+		}
+
+		if (myPlayer && event.sourcePlayerId === myPlayer.id) {
+			return;
+		}
+
+		if (!event.giveResource || !event.receiveResource || typeof event.amount !== "number") {
+			return;
+		}
+
+		const giveResource = event.giveResource;
+		const receiveResource = event.receiveResource;
+		const amount = event.amount;
+
+		if (event.type === "BANK_TRADE") {
+			setState((previousState) => {
+				const sourceIndex = previousState.players.findIndex((player) => player.id === event.sourcePlayerId);
+				if (sourceIndex < 0) {
+					return previousState;
+				}
+
+				const nextPlayers = [...previousState.players];
+				const source = { ...nextPlayers[sourceIndex], resources: { ...nextPlayers[sourceIndex].resources } };
+				const giveAmount = amount * 4;
+				source.resources[giveResource] -= giveAmount;
+				source.resources[receiveResource] += amount;
+				nextPlayers[sourceIndex] = source;
+
+				return {
+					...previousState,
+					players: nextPlayers,
+				};
+			});
+
+			if (event.message) {
+				addToLog(event.message);
+			}
+			return;
+		}
+
+		if (event.type === "PLAYER_TRADE") {
+			if (typeof event.targetPlayerId !== "number") {
+				return;
+			}
+
+			setState((previousState) => {
+				const sourceIndex = previousState.players.findIndex((player) => player.id === event.sourcePlayerId);
+				const targetIndex = previousState.players.findIndex((player) => player.id === event.targetPlayerId);
+				if (sourceIndex < 0 || targetIndex < 0) {
+					return previousState;
+				}
+
+				const nextPlayers = [...previousState.players];
+				const source = { ...nextPlayers[sourceIndex], resources: { ...nextPlayers[sourceIndex].resources } };
+				const target = { ...nextPlayers[targetIndex], resources: { ...nextPlayers[targetIndex].resources } };
+
+				source.resources[giveResource] -= amount;
+				source.resources[receiveResource] += amount;
+				target.resources[receiveResource] -= amount;
+				target.resources[giveResource] += amount;
+
+				nextPlayers[sourceIndex] = source;
+				nextPlayers[targetIndex] = target;
+
+				return {
+					...previousState,
+					players: nextPlayers,
+				};
+			});
+
+			if (event.message) {
+				addToLog(event.message);
+			}
+		}
+	};
+
+	useEffect(() => {
+		if (!activeGameId) {
+			return;
+		}
+
+		const client = new Client({
+			webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`),
+			onConnect: () => {
+				client.subscribe(`/topic/games/${activeGameId}/events`, (message) => {
+					try {
+						applyGameEvent(JSON.parse(message.body) as GameEventDTO);
+					} catch {
+						// Ignore malformed messages.
+					}
+				});
+
+				client.subscribe(`/topic/games/${activeGameId}/chat`, (message) => {
+					try {
+						const payload = JSON.parse(message.body) as GameChatMessageDTO;
+						if (payload?.text) {
+							addToLog(`[CHAT] ${payload.playerName ?? "Player"}: ${payload.text}`);
+						}
+					} catch {
+						// Ignore malformed messages.
+					}
+				});
+			},
+		});
+
+		client.activate();
+
+		return () => {
+			void client.deactivate();
+		};
+	}, [activeGameId, myPlayer]);
+
 	const handleBankTrade = () => {
-		if (currentPlayerIndex < 0 || !currentPlayer) {
+		if (currentPlayerIndex < 0 || !currentPlayer || !activeGameId) {
 			addToLog("No active player for trading.");
 			return;
 		}
@@ -693,11 +877,20 @@ export default function Gameboard() {
 			};
 		});
 
-		addToLog(`${currentPlayer.name} trades ${giveAmount} ${giveResource} for ${tradeAmount} ${receiveResource} with bank.`);
+		const logMessage = `${currentPlayer.name} trades ${giveAmount} ${giveResource} for ${tradeAmount} ${receiveResource} with bank.`;
+		addToLog(logMessage);
+		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+			type: "BANK_TRADE",
+			sourcePlayerId: currentPlayer.id,
+			giveResource,
+			receiveResource,
+			amount: tradeAmount,
+			message: logMessage,
+		});
 	};
 
 	const handlePlayerTrade = () => {
-		if (currentPlayerIndex < 0 || !currentPlayer || !targetPlayerId) {
+		if (currentPlayerIndex < 0 || !currentPlayer || !targetPlayerId || !activeGameId) {
 			addToLog("Select a trade partner first.");
 			return;
 		}
@@ -744,11 +937,68 @@ export default function Gameboard() {
 			};
 		});
 
-		addToLog(`${currentPlayer.name} trades ${tradeAmount} ${giveResource} with ${targetPlayer.name} for ${receiveResource}.`);
+		const logMessage = `${currentPlayer.name} trades ${tradeAmount} ${giveResource} with ${targetPlayer.name} for ${receiveResource}.`;
+		addToLog(logMessage);
+		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+			type: "PLAYER_TRADE",
+			sourcePlayerId: currentPlayer.id,
+			targetPlayerId,
+			giveResource,
+			receiveResource,
+			amount: tradeAmount,
+			message: logMessage,
+		});
 	};
 
 	const handleActionPlaceholder = (actionName: string) => {
-		addToLog(`Action clicked: ${actionName} (implementation pending).`);
+		const message = `Action clicked: ${actionName} (implementation pending).`;
+		addToLog(message);
+		if (!activeGameId || !myPlayer) {
+			return;
+		}
+
+		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+			type: "ACTION",
+			sourcePlayerId: myPlayer.id,
+			message,
+		});
+	};
+
+	const handleEndTurn = async () => {
+		if (!isMyTurn || !activeGameId || !myPlayer || state.players.length === 0) {
+			return;
+		}
+
+		const currentIndex = state.players.findIndex((player) => player.id === state.currentPlayerId);
+		if (currentIndex < 0) {
+			return;
+		}
+
+		const nextIndex = (currentIndex + 1) % state.players.length;
+		const nextPlayer = state.players[nextIndex];
+
+		setState((previousState) => ({
+			...previousState,
+			currentPlayerId: nextPlayer.id,
+		}));
+
+		const message = `${myPlayer.name} ended turn. ${nextPlayer.name} is now active.`;
+		addToLog(message);
+
+		try {
+			await apiService.put<GameGetDTO>(`/games/${activeGameId}`, {
+				currentTurnIndex: nextIndex,
+			});
+		} catch {
+			// Keep local progression even if persistence fails; polling will eventually re-sync.
+		}
+
+		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+			type: "TURN_END",
+			sourcePlayerId: myPlayer.id,
+			nextPlayerId: nextPlayer.id,
+			message,
+		});
 	};
 
 	const handleSendTradeRequest = () => {
@@ -762,11 +1012,15 @@ export default function Gameboard() {
 	};
 
 	const handleSendChatMessage = () => {
-		if (!chatMessage.trim()) {
+		if (!chatMessage.trim() || !activeGameId) {
 			return;
 		}
 
-		addToLog(`[CHAT] ${currentPlayer ? currentPlayer.name : "Player"}: ${chatMessage.trim()}`);
+		void apiService.post<GameChatMessageDTO>(`/games/${activeGameId}/chat`, {
+			playerId: myPlayer?.id,
+			playerName: myPlayer?.name ?? "Player",
+			text: chatMessage.trim(),
+		});
 		setChatMessage("");
 	};
 
@@ -1078,35 +1332,35 @@ export default function Gameboard() {
 
 				<div className={styles.actionStrip}>
 					<div className={styles.actionBox}>
-						<button type="button" className={styles.rollDiceButton} onClick={() => handleActionPlaceholder("Roll Dice")}>
+						<button type="button" className={styles.rollDiceButton} onClick={() => handleActionPlaceholder("Roll Dice")} disabled={!isMyTurn}>
 							<span className={styles.actionEmoji}>🎲</span>
 							<span>Roll Dice</span>
 						</button>
 
 						<div className={styles.actionGrid}>
-							<button type="button" className={`${styles.actionSquareButton} ${styles.knightButton}`} onClick={() => handleActionPlaceholder("Knight")}>
+							<button type="button" className={`${styles.actionSquareButton} ${styles.knightButton}`} onClick={() => handleActionPlaceholder("Knight")} disabled={!isMyTurn}>
 								<span className={styles.actionEmoji}>⚔️</span>
 								<span className={styles.actionLabel}>Knight</span>
 							</button>
-							<button type="button" className={`${styles.actionSquareButton} ${styles.roadButton}`} onClick={() => handleActionPlaceholder("Build Road")}>
+							<button type="button" className={`${styles.actionSquareButton} ${styles.roadButton}`} onClick={() => handleActionPlaceholder("Build Road")} disabled={!isMyTurn}>
 								<Minus size={26} />
 								<span className={styles.actionLabel}>Road</span>
 							</button>
-							<button type="button" className={`${styles.actionSquareButton} ${styles.settlementButton}`} onClick={() => handleActionPlaceholder("Build Settlement")}>
+							<button type="button" className={`${styles.actionSquareButton} ${styles.settlementButton}`} onClick={() => handleActionPlaceholder("Build Settlement")} disabled={!isMyTurn}>
 								<Home size={24} />
 								<span className={styles.actionLabel}>Settlement</span>
 							</button>
-							<button type="button" className={`${styles.actionSquareButton} ${styles.cityButton}`} onClick={() => handleActionPlaceholder("Build City")}>
+							<button type="button" className={`${styles.actionSquareButton} ${styles.cityButton}`} onClick={() => handleActionPlaceholder("Build City")} disabled={!isMyTurn}>
 								<Castle size={24} />
 								<span className={styles.actionLabel}>City</span>
 							</button>
-							<button type="button" className={`${styles.actionSquareButton} ${styles.devCardButton}`} onClick={() => handleActionPlaceholder("Development Card")}>
+							<button type="button" className={`${styles.actionSquareButton} ${styles.devCardButton}`} onClick={() => handleActionPlaceholder("Development Card")} disabled={!isMyTurn}>
 								<span className={styles.actionEmoji}>🎴</span>
 								<span className={styles.actionLabel}>Development Card</span>
 							</button>
 						</div>
 
-						<button type="button" className={styles.endTurnButton} onClick={() => handleActionPlaceholder("End Turn")}>
+						<button type="button" className={styles.endTurnButton} onClick={handleEndTurn} disabled={!isMyTurn}>
 							End Turn
 						</button>
 					</div>
@@ -1155,20 +1409,19 @@ export default function Gameboard() {
 
 				<section className={styles.sidebarCard}>
 					<h2 className={styles.panelTitle}>Resources</h2>
-					{currentPlayer ? (
+					{myPlayer ? (
 						<>
-							<div className={styles.currentPlayerLine}>{currentPlayer.name} · Total {totalCurrentResources}</div>
 							<div className={styles.resourcePanelGrid}>
 								{resourceTypes.map((resource) => (
 									<div key={`res-${resource}`} className={`${styles.resourcePanelTile} ${styles[`resourcePanelTile${resource.charAt(0).toUpperCase() + resource.slice(1)}`]}`}>
 										<span>{resourceEmojiByType[resource]}</span>
-										<strong>{currentPlayer.resources[resource]}</strong>
+										<strong>{myPlayer.resources[resource]}</strong>
 									</div>
 								))}
 							</div>
 						</>
 					) : (
-						<div className={styles.currentPlayerLine}>No active player</div>
+						<div className={styles.currentPlayerLine}>No personal resource data available</div>
 					)}
 				</section>
 
