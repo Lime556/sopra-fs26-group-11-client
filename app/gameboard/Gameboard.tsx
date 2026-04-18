@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { useApi } from "@/hooks/useApi";
@@ -694,6 +694,75 @@ export default function Gameboard() {
 	}, [otherPlayers, targetPlayerId]);
 
 	const diceLabel = state.diceResult ? `${state.diceResult[0]} + ${state.diceResult[1]}` : "-";
+	const leaderboardPlayers = useMemo(
+		() =>
+			[...state.players].sort((firstPlayer, secondPlayer) => {
+				if (secondPlayer.victoryPoints !== firstPlayer.victoryPoints) {
+					return secondPlayer.victoryPoints - firstPlayer.victoryPoints;
+				}
+
+				const firstBuildings =
+					firstPlayer.roadsOnEdges.length + firstPlayer.settlementsOnCorners.length + firstPlayer.citiesOnCorners.length;
+				const secondBuildings =
+					secondPlayer.roadsOnEdges.length + secondPlayer.settlementsOnCorners.length + secondPlayer.citiesOnCorners.length;
+
+				if (secondBuildings !== firstBuildings) {
+					return secondBuildings - firstBuildings;
+				}
+
+				return firstPlayer.name.localeCompare(secondPlayer.name);
+			}),
+		[state.players]
+	);
+	const winnerDisplayName = winnerPlayerName ?? leaderboardPlayers[0]?.name ?? "Unknown Player";
+	const perPlayerGameStats = useMemo(() => {
+		const statsByPlayerId = new Map<number, {
+			cardsPlayedCount: number;
+			knightsPlayedCount: number;
+			roadsBuiltCount: number;
+			settlementsBuiltCount: number;
+			citiesBuiltCount: number;
+			buildingsBuiltCount: number;
+		}>();
+
+		const escapeForRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+		state.players.forEach((player) => {
+			const escapedPlayerName = escapeForRegex(player.name);
+			const cardsPlayedCount = gameLog.filter((entry) => new RegExp(`${escapedPlayerName}.*(development card|dev card)`, "i").test(entry)).length;
+			const knightsPlayedCount = gameLog.filter((entry) => new RegExp(`${escapedPlayerName}.*knight`, "i").test(entry)).length;
+			const roadsBuiltCount = player.roadsOnEdges.length;
+			const settlementsBuiltCount = player.settlementsOnCorners.length;
+			const citiesBuiltCount = player.citiesOnCorners.length;
+
+			statsByPlayerId.set(player.id, {
+				cardsPlayedCount,
+				knightsPlayedCount,
+				roadsBuiltCount,
+				settlementsBuiltCount,
+				citiesBuiltCount,
+				buildingsBuiltCount: roadsBuiltCount + settlementsBuiltCount + citiesBuiltCount,
+			});
+		});
+
+		return statsByPlayerId;
+	}, [gameLog, state.players]);
+	const gameSummaryStats = useMemo(() => {
+		const cardsPlayedCount = gameLog.filter((entry) => /development card|dev card/i.test(entry)).length;
+		const knightsPlayedCount = gameLog.filter((entry) => /knight/i.test(entry)).length;
+		const roadsBuiltCount = state.players.reduce((sum, player) => sum + player.roadsOnEdges.length, 0);
+		const settlementsBuiltCount = state.players.reduce((sum, player) => sum + player.settlementsOnCorners.length, 0);
+		const citiesBuiltCount = state.players.reduce((sum, player) => sum + player.citiesOnCorners.length, 0);
+
+		return {
+			cardsPlayedCount,
+			knightsPlayedCount,
+			roadsBuiltCount,
+			settlementsBuiltCount,
+			citiesBuiltCount,
+			buildingsBuiltCount: roadsBuiltCount + settlementsBuiltCount + citiesBuiltCount,
+		};
+	}, [gameLog, state.players]);
 
 	const addToLog = (message: string) => {
 		setGameLog((previous) => [message, ...previous].slice(0, 12));
@@ -1026,6 +1095,93 @@ export default function Gameboard() {
 
 	return (
 		<>
+			{isGameFinished ? (
+				<div className={styles.endGameOverlay}>
+					<div className={styles.endGameCard}>
+						<h1 className={styles.endGameTitle}>Game Finished</h1>
+						<p className={styles.endGameWinnerLine}>
+							Winner: <strong>{winnerDisplayName}</strong>
+						</p>
+
+						<div className={styles.endGameSection}>
+							<h2 className={styles.endGameSectionTitle}>Leaderboard</h2>
+							<div className={styles.endGameLeaderboardScroll}>
+								<div className={styles.endGameLeaderboard}>
+									<div className={styles.endGameLeaderboardHeader}>Rank</div>
+									<div className={styles.endGameLeaderboardHeader}>Player</div>
+									<div className={styles.endGameLeaderboardHeader}>VP</div>
+									<div className={styles.endGameLeaderboardHeader}>Cards</div>
+									<div className={styles.endGameLeaderboardHeader}>Knights</div>
+									<div className={styles.endGameLeaderboardHeader}>Roads</div>
+									<div className={styles.endGameLeaderboardHeader}>Settlements</div>
+									<div className={styles.endGameLeaderboardHeader}>Cities</div>
+									<div className={styles.endGameLeaderboardHeader}>Buildings</div>
+								{leaderboardPlayers.map((player, index) => {
+									const playerStats = perPlayerGameStats.get(player.id) ?? {
+										cardsPlayedCount: 0,
+										knightsPlayedCount: 0,
+										roadsBuiltCount: 0,
+										settlementsBuiltCount: 0,
+										citiesBuiltCount: 0,
+										buildingsBuiltCount: 0,
+									};
+									const rowClass = index % 2 === 1 ? styles.endGameLeaderboardCellAlt : "";
+
+									return (
+										<Fragment key={`leaderboard-row-${player.id}`}>
+											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>#{index + 1}</div>
+											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{player.name}</div>
+											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{player.victoryPoints}</div>
+											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.cardsPlayedCount}</div>
+											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.knightsPlayedCount}</div>
+											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.roadsBuiltCount}</div>
+											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.settlementsBuiltCount}</div>
+											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.citiesBuiltCount}</div>
+											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.buildingsBuiltCount}</div>
+										</Fragment>
+									);
+								})}
+								</div>
+							</div>
+						</div>
+
+						<div className={styles.endGameSection}>
+							<h2 className={styles.endGameSectionTitle}>Game Stats</h2>
+							<div className={styles.endGameStatsGrid}>
+								<div className={styles.endGameStatItem}>
+									<span>Cards Played</span>
+									<strong>{gameSummaryStats.cardsPlayedCount}</strong>
+								</div>
+								<div className={styles.endGameStatItem}>
+									<span>Knights Played</span>
+									<strong>{gameSummaryStats.knightsPlayedCount}</strong>
+								</div>
+								<div className={styles.endGameStatItem}>
+									<span>Buildings Built</span>
+									<strong>{gameSummaryStats.buildingsBuiltCount}</strong>
+								</div>
+								<div className={styles.endGameStatItem}>
+									<span>Roads</span>
+									<strong>{gameSummaryStats.roadsBuiltCount}</strong>
+								</div>
+								<div className={styles.endGameStatItem}>
+									<span>Settlements</span>
+									<strong>{gameSummaryStats.settlementsBuiltCount}</strong>
+								</div>
+								<div className={styles.endGameStatItem}>
+									<span>Cities</span>
+									<strong>{gameSummaryStats.citiesBuiltCount}</strong>
+								</div>
+							</div>
+						</div>
+
+						<div className={styles.endGameActionsRow}>
+							<button type="button" className={styles.endGameActionButton} onClick={() => router.push("/lobby")}>Back to Main Screen</button>
+						</div>
+					</div>
+				</div>
+			) : null}
+
 			{showTradePopup ? (
 				<div className={styles.modalOverlay}>
 					<div className={styles.tradeModal}>
