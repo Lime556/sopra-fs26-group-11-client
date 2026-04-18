@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { useApi } from "@/hooks/useApi";
@@ -8,521 +8,52 @@ import useLocalStorage from "@/hooks/useLocalStorage";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import { getApiDomain } from "@/utils/domain";
-import { Castle, Home, LogOut, Minus, Send } from "lucide-react";
+import { LogOut, Send } from "lucide-react";
 import styles from "@/styles/gameboard.module.css";
 import { ApplicationError } from "@/types/error";
-
-export type ResourceType = "wood" | "brick" | "wool" | "wheat" | "ore";
-
-export interface Resources {
-	wood: number;
-	brick: number;
-	wool: number;
-	wheat: number;
-	ore: number;
-}
-
-export interface HexTile {
-	id: number;
-	type: ResourceType | "desert";
-	number: number | null;
-	x: number;
-	y: number;
-}
-
-export interface Player {
-	id: number;
-	name: string;
-	color: string;
-	resources: Resources;
-	victoryPoints: number;
-	hasLongestRoad?: boolean;
-	settlementsOnCorners: { hexId: number; corner: number }[];
-	citiesOnCorners: { hexId: number; corner: number }[];
-	roadsOnEdges: { hexId: number; edge: number }[];
-}
-
-export interface GameState {
-	hexes: HexTile[];
-	ports: PortVisual[];
-	players: Player[];
-	currentPlayerId: number;
-	diceResult: [number, number] | null;
-	robberHexId: number | null;
-}
-
-type PortType = "3:1" | ResourceType;
-
-interface PortVisual {
-	id: number;
-	type: PortType;
-	hexId: number;
-	corners: [number, number];
-}
-
-type TradeMode = "bank" | "player";
-
-interface BoardGetDTO {
-	id?: number;
-	hexTiles: string[];
-	intersections: boolean[];
-	edges: boolean[];
-	ports: string[];
-	boats?: BoatGetDTO[];
-	hexTile_DiceNumbers: number[];
-}
-
-interface BoatGetDTO {
-	id?: number;
-	boatType?: string;
-	hexId?: number;
-	firstCorner?: number;
-	secondCorner?: number;
-}
-
-interface GameGetDTO {
-	id: number;
-	board?: BoardGetDTO | null;
-	currentTurnIndex?: number | null;
-	robberTileIndex?: number | null;
-	players?: PlayerGetDTO[];
-	winner?: PlayerGetDTO | null;
-	leaderboard?: PlayerGetDTO[];
-	targetVictoryPoints?: number | null;
-	finishedAt?: string | null;
-	gameFinished?: boolean | null;
-	chatMessages?: string[];
-}
-
-interface PlayerGetDTO {
-	id: number;
-	name: string;
-	victoryPoints?: number | null;
-	settlementPoints?: number | null;
-	cityPoints?: number | null;
-	developmentCardVictoryPoints?: number | null;
-	hasLongestRoad?: boolean | null;
-	hasLargestArmy?: boolean | null;
-	roadsOnEdges?: string[];
-	wood?: number | null;
-	brick?: number | null;
-	wool?: number | null;
-	wheat?: number | null;
-	ore?: number | null;
-}
-
-interface GameEventDTO {
-	type: "BANK_TRADE" | "PLAYER_TRADE" | "ACTION" | "TURN_END" | "ROAD_BUILT";
-	sourcePlayerId?: number;
-	targetPlayerId?: number;
-	giveResource?: ResourceType;
-	receiveResource?: ResourceType;
-	amount?: number;
-	hexId?: number;
-	edge?: number;
-	nextPlayerId?: number;
-	message?: string;
-}
-
-interface GameChatMessageDTO {
-	playerId?: number;
-	playerName?: string;
-	text?: string;
-}
-
-const hexSize = 58;
-const sqrt3 = Math.sqrt(3);
-const originX = 150;
-const originY = 130;
-const hexSpacingX = hexSize * sqrt3;
-const hexSpacingY = hexSize * 1.5;
-
-const tileImageByType: Record<HexTile["type"], string> = {
-	wood: "/Wood.png",
-	brick: "/Brick.png",
-	wool: "/Sheep.png",
-	wheat: "/Wheat.png",
-	ore: "/Stone.png",
-	desert: "/Desert.png",
-};
-
-const resourceTypes: ResourceType[] = ["wood", "brick", "wool", "wheat", "ore"];
-const resourceEmojiByType: Record<ResourceType, string> = {
-	wood: "🌲",
-	brick: "🧱",
-	wool: "🐑",
-	wheat: "🌾",
-	ore: "⛰️",
-};
-
-const bankResources: Resources = {
-	wood: 19,
-	brick: 19,
-	wool: 19,
-	wheat: 19,
-	ore: 19,
-};
-
-const bankResourceColorByType: Record<ResourceType, string> = {
-	wood: "#16a34a",
-	brick: "#dc2626",
-	wool: "#84cc16",
-	wheat: "#eab308",
-	ore: "#475569",
-};
-
-const developmentCardsRemaining = 21;
-
-
-const boardCoordinatesById: Record<number, { x: number; y: number }> = {
-	1: { x: 1, y: 0 },
-	2: { x: 2, y: 0 },
-	3: { x: 3, y: 0 },
-	4: { x: 0.5, y: 1 },
-	5: { x: 1.5, y: 1 },
-	6: { x: 2.5, y: 1 },
-	7: { x: 3.5, y: 1 },
-	8: { x: 0, y: 2 },
-	9: { x: 1, y: 2 },
-	10: { x: 2, y: 2 },
-	11: { x: 3, y: 2 },
-	12: { x: 4, y: 2 },
-	13: { x: 0.5, y: 3 },
-	14: { x: 1.5, y: 3 },
-	15: { x: 2.5, y: 3 },
-	16: { x: 3.5, y: 3 },
-	17: { x: 1, y: 4 },
-	18: { x: 2, y: 4 },
-	19: { x: 3, y: 4 },
-};
-
-function toPixel(hex: Pick<HexTile, "x" | "y">) {
-	return {
-		cx: originX + hex.x * hexSpacingX,
-		cy: originY + hex.y * hexSpacingY,
-	};
-}
-
-function getCornerPoint(centerX: number, centerY: number, cornerIndex: number) {
-	const angle = (Math.PI / 3) * cornerIndex + Math.PI / 6;
-	return {
-		x: centerX + hexSize * Math.cos(angle),
-		y: centerY + hexSize * Math.sin(angle),
-	};
-}
-
-function calculateHexPoints(centerX: number, centerY: number) {
-	const points: string[] = [];
-
-	for (let i = 0; i < 6; i += 1) {
-		const corner = getCornerPoint(centerX, centerY, i);
-		points.push(`${corner.x},${corner.y}`);
-	}
-
-	return points.join(" ");
-}
-
-function createCanonicalEdgeKey(hex: HexTile, edge: number): string {
-	const { cx, cy } = toPixel(hex);
-	const point1 = getCornerPoint(cx, cy, edge);
-	const point2 = getCornerPoint(cx, cy, (edge + 1) % 6);
-	const a = `${Math.round(point1.x)}:${Math.round(point1.y)}`;
-	const b = `${Math.round(point2.x)}:${Math.round(point2.y)}`;
-	return a < b ? `${a}|${b}` : `${b}|${a}`;
-}
-
-function createCanonicalCornerKey(hex: HexTile, corner: number): string {
-	const { cx, cy } = toPixel(hex);
-	const point = getCornerPoint(cx, cy, corner);
-	return `${Math.round(point.x)}:${Math.round(point.y)}`;
-}
-
-function getCanonicalRoadEndpoints(hex: HexTile, edge: number): [string, string] {
-	const from = createCanonicalCornerKey(hex, edge);
-	const to = createCanonicalCornerKey(hex, (edge + 1) % 6);
-	return from < to ? [from, to] : [to, from];
-}
-
-function computeLongestRoadLength(player: Player, hexById: Map<number, HexTile>): number {
-	const uniqueEdges = new Map<string, [string, string]>();
-
-	player.roadsOnEdges.forEach((road) => {
-		const hex = hexById.get(road.hexId);
-		if (!hex) {
-			return;
-		}
-
-		const [from, to] = getCanonicalRoadEndpoints(hex, road.edge);
-		const edgeKey = `${from}|${to}`;
-		if (!uniqueEdges.has(edgeKey)) {
-			uniqueEdges.set(edgeKey, [from, to]);
-		}
-	});
-
-	const edges = Array.from(uniqueEdges.values());
-	if (edges.length === 0) {
-		return 0;
-	}
-
-	const adjacency = new Map<string, number[]>();
-	edges.forEach(([from, to], index) => {
-		const fromList = adjacency.get(from) ?? [];
-		fromList.push(index);
-		adjacency.set(from, fromList);
-
-		const toList = adjacency.get(to) ?? [];
-		toList.push(index);
-		adjacency.set(to, toList);
-	});
-
-	const usedEdge = new Array<boolean>(edges.length).fill(false);
-
-	const dfs = (node: string): number => {
-		const connected = adjacency.get(node) ?? [];
-		let best = 0;
-
-		for (const edgeIndex of connected) {
-			if (usedEdge[edgeIndex]) {
-				continue;
-			}
-
-			usedEdge[edgeIndex] = true;
-			const [from, to] = edges[edgeIndex];
-			const nextNode = node === from ? to : from;
-			best = Math.max(best, 1 + dfs(nextNode));
-			usedEdge[edgeIndex] = false;
-		}
-
-		return best;
-	};
-
-	let longest = 0;
-	adjacency.forEach((_, node) => {
-		longest = Math.max(longest, dfs(node));
-	});
-
-	return longest;
-}
-
-function createInitialGameState(): GameState {
-	return {
-		hexes: [],
-		ports: [],
-		currentPlayerId: 0,
-		diceResult: null,
-		players: [],
-		robberHexId: null,
-	};
-}
-
-function parseRoadEntry(roadEntry: string): { hexId: number; edge: number } | null {
-	const [rawHexId, rawEdge] = roadEntry.split(":");
-	const hexId = Number(rawHexId);
-	const edge = Number(rawEdge);
-	if (!Number.isInteger(hexId) || !Number.isInteger(edge)) {
-		return null;
-	}
-	return { hexId, edge };
-}
-
-function createRoadEdgeId(road: { hexId: number; edge: number }): string {
-	return `${road.hexId}:${road.edge}`;
-}
-
-function mergeRoadLists(
-	serverRoads: { hexId: number; edge: number }[],
-	localRoads: { hexId: number; edge: number }[]
-): { hexId: number; edge: number }[] {
-	const merged = new Map<string, { hexId: number; edge: number }>();
-	[...localRoads, ...serverRoads].forEach((road) => {
-		merged.set(createRoadEdgeId(road), road);
-	});
-	return Array.from(merged.values());
-}
-
-function rememberRoadsInCache(
-	roadCache: Map<number, Set<string>>,
-	playerId: number,
-	roads: { hexId: number; edge: number }[]
-) {
-	const cacheEntry = roadCache.get(playerId) ?? new Set<string>();
-	roads.forEach((road) => cacheEntry.add(createRoadEdgeId(road)));
-	roadCache.set(playerId, cacheEntry);
-}
-
-function mapServerPortType(type: string | undefined): PortType {
-	if (!type) {
-		return "3:1";
-	}
-
-	switch (type.toUpperCase()) {
-		case "WOOD":
-			return "wood";
-		case "BRICK":
-			return "brick";
-		case "SHEEP":
-			return "wool";
-		case "WHEAT":
-			return "wheat";
-			case "STONE":
-		case "ORE":
-			return "ore";
-			case "STANDARD":
-				return "3:1";
-		case "3:1":
-		case "THREE_TO_ONE":
-		case "ANY":
-			return "3:1";
-		default:
-			return "3:1";
-	}
-}
-
-function mapBoardDtoToPorts(boardDto: BoardGetDTO): PortVisual[] {
-	if (!Array.isArray(boardDto.boats)) {
-		return [];
-	}
-
-	return boardDto.boats
-		.filter((boat): boat is BoatGetDTO =>
-			boat !== undefined
-			&& boat !== null
-			&& typeof boat.hexId === "number"
-			&& typeof boat.firstCorner === "number"
-			&& typeof boat.secondCorner === "number"
-		)
-		.map((boat, index) => ({
-			id: boat.id ?? index + 1,
-			type: mapServerPortType(boat.boatType),
-			hexId: boat.hexId as number,
-			corners: [boat.firstCorner as number, boat.secondCorner as number],
-		}));
-}
-
-function getPortColor(type: PortType): string {
-	if (type === "3:1") {
-		return "#8b4513";
-	}
-
-	const colors: Record<ResourceType, string> = {
-		wood: "#22c55e",
-		brick: "#ef4444",
-		wool: "#a3e635",
-		wheat: "#fbbf24",
-		ore: "#64748b",
-	};
-
-	return colors[type];
-}
-
-function getPortLabel(type: PortType): string {
-	return type === "3:1" ? "3:1" : "2:1";
-}
-
-function getPortIcon(type: PortType): string {
-	switch (type) {
-		case "wood":
-			return "🌲";
-		case "brick":
-			return "🧱";
-		case "wool":
-			return "🐑";
-		case "wheat":
-			return "🌾";
-		case "ore":
-			return "⛰️";
-		default:
-			return "?";
-	}
-}
-
-function calculatePortPosition(centerX: number, centerY: number, corner1Index: number, corner2Index: number, distance: number) {
-	const corner1 = getCornerPoint(centerX, centerY, corner1Index);
-	const corner2 = getCornerPoint(centerX, centerY, corner2Index);
-
-	const midX = (corner1.x + corner2.x) / 2;
-	const midY = (corner1.y + corner2.y) / 2;
-
-	const dx = midX - centerX;
-	const dy = midY - centerY;
-	const length = Math.sqrt(dx * dx + dy * dy);
-
-	return {
-		portX: centerX + (dx / length) * (length + distance),
-		portY: centerY + (dy / length) * (length + distance),
-		corner1,
-		corner2,
-	};
-}
-
-function mapServerTileType(type: string): HexTile["type"] {
-	switch (type.toUpperCase()) {
-		case "WOOD":
-			return "wood";
-		case "BRICK":
-			return "brick";
-		case "SHEEP":
-			return "wool";
-		case "WHEAT":
-			return "wheat";
-		case "ORE":
-			return "ore";
-		default:
-			return "desert";
-	}
-}
-
-function mapBoardDtoToHexes(boardDto: BoardGetDTO): HexTile[] {
-	return Array.from({ length: 19 }, (_, index) => {
-		const id = index + 1;
-		const coord = boardCoordinatesById[id] ?? { x: 0, y: 0 };
-		const serverType = boardDto.hexTiles[index] ?? "DESERT";
-		const dice = boardDto.hexTile_DiceNumbers[index] ?? -1;
-
-		return {
-			id,
-			type: mapServerTileType(serverType),
-			number: dice > 0 ? dice : null,
-			x: coord.x,
-			y: coord.y,
-		};
-	});
-}
-
-function findDesertHexId(hexes: HexTile[]): number | null {
-	const desertHex = hexes.find((hex) => hex.type === "desert");
-	return desertHex?.id ?? null;
-}
-
-function parseGameId(rawValue: string | null): number | null {
-	if (!rawValue) {
-		return null;
-	}
-
-	const normalized = rawValue.replace(/"/g, "").trim();
-	const value = Number(normalized);
-	return Number.isFinite(value) ? value : null;
-}
-
-const fallbackPlayerColors = ["#d13f34", "#2e7ccf", "#e0a120", "#3f9e56"];
-
-function fallbackColorForPlayer(index: number): string {
-	return fallbackPlayerColors[index % fallbackPlayerColors.length];
-}
-
-function safeResourceValue(value: number | null | undefined): number {
-	return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 10;
-}
-
-function mapResourcesFromServer(player: PlayerGetDTO): Resources {
-	return {
-		wood: safeResourceValue(player.wood),
-		brick: safeResourceValue(player.brick),
-		wool: safeResourceValue(player.wool),
-		wheat: safeResourceValue(player.wheat),
-		ore: safeResourceValue(player.ore),
-	};
-}
+import { BoardColumn } from "./components/BoardColumn";
+import { EndGameOverlay } from "./components/EndGameOverlay";
+import { TradeModal } from "./components/TradeModal";
+import {
+bankResourceColorByType,
+bankResources,
+developmentCardsRemaining,
+resourceEmojiByType,
+resourceTypes,
+} from "./constants";
+import {
+createCanonicalCornerKey,
+createCanonicalEdgeKey,
+getCanonicalRoadEndpoints,
+getCornerPoint,
+toPixel,
+} from "./geometry";
+import {
+createInitialGameState,
+fallbackColorForPlayer,
+	findDesertHexId,
+mapBoardDtoToHexes,
+mapBoardDtoToPorts,
+mapResourcesFromServer,
+parseGameId,
+} from "./mappers";
+import {
+computeLongestRoadLength,
+mergeRoadLists,
+parseRoadEntry,
+rememberRoadsInCache,
+} from "./roads";
+import {
+type BoardGetDTO,
+type GameChatMessageDTO,
+type GameEventDTO,
+type GameGetDTO,
+type GameState,
+type HexTile,
+type Player,
+type ResourceType,
+type TradeMode,
+} from "./types";
 
 export default function Gameboard() {
 	const router = useRouter();
@@ -539,8 +70,6 @@ export default function Gameboard() {
 	const [targetPlayerId, setTargetPlayerId] = useState<number | null>(null);
 	const [showTradePopup, setShowTradePopup] = useState<boolean>(false);
 	const [chatMessage, setChatMessage] = useState<string>("");
-	const [targetVictoryPoints, setTargetVictoryPoints] = useState<number>(10);
-	const [winnerPlayerId, setWinnerPlayerId] = useState<number | null>(null);
 	const [winnerPlayerName, setWinnerPlayerName] = useState<string | null>(null);
 	const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
 	const [activeGameId, setActiveGameId] = useState<number | null>(null);
@@ -690,8 +219,6 @@ export default function Gameboard() {
 						})(),
 					}));
 
-					setTargetVictoryPoints(gameDto?.targetVictoryPoints ?? 10);
-					setWinnerPlayerId(gameDto?.winner?.id ?? null);
 					setWinnerPlayerName(gameDto?.winner?.name ?? null);
 					setIsGameFinished(Boolean(gameDto?.gameFinished) || Boolean(gameDto?.finishedAt));
 
@@ -890,7 +417,6 @@ export default function Gameboard() {
 		}
 	}, [otherPlayers, targetPlayerId]);
 
-	const diceLabel = state.diceResult ? `${state.diceResult[0]} + ${state.diceResult[1]}` : "-";
 	const leaderboardPlayers = useMemo(
 		() =>
 			[...state.players].sort((firstPlayer, secondPlayer) => {
@@ -1519,460 +1045,49 @@ export default function Gameboard() {
 
 	return (
 		<>
-			{isGameFinished ? (
-				<div className={styles.endGameOverlay}>
-					<div className={styles.endGameCard}>
-						<h1 className={styles.endGameTitle}>Game Finished</h1>
-						<p className={styles.endGameWinnerLine}>
-							Winner: <strong>{winnerDisplayName}</strong>
-						</p>
+			<EndGameOverlay
+				isVisible={isGameFinished}
+				winnerDisplayName={winnerDisplayName}
+				leaderboardPlayers={leaderboardPlayers}
+				perPlayerGameStats={perPlayerGameStats}
+				gameSummaryStats={gameSummaryStats}
+				onBackToMain={() => router.push("/lobby")}
+			/>
 
-						<div className={styles.endGameSection}>
-							<h2 className={styles.endGameSectionTitle}>Leaderboard</h2>
-							<div className={styles.endGameLeaderboardScroll}>
-								<div className={styles.endGameLeaderboard}>
-									<div className={styles.endGameLeaderboardHeader}>Rank</div>
-									<div className={styles.endGameLeaderboardHeader}>Player</div>
-									<div className={styles.endGameLeaderboardHeader}>VP</div>
-									<div className={styles.endGameLeaderboardHeader}>Cards</div>
-									<div className={styles.endGameLeaderboardHeader}>Knights</div>
-									<div className={styles.endGameLeaderboardHeader}>Roads</div>
-									<div className={styles.endGameLeaderboardHeader}>Settlements</div>
-									<div className={styles.endGameLeaderboardHeader}>Cities</div>
-									<div className={styles.endGameLeaderboardHeader}>Buildings</div>
-								{leaderboardPlayers.map((player, index) => {
-									const playerStats = perPlayerGameStats.get(player.id) ?? {
-										cardsPlayedCount: 0,
-										knightsPlayedCount: 0,
-										roadsBuiltCount: 0,
-										settlementsBuiltCount: 0,
-										citiesBuiltCount: 0,
-										buildingsBuiltCount: 0,
-									};
-									const rowClass = index % 2 === 1 ? styles.endGameLeaderboardCellAlt : "";
-
-									return (
-										<Fragment key={`leaderboard-row-${player.id}`}>
-											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>#{index + 1}</div>
-											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{player.name}</div>
-											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{player.victoryPoints}</div>
-											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.cardsPlayedCount}</div>
-											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.knightsPlayedCount}</div>
-											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.roadsBuiltCount}</div>
-											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.settlementsBuiltCount}</div>
-											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.citiesBuiltCount}</div>
-											<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.buildingsBuiltCount}</div>
-										</Fragment>
-									);
-								})}
-								</div>
-							</div>
-						</div>
-
-						<div className={styles.endGameSection}>
-							<h2 className={styles.endGameSectionTitle}>Game Stats</h2>
-							<div className={styles.endGameStatsGrid}>
-								<div className={styles.endGameStatItem}>
-									<span>Cards Played</span>
-									<strong>{gameSummaryStats.cardsPlayedCount}</strong>
-								</div>
-								<div className={styles.endGameStatItem}>
-									<span>Knights Played</span>
-									<strong>{gameSummaryStats.knightsPlayedCount}</strong>
-								</div>
-								<div className={styles.endGameStatItem}>
-									<span>Buildings Built</span>
-									<strong>{gameSummaryStats.buildingsBuiltCount}</strong>
-								</div>
-								<div className={styles.endGameStatItem}>
-									<span>Roads</span>
-									<strong>{gameSummaryStats.roadsBuiltCount}</strong>
-								</div>
-								<div className={styles.endGameStatItem}>
-									<span>Settlements</span>
-									<strong>{gameSummaryStats.settlementsBuiltCount}</strong>
-								</div>
-								<div className={styles.endGameStatItem}>
-									<span>Cities</span>
-									<strong>{gameSummaryStats.citiesBuiltCount}</strong>
-								</div>
-							</div>
-						</div>
-
-						<div className={styles.endGameActionsRow}>
-							<button type="button" className={styles.endGameActionButton} onClick={() => router.push("/lobby")}>Back to Main Screen</button>
-						</div>
-					</div>
-				</div>
-			) : null}
-
-			{showTradePopup ? (
-				<div className={styles.modalOverlay}>
-					<div className={styles.tradeModal}>
-						<div className={styles.tradeModalHeader}>
-							<h2 className={styles.panelTitle}>Trading</h2>
-							<button type="button" className={styles.tradeCloseButton} onClick={() => setShowTradePopup(false)}>
-								Close
-							</button>
-						</div>
-
-						<div className={styles.tradeRow}>
-							<button
-								type="button"
-								className={`${styles.tradeModeButton} ${tradeMode === "bank" ? styles.tradeModeButtonActive : ""}`}
-								onClick={() => setTradeMode("bank")}
-							>
-								Bank
-							</button>
-							<button
-								type="button"
-								className={`${styles.tradeModeButton} ${tradeMode === "player" ? styles.tradeModeButtonActive : ""}`}
-								onClick={() => setTradeMode("player")}
-							>
-								Player
-							</button>
-						</div>
-
-						<div className={styles.tradeGrid}>
-							<select className={styles.tradeSelect} value={giveResource} onChange={(event) => setGiveResource(event.target.value as ResourceType)}>
-								{resourceTypes.map((resource) => (
-									<option key={`give-${resource}`} value={resource}>
-										Give: {resource}
-									</option>
-								))}
-							</select>
-							<select className={styles.tradeSelect} value={receiveResource} onChange={(event) => setReceiveResource(event.target.value as ResourceType)}>
-								{resourceTypes.map((resource) => (
-									<option key={`receive-${resource}`} value={resource}>
-										Receive: {resource}
-									</option>
-								))}
-							</select>
-							<input
-								className={styles.tradeInput}
-								type="number"
-								min={1}
-								value={tradeAmount}
-								onChange={(event) => setTradeAmount(Math.max(1, Number(event.target.value) || 1))}
-							/>
-							{tradeMode === "player" ? (
-								<select
-									className={styles.tradeSelect}
-									value={targetPlayerId ?? ""}
-									onChange={(event) => setTargetPlayerId(Number(event.target.value))}
-								>
-									{otherPlayers.map((player) => (
-										<option key={`target-${player.id}`} value={player.id}>
-											{player.name}
-										</option>
-									))}
-								</select>
-							) : null}
-						</div>
-
-						<button
-							type="button"
-							className={styles.tradeActionButton}
-							onClick={tradeMode === "bank" ? handleBankTrade : handlePlayerTrade}
-							disabled={!currentPlayer || (tradeMode === "player" && otherPlayers.length === 0)}
-						>
-							{tradeMode === "bank" ? "Execute Bank Trade (4:1)" : "Execute Player Trade (1:1)"}
-						</button>
-					</div>
-				</div>
-			) : null}
+			<TradeModal
+				isVisible={showTradePopup}
+				tradeMode={tradeMode}
+				giveResource={giveResource}
+				receiveResource={receiveResource}
+				tradeAmount={tradeAmount}
+				targetPlayerId={targetPlayerId}
+				otherPlayers={otherPlayers}
+				currentPlayer={currentPlayer}
+				onClose={() => setShowTradePopup(false)}
+				onSetTradeMode={setTradeMode}
+				onSetGiveResource={setGiveResource}
+				onSetReceiveResource={setReceiveResource}
+				onSetTradeAmount={setTradeAmount}
+				onSetTargetPlayerId={setTargetPlayerId}
+				onBankTrade={handleBankTrade}
+				onPlayerTrade={handlePlayerTrade}
+			/>
 
 			<div className={styles.layout}>
-			<div className={styles.boardColumn}>
-				<main className={styles.boardViewport}>
-					{boardStatus ? <div className={styles.boardStatus}>{boardStatus}</div> : null}
-					<svg viewBox="0 0 1000 800" className={styles.board} role="img" aria-label="Settlers of Catan board">
-						<defs>
-							{state.hexes.map((hex) => {
-								const { cx, cy } = toPixel(hex);
-								return (
-									<clipPath id={`clip-${hex.id}`} key={`clip-${hex.id}`}>
-										<polygon points={calculateHexPoints(cx, cy)} />
-									</clipPath>
-								);
-							})}
-						</defs>
-
-						<g>
-							{state.hexes.map((hex) => {
-								const { cx, cy } = toPixel(hex);
-								const baseImageSize = hexSize * 2.35;
-								const imageSize =
-															hex.type === "wheat"
-										? baseImageSize + 10
-										: hex.type === "desert"
-											? baseImageSize - 12
-											: baseImageSize;
-														const imageYOffset = hex.type === "wheat" ? 0 : 0;
-								return (
-									<g key={hex.id}>
-										<image
-											href={tileImageByType[hex.type]}
-											x={cx - imageSize / 2}
-											y={cy - imageSize / 2 + imageYOffset}
-											width={imageSize}
-											height={imageSize}
-											preserveAspectRatio="xMidYMid slice"
-											clipPath={`url(#clip-${hex.id})`}
-										/>
-										<polygon className={styles.hex} points={calculateHexPoints(cx, cy)} fill="none" />
-										{hex.number !== null ? (
-											<>
-												<circle cx={cx} cy={cy} r={17} fill="#fff" fillOpacity={0.55} stroke="#333" strokeWidth={2} />
-												<text
-													className={styles.hexLabel}
-													x={cx}
-													y={cy + 1}
-													fill={hex.number === 6 || hex.number === 8 ? "#dc2626" : "#1f1408"}
-												>
-													{hex.number}
-												</text>
-											</>
-										) : null}
-									</g>
-								);
-							})}
-						</g>
-
-						{ports.map((port) => {
-							const connectedHex = hexById.get(port.hexId);
-							if (!connectedHex) {
-								return null;
-							}
-
-							const { cx: hexCenterX, cy: hexCenterY } = toPixel(connectedHex);
-							const portDistance = 45;
-							const { portX, portY, corner1, corner2 } = calculatePortPosition(
-								hexCenterX,
-								hexCenterY,
-								port.corners[0],
-								port.corners[1],
-								portDistance
-							);
-
-							let edgeAngle = (Math.atan2(corner2.y - corner1.y, corner2.x - corner1.x) * 180) / Math.PI;
-							if (port.id === 1 || port.id === 2) {
-								edgeAngle += 180;
-							}
-
-							const outwardX = portX - hexCenterX;
-							const outwardY = portY - hexCenterY;
-							const edgeX = corner2.x - corner1.x;
-							const edgeY = corner2.y - corner1.y;
-							const perpX = -edgeY;
-							const perpY = edgeX;
-							const dotProduct = perpX * outwardX + perpY * outwardY;
-							const sailSide = dotProduct < 0 ? 1 : -1;
-
-							return (
-								<g key={`port-${port.id}`}>
-									<line x1={portX} y1={portY} x2={corner1.x} y2={corner1.y} stroke="#654321" strokeWidth={3} strokeLinecap="round" />
-									<line x1={portX} y1={portY} x2={corner2.x} y2={corner2.y} stroke="#654321" strokeWidth={3} strokeLinecap="round" />
-
-									<g transform={`translate(${portX}, ${portY}) rotate(${edgeAngle})`}>
-										<path d="M-20,5 L-15,15 L15,15 L20,5 L15,-5 L-15,-5 Z" fill="#8b5a3c" stroke="#654321" strokeWidth={2} />
-										<rect x={-15} y={-5} width={30} height={10} fill="#a0826d" stroke="#654321" strokeWidth={1} />
-										<line x1={0} y1={-5} x2={0} y2={-40} stroke="#654321" strokeWidth={2} />
-										<path
-											d={sailSide > 0 ? "M0,-40 L20,-25 L20,-10 L0,-5 Z" : "M0,-40 L-20,-25 L-20,-10 L0,-5 Z"}
-											fill={getPortColor(port.type)}
-											stroke="#fff"
-											strokeWidth={2}
-											opacity={0.9}
-										/>
-
-										{port.type === "3:1" ? (
-											<text x={sailSide * 10} y={-18} textAnchor="middle" fill="#fff" fontSize={22} fontWeight={800} style={{ textShadow: "1px 1px 2px rgba(0,0,0,0.8)" }}>
-												?
-											</text>
-										) : (
-											<>
-												<circle cx={sailSide * 10} cy={-22} r={8} fill="#fff" opacity={0.3} />
-												<text x={sailSide * 10} y={-18} textAnchor="middle" fill="#fff" fontSize={12} fontWeight={800} style={{ textShadow: "1px 1px 2px rgba(0,0,0,0.5)" }}>
-													{getPortIcon(port.type)}
-												</text>
-											</>
-										)}
-
-										<text x={0} y={28} textAnchor="middle" fill="#fff" fontSize={14} fontWeight={800} style={{ textShadow: "1px 1px 3px rgba(0,0,0,0.9)" }}>
-											{getPortLabel(port.type)}
-										</text>
-									</g>
-								</g>
-							);
-						})}
-
-						{isRoadPlacementMode && isMyTurn
-							? state.hexes.flatMap((hex) =>
-								Array.from({ length: 6 }, (_, edge) => {
-									const p1 = getCornerPoint(toPixel(hex).cx, toPixel(hex).cy, edge);
-									const p2 = getCornerPoint(toPixel(hex).cx, toPixel(hex).cy, (edge + 1) % 6);
-									const legal = isLegalRoadPlacement(hex.id, edge);
-									if (!legal) {
-										return null;
-									}
-
-									return (
-										<line
-											key={`select-road-${hex.id}-${edge}`}
-											x1={p1.x}
-											y1={p1.y}
-											x2={p2.x}
-											y2={p2.y}
-											className={styles.roadEdgeSelectable}
-											onClick={() => {
-												handleRoadEdgeClick(hex.id, edge);
-											}}
-										/>
-									);
-								})
-							)
-							: null}
-
-						<g>
-							{renderedRoadSegments.map((segment) => (
-								<line
-									key={segment.key}
-									x1={segment.x1}
-									y1={segment.y1}
-									x2={segment.x2}
-									y2={segment.y2}
-									stroke={segment.color}
-									strokeWidth={9}
-									strokeLinecap="round"
-								/>
-							))}
-						</g>
-
-						<g>
-							{state.players.flatMap((player) =>
-								player.settlementsOnCorners.map((settlement, index) => {
-									const hex = hexById.get(settlement.hexId);
-
-									if (!hex) {
-										return null;
-									}
-
-									const { cx, cy } = toPixel(hex);
-									const point = getCornerPoint(cx, cy, settlement.corner);
-
-									return (
-										<rect
-											key={`settlement-${player.id}-${settlement.hexId}-${settlement.corner}-${index}`}
-											x={point.x - 8}
-											y={point.y - 8}
-											width={16}
-											height={16}
-											rx={2}
-											fill={player.color}
-											stroke="#ffffff"
-											strokeWidth={2}
-										/>
-									);
-								})
-							)}
-
-							{state.players.flatMap((player) =>
-								player.citiesOnCorners.map((city, index) => {
-									const hex = hexById.get(city.hexId);
-
-									if (!hex) {
-										return null;
-									}
-
-									const { cx, cy } = toPixel(hex);
-									const point = getCornerPoint(cx, cy, city.corner);
-
-									return (
-										<rect
-											key={`city-${player.id}-${city.hexId}-${city.corner}-${index}`}
-											x={point.x - 11}
-											y={point.y - 11}
-											width={22}
-											height={22}
-											rx={3}
-											fill={player.color}
-											stroke="#ffffff"
-											strokeWidth={3}
-										/>
-									);
-								})
-							)}
-						</g>
-
-						{(() => {
-							const fallbackRobberHexId = findDesertHexId(state.hexes);
-							const robberHex = hexById.get(state.robberHexId ?? fallbackRobberHexId ?? -1);
-							if (!robberHex) {
-								return null;
-							}
-
-							const { cx, cy } = toPixel(robberHex);
-							return (
-								<g key="robber">
-									<circle cx={cx} cy={cy + 10} r={12} fill="#1a1a1a" stroke="#000" strokeWidth={2} />
-									<ellipse cx={cx} cy={cy - 5} rx={10} ry={15} fill="#1a1a1a" stroke="#000" strokeWidth={2} />
-									<circle cx={cx} cy={cy - 20} r={8} fill="#1a1a1a" stroke="#000" strokeWidth={2} />
-								</g>
-							);
-						})()}
-					</svg>
-				</main>
-
-				<div className={styles.actionStrip}>
-					<div className={styles.actionBox}>
-						<button type="button" className={styles.rollDiceButton} onClick={() => handleActionPlaceholder("Roll Dice")} disabled={!isMyTurn}>
-							<span className={styles.actionEmoji}>🎲</span>
-							<span>Roll Dice</span>
-						</button>
-
-						<div className={styles.actionGrid}>
-							<button type="button" className={`${styles.actionSquareButton} ${styles.knightButton}`} onClick={() => handleActionPlaceholder("Knight")} disabled={!isMyTurn}>
-								<span className={styles.actionEmoji}>⚔️</span>
-								<span className={styles.actionLabel}>Knight</span>
-							</button>
-							<button
-								type="button"
-								className={`${styles.actionSquareButton} ${styles.roadButton}`}
-								onClick={handleBuildRoadAction}
-								disabled={!isMyTurn}
-							>
-								<Minus size={26} />
-								<span className={styles.actionLabel}>{isRoadPlacementMode ? "Cancel Road" : "Road"}</span>
-								{!isRoadPlacementMode ? (
-									<span className={styles.roadCostOverlay} aria-hidden="true">
-										<span className={styles.roadCostChip}>🌲</span>
-										<span className={styles.roadCostPlus}>+</span>
-										<span className={styles.roadCostChip}>🧱</span>
-									</span>
-								) : null}
-							</button>
-							<button type="button" className={`${styles.actionSquareButton} ${styles.settlementButton}`} onClick={() => handleActionPlaceholder("Build Settlement")} disabled={!isMyTurn}>
-								<Home size={24} />
-								<span className={styles.actionLabel}>Settlement</span>
-							</button>
-							<button type="button" className={`${styles.actionSquareButton} ${styles.cityButton}`} onClick={() => handleActionPlaceholder("Build City")} disabled={!isMyTurn}>
-								<Castle size={24} />
-								<span className={styles.actionLabel}>City</span>
-							</button>
-							<button type="button" className={`${styles.actionSquareButton} ${styles.devCardButton}`} onClick={() => handleActionPlaceholder("Development Card")} disabled={!isMyTurn}>
-								<span className={styles.actionEmoji}>🎴</span>
-								<span className={styles.actionLabel}>Development Card</span>
-							</button>
-						</div>
-
-						<button type="button" className={styles.endTurnButton} onClick={handleEndTurn} disabled={!isMyTurn}>
-							End Turn
-						</button>
-					</div>
-				</div>
-			</div>
-
+				<BoardColumn
+					boardStatus={boardStatus}
+					state={state}
+					ports={ports}
+					hexById={hexById}
+					renderedRoadSegments={renderedRoadSegments}
+					isRoadPlacementMode={isRoadPlacementMode}
+					isMyTurn={isMyTurn}
+					isLegalRoadPlacement={isLegalRoadPlacement}
+					handleRoadEdgeClick={handleRoadEdgeClick}
+					handleActionPlaceholder={handleActionPlaceholder}
+					handleBuildRoadAction={handleBuildRoadAction}
+					handleEndTurn={handleEndTurn}
+				/>
 			<aside className={styles.rightPanel}>
 				<section className={styles.sidebarCard}>
 					<h2 className={styles.panelTitle}>Players</h2>
