@@ -219,7 +219,7 @@ export default function Gameboard() {
 							return serverPlayers[0].id;
 						})(),
 						turnPhase: gameDto?.turnPhase ?? previousState.turnPhase,
-						diceValue: gameDto?.diceValue ?? previousState.diceValue,
+						diceResult: gameDto?.diceValue ?? previousState.diceResult,
 					}));
 
 					setWinnerPlayerName(gameDto?.winner?.name ?? null);
@@ -816,7 +816,7 @@ export default function Gameboard() {
 								: previousState.currentPlayerId,
 							robberHexId: gameDto.robberTileIndex ?? previousState.robberHexId,
 							turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
-							diceValue: gameDto.diceValue ?? previousState.diceValue,
+							diceResult: gameDto.diceValue ?? previousState.diceResult,
 						}));
 					} catch {
 						// Ignore malformed state messages.
@@ -1022,15 +1022,15 @@ export default function Gameboard() {
 		setState((previousState) => ({
 			...previousState,
 			currentPlayerId: nextPlayer.id,
+			turnPhase: "ROLL_DICE",
+			diceResult: null,
 		}));
 
 		const message = `${myPlayer.name} ended turn. ${nextPlayer.name} is now active.`;
 		addToLog(message);
 
 		try {
-			await apiService.put<GameGetDTO>(`/games/${activeGameId}`, {
-				currentTurnIndex: nextIndex,
-			});
+			await apiService.post<GameStateDTO>(`/games/${activeGameId}/actions/end-turn`, {});
 		} catch {
 			// Keep local progression even if persistence fails; polling will eventually re-sync.
 		}

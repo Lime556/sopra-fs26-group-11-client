@@ -33,10 +33,9 @@ export interface GameState {
 	ports: PortVisual[];
 	players: Player[];
 	currentPlayerId: number;
-	diceResult: [number, number] | null;
+	diceResult: number | null;
 	robberHexId: number | null;
 	turnPhase: string;
-	diceValue: number | null;
 }
 
 export type PortType = "3:1" | ResourceType;
