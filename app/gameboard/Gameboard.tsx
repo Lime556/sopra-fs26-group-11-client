@@ -49,6 +49,7 @@ type GameChatMessageDTO,
 type GameEventDTO,
 type GameGetDTO,
 type GameState,
+type GameStateDTO,
 type HexTile,
 type Player,
 type ResourceType,
@@ -217,6 +218,8 @@ export default function Gameboard() {
 
 							return serverPlayers[0].id;
 						})(),
+						turnPhase: gameDto?.turnPhase ?? previousState.turnPhase,
+						diceResult: gameDto?.diceValue ?? previousState.diceResult,
 					}));
 
 					setWinnerPlayerName(gameDto?.winner?.name ?? null);
@@ -748,6 +751,24 @@ export default function Gameboard() {
 		}
 	};
 
+	const handleRollDice = async () => {
+		if (!isMyTurn || !activeGameId || state.turnPhase !== "ROLL_DICE") {
+			return;
+		}
+
+		try {
+			await apiService.post(`/games/${activeGameId}/actions/roll-dice`, {});
+			addToLog("Dice rolled.");
+		} catch (error) {
+			const appError = error as Partial<ApplicationError>;
+			if (appError.status === 409) {
+				addToLog("Cannot roll dice: " + (appError.message || "Invalid turn phase"));
+			} else {
+				addToLog("Failed to roll dice.");
+			}
+		}
+	};
+
 	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
 	applyGameEventRef.current = applyGameEvent;
 
@@ -794,6 +815,8 @@ export default function Gameboard() {
 								? gameDto.players[((gameDto.currentTurnIndex % gameDto.players.length) + gameDto.players.length) % gameDto.players.length].id
 								: previousState.currentPlayerId,
 							robberHexId: gameDto.robberTileIndex ?? previousState.robberHexId,
+							turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
+							diceResult: gameDto.diceValue ?? previousState.diceResult,
 						}));
 					} catch {
 						// Ignore malformed state messages.
@@ -999,15 +1022,15 @@ export default function Gameboard() {
 		setState((previousState) => ({
 			...previousState,
 			currentPlayerId: nextPlayer.id,
+			turnPhase: "ROLL_DICE",
+			diceResult: null,
 		}));
 
 		const message = `${myPlayer.name} ended turn. ${nextPlayer.name} is now active.`;
 		addToLog(message);
 
 		try {
-			await apiService.put<GameGetDTO>(`/games/${activeGameId}`, {
-				currentTurnIndex: nextIndex,
-			});
+			await apiService.post<GameStateDTO>(`/games/${activeGameId}/actions/end-turn`, {});
 		} catch {
 			// Keep local progression even if persistence fails; polling will eventually re-sync.
 		}
@@ -1085,6 +1108,7 @@ export default function Gameboard() {
 					isLegalRoadPlacement={isLegalRoadPlacement}
 					handleRoadEdgeClick={handleRoadEdgeClick}
 					handleActionPlaceholder={handleActionPlaceholder}
+					handleRollDice={handleRollDice}
 					handleBuildRoadAction={handleBuildRoadAction}
 					handleEndTurn={handleEndTurn}
 				/>
