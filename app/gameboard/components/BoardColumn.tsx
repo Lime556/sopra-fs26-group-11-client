@@ -25,6 +25,7 @@ interface BoardColumnProps {
 	isLegalRoadPlacement: (hexId: number, edge: number) => boolean;
 	handleRoadEdgeClick: (hexId: number, edge: number) => void;
 	handleActionPlaceholder: (actionName: string) => void;
+	handleRollDice: () => void;
 	handleBuildRoadAction: () => void;
 	handleEndTurn: () => void;
 }
@@ -40,6 +41,7 @@ export function BoardColumn({
 	isLegalRoadPlacement,
 	handleRoadEdgeClick,
 	handleActionPlaceholder,
+	handleRollDice,
 	handleBuildRoadAction,
 	handleEndTurn,
 }: BoardColumnProps) {
@@ -287,13 +289,18 @@ export function BoardColumn({
 
 			<div className={styles.actionStrip}>
 				<div className={styles.actionBox}>
-					<button type="button" className={styles.rollDiceButton} onClick={() => handleActionPlaceholder("Roll Dice")} disabled={!isMyTurn}>
+					<button
+						type="button"
+						className={`${styles.rollDiceButton} ${!isMyTurn || state.turnPhase !== "ROLL_DICE" ? styles.buttonDisabled : styles.rollDiceButton}`}
+						onClick={handleRollDice}
+						disabled={!isMyTurn || state.turnPhase !== "ROLL_DICE"}
+					>
 						<span className={styles.actionEmoji}>🎲</span>
 						<span>Roll Dice</span>
 					</button>
 
 					<div className={styles.actionGrid}>
-						<button type="button" className={`${styles.actionSquareButton} ${styles.knightButton}`} onClick={() => handleActionPlaceholder("Knight")} disabled={!isMyTurn}>
+						<button type="button" className={`${styles.actionSquareButton} ${styles.knightButton}`} onClick={() => handleActionPlaceholder("Knight")} disabled={!isMyTurn || state.turnPhase !== "ACTION"}>
 							<span className={styles.actionEmoji}>⚔️</span>
 							<span className={styles.actionLabel}>Knight</span>
 						</button>
@@ -301,7 +308,7 @@ export function BoardColumn({
 							type="button"
 							className={`${styles.actionSquareButton} ${styles.roadButton}`}
 							onClick={handleBuildRoadAction}
-							disabled={!isMyTurn}
+							disabled={!isMyTurn || state.turnPhase !== "ACTION"}
 						>
 							<Minus size={26} />
 							<span className={styles.actionLabel}>{isRoadPlacementMode ? "Cancel Road" : "Road"}</span>
@@ -313,21 +320,26 @@ export function BoardColumn({
 								</span>
 							) : null}
 						</button>
-						<button type="button" className={`${styles.actionSquareButton} ${styles.settlementButton}`} onClick={() => handleActionPlaceholder("Build Settlement")} disabled={!isMyTurn}>
+						<button type="button" className={`${styles.actionSquareButton} ${styles.settlementButton}`} onClick={() => handleActionPlaceholder("Build Settlement")} disabled={!isMyTurn || state.turnPhase !== "ACTION"}>
 							<Home size={24} />
 							<span className={styles.actionLabel}>Settlement</span>
 						</button>
-						<button type="button" className={`${styles.actionSquareButton} ${styles.cityButton}`} onClick={() => handleActionPlaceholder("Build City")} disabled={!isMyTurn}>
+						<button type="button" className={`${styles.actionSquareButton} ${styles.cityButton}`} onClick={() => handleActionPlaceholder("Build City")} disabled={!isMyTurn || state.turnPhase !== "ACTION"}>
 							<Castle size={24} />
 							<span className={styles.actionLabel}>City</span>
 						</button>
-						<button type="button" className={`${styles.actionSquareButton} ${styles.devCardButton}`} onClick={() => handleActionPlaceholder("Development Card")} disabled={!isMyTurn}>
+						<button type="button" className={`${styles.actionSquareButton} ${styles.devCardButton}`} onClick={() => handleActionPlaceholder("Development Card")} disabled={!isMyTurn || state.turnPhase !== "ACTION"}>
 							<span className={styles.actionEmoji}>🎴</span>
 							<span className={styles.actionLabel}>Development Card</span>
 						</button>
 					</div>
 
-					<button type="button" className={styles.endTurnButton} onClick={handleEndTurn} disabled={!isMyTurn}>
+					<button
+						type="button"
+						className={`${styles.endTurnButton} ${!isMyTurn || state.turnPhase !== "ACTION" ? styles.buttonDisabled : styles.endTurnButton}`}
+						onClick={handleEndTurn}
+						disabled={!isMyTurn || state.turnPhase !== "ACTION"}
+					>
 						End Turn
 					</button>
 				</div>

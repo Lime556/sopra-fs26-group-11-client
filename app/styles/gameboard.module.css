@@ -521,6 +521,10 @@
   background: linear-gradient(90deg, #e9b320, #b7781f);
 }
 
+.rollDiceButton:hover {
+  background: #b7781f;
+}
+
 .actionGrid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -537,6 +541,16 @@
   cursor: pointer;
   background: linear-gradient(180deg, #cf4a3e, #a5302b);
   color: #fff;
+}
+
+.endTurnButton:hover {
+  background: #a5302b;
+}
+
+.buttonDisabled {
+  background: rgb(156, 163, 175);
+  color: rgb(229, 231, 235);
+  cursor: not-allowed;
 }
 
 .actionSquareButton {

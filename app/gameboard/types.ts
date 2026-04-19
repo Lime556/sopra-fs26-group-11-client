@@ -35,6 +35,8 @@ export interface GameState {
 	currentPlayerId: number;
 	diceResult: [number, number] | null;
 	robberHexId: number | null;
+	turnPhase: string;
+	diceValue: number | null;
 }
 
 export type PortType = "3:1" | ResourceType;
@@ -70,6 +72,8 @@ export interface GameGetDTO {
 	id: number;
 	board?: BoardGetDTO | null;
 	currentTurnIndex?: number | null;
+	turnPhase?: string | null;
+	diceValue?: number | null;
 	robberTileIndex?: number | null;
 	players?: PlayerGetDTO[];
 	winner?: PlayerGetDTO | null;
@@ -78,6 +82,13 @@ export interface GameGetDTO {
 	finishedAt?: string | null;
 	gameFinished?: boolean | null;
 	chatMessages?: string[];
+}
+
+export interface GameStateDTO {
+	currentPlayerId: number;
+	turnPhase: string;
+	diceValue: number | null;
+	gameFinished: boolean;
 }
 
 export interface PlayerGetDTO {
