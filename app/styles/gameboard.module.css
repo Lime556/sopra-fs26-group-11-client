@@ -870,6 +870,98 @@
   cursor: pointer;
 }
 
+
+.cornerSelectable {
+  fill: rgba(34, 197, 94, 0.85);
+  stroke: white;
+  stroke-width: 3;
+  cursor: pointer;
+}
+
+.cornerSelectable:hover {
+  fill: rgba(250, 204, 21, 0.95);
+}
+
+.roadButton,
+.settlementButton,
+.cityButton {
+  position: relative;
+  overflow: hidden;
+}
+
+.roadButton {
+  background: #bb6b27;
+}
+
+.settlementButton {
+  background: #7d3db0;
+}
+
+.cityButton {
+  background: #c2458b;
+}
+
+.roadButton > *,
+.settlementButton > *,
+.cityButton > * {
+  position: relative;
+  z-index: 1;
+}
+
+.roadCostOverlay,
+.settlementCostOverlay,
+.cityCostOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.22rem;
+  padding: 0.2rem;
+  flex-wrap: wrap;
+  background: rgba(34, 16, 3, 0.34);
+  opacity: 0;
+  transition: opacity 130ms ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.roadCostChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 0.82rem;
+  line-height: 1;
+}
+
+.roadCostPlus {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.roadButton:hover .roadCostOverlay {
+  opacity: 1;
+}
+
+.settlementButton:hover .settlementCostOverlay {
+  opacity: 1;
+}
+
+.cityButton:hover .cityCostOverlay {
+  opacity: 1;
+}
+
+.roadButton:disabled .roadCostOverlay,
+.settlementButton:disabled .settlementCostOverlay,
+.cityButton:disabled .cityCostOverlay {
+  display: none;
+}
+
 @keyframes boardEnter {
   from {
     opacity: 0;

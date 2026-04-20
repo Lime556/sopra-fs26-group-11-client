@@ -21,12 +21,20 @@ interface BoardColumnProps {
 	hexById: Map<number, HexTile>;
 	renderedRoadSegments: RenderedRoadSegment[];
 	isRoadPlacementMode: boolean;
+	isSettlementPlacementMode: boolean;
+	isCityPlacementMode: boolean;
 	isMyTurn: boolean;
 	isLegalRoadPlacement: (hexId: number, edge: number) => boolean;
+	isLegalSettlementPlacement: (hexId: number, corner: number) => boolean;
+	isLegalCityPlacement: (hexId: number, corner: number) => boolean;
 	handleRoadEdgeClick: (hexId: number, edge: number) => void;
+	handleSettlementCornerClick: (hexId: number, corner: number) => void;
+	handleCityCornerClick: (hexId: number, corner: number) => void;
 	handleActionPlaceholder: (actionName: string) => void;
 	handleRollDice: () => void;
 	handleBuildRoadAction: () => void;
+	handleBuildSettlementAction: () => void;
+	handleBuildCityAction: () => void;
 	handleEndTurn: () => void;
 }
 
@@ -37,12 +45,20 @@ export function BoardColumn({
 	hexById,
 	renderedRoadSegments,
 	isRoadPlacementMode,
+	isSettlementPlacementMode,
+	isCityPlacementMode,
 	isMyTurn,
 	isLegalRoadPlacement,
+	isLegalSettlementPlacement,
+	isLegalCityPlacement,
 	handleRoadEdgeClick,
+	handleSettlementCornerClick,
+	handleCityCornerClick,
 	handleActionPlaceholder,
 	handleRollDice,
 	handleBuildRoadAction,
+	handleBuildSettlementAction,
+	handleBuildCityAction,
 	handleEndTurn,
 }: BoardColumnProps) {
 	return (
@@ -197,6 +213,52 @@ export function BoardColumn({
 							)
 						: null}
 
+					{isSettlementPlacementMode && isMyTurn
+						? state.hexes.flatMap((hex) =>
+								Array.from({ length: 6 }, (_, corner) => {
+									const point = getCornerPoint(toPixel(hex).cx, toPixel(hex).cy, corner);
+									const legal = isLegalSettlementPlacement(hex.id, corner);
+									if (!legal) {
+										return null;
+									}
+
+									return (
+										<circle
+											key={`select-settlement-${hex.id}-${corner}`}
+											cx={point.x}
+											cy={point.y}
+											r={10}
+											className={styles.cornerSelectable}
+											onClick={() => handleSettlementCornerClick(hex.id, corner)}
+										/>
+									);
+								})
+							)
+						: null}
+
+					{isCityPlacementMode && isMyTurn
+						? state.hexes.flatMap((hex) =>
+								Array.from({ length: 6 }, (_, corner) => {
+									const point = getCornerPoint(toPixel(hex).cx, toPixel(hex).cy, corner);
+									const legal = isLegalCityPlacement(hex.id, corner);
+									if (!legal) {
+										return null;
+									}
+
+									return (
+										<circle
+											key={`select-city-${hex.id}-${corner}`}
+											cx={point.x}
+											cy={point.y}
+											r={10}
+											className={styles.cornerSelectable}
+											onClick={() => handleCityCornerClick(hex.id, corner)}
+										/>
+									);
+								})
+							)
+						: null}
+
 					<g>
 						{renderedRoadSegments.map((segment) => (
 							<line
@@ -300,10 +362,16 @@ export function BoardColumn({
 					</button>
 
 					<div className={styles.actionGrid}>
-						<button type="button" className={`${styles.actionSquareButton} ${styles.knightButton}`} onClick={() => handleActionPlaceholder("Knight")} disabled={!isMyTurn || state.turnPhase !== "ACTION"}>
+						<button
+							type="button"
+							className={`${styles.actionSquareButton} ${styles.knightButton}`}
+							onClick={() => handleActionPlaceholder("Knight")}
+							disabled={!isMyTurn || state.turnPhase !== "ACTION"}
+						>
 							<span className={styles.actionEmoji}>⚔️</span>
 							<span className={styles.actionLabel}>Knight</span>
 						</button>
+
 						<button
 							type="button"
 							className={`${styles.actionSquareButton} ${styles.roadButton}`}
@@ -320,17 +388,53 @@ export function BoardColumn({
 								</span>
 							) : null}
 						</button>
-						<button type="button" className={`${styles.actionSquareButton} ${styles.settlementButton}`} onClick={() => handleActionPlaceholder("Build Settlement")} disabled={!isMyTurn || state.turnPhase !== "ACTION"}>
+
+						<button
+							type="button"
+							className={`${styles.actionSquareButton} ${styles.settlementButton}`}
+							onClick={handleBuildSettlementAction}
+							disabled={!isMyTurn || state.turnPhase !== "ACTION"}
+						>
 							<Home size={24} />
-							<span className={styles.actionLabel}>Settlement</span>
+							<span className={styles.actionLabel}>
+								{isSettlementPlacementMode ? "Cancel Settlement" : "Settlement"}
+							</span>
+							{!isSettlementPlacementMode ? (
+								<span className={styles.settlementCostOverlay} aria-hidden="true">
+									<span className={styles.roadCostChip}>🌲</span>
+									<span className={styles.roadCostPlus}>+</span>
+									<span className={styles.roadCostChip}>🧱</span>
+									<span className={styles.roadCostPlus}>+</span>
+									<span className={styles.roadCostChip}>🐑</span>
+									<span className={styles.roadCostPlus}>+</span>
+									<span className={styles.roadCostChip}>🌾</span>
+								</span>
+							) : null}
 						</button>
-						<button type="button" className={`${styles.actionSquareButton} ${styles.cityButton}`} onClick={() => handleActionPlaceholder("Build City")} disabled={!isMyTurn || state.turnPhase !== "ACTION"}>
+
+						<button
+							type="button"
+							className={`${styles.actionSquareButton} ${styles.cityButton}`}
+							onClick={handleBuildCityAction}
+							disabled={!isMyTurn || state.turnPhase !== "ACTION"}
+						>
 							<Castle size={24} />
-							<span className={styles.actionLabel}>City</span>
-						</button>
-						<button type="button" className={`${styles.actionSquareButton} ${styles.devCardButton}`} onClick={() => handleActionPlaceholder("Development Card")} disabled={!isMyTurn || state.turnPhase !== "ACTION"}>
-							<span className={styles.actionEmoji}>🎴</span>
-							<span className={styles.actionLabel}>Development Card</span>
+							<span className={styles.actionLabel}>
+								{isCityPlacementMode ? "Cancel City" : "City"}
+							</span>
+							{!isCityPlacementMode ? (
+								<span className={styles.cityCostOverlay} aria-hidden="true">
+									<span className={styles.roadCostChip}>🌾</span>
+									<span className={styles.roadCostPlus}>+</span>
+									<span className={styles.roadCostChip}>🌾</span>
+									<span className={styles.roadCostPlus}>+</span>
+									<span className={styles.roadCostChip}>⛰️</span>
+									<span className={styles.roadCostPlus}>+</span>
+									<span className={styles.roadCostChip}>⛰️</span>
+									<span className={styles.roadCostPlus}>+</span>
+									<span className={styles.roadCostChip}>⛰️</span>
+								</span>
+							) : null}
 						</button>
 					</div>
 

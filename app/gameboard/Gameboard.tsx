@@ -15,46 +15,49 @@ import { BoardColumn } from "./components/BoardColumn";
 import { EndGameOverlay } from "./components/EndGameOverlay";
 import { TradeModal } from "./components/TradeModal";
 import {
-bankResourceColorByType,
-bankResources,
-developmentCardsRemaining,
-resourceEmojiByType,
-resourceTypes,
-} from "./constants";
+	bankResourceColorByType,
+	bankResources,
+	developmentCardsRemaining,
+	hexSize,
+	resourceEmojiByType,
+	resourceTypes,
+	} from "./constants";
 import {
-createCanonicalCornerKey,
-createCanonicalEdgeKey,
-getCanonicalRoadEndpoints,
-getCornerPoint,
-toPixel,
+	createCanonicalCornerKey,
+	createCanonicalEdgeKey,
+	getCanonicalRoadEndpoints,
+	getCornerPoint,
+	toPixel,
 } from "./geometry";
 import {
-createInitialGameState,
-fallbackColorForPlayer,
+	createInitialGameState,
+	fallbackColorForPlayer,
 	findDesertHexId,
-mapBoardDtoToHexes,
-mapBoardDtoToPorts,
-mapResourcesFromServer,
-parseGameId,
+	mapBoardDtoToHexes,
+	mapBoardDtoToPorts,
+	mapResourcesFromServer,
+	parseGameId,
 } from "./mappers";
 import {
-computeLongestRoadLength,
-mergeRoadLists,
-parseRoadEntry,
-rememberRoadsInCache,
+	computeLongestRoadLength,
+	mergeRoadLists,
+	parseRoadEntry,
+	rememberRoadsInCache,
 } from "./roads";
 import {
-type BoardGetDTO,
-type GameChatMessageDTO,
-type GameEventDTO,
-type GameGetDTO,
-type GameState,
-type GameStateDTO,
-type HexTile,
-type Player,
-type ResourceType,
-type TradeMode,
+	type BoardGetDTO,
+	type GameChatMessageDTO,
+	type GameEventDTO,
+	type GameGetDTO,
+	type GameState,
+	type GameStateDTO,
+	type HexTile,
+	type Player,
+	type ResourceType,
+	type TradeMode,
 } from "./types";
+
+const DEBUG_LOCAL = false;
 
 export default function Gameboard() {
 	const router = useRouter();
@@ -74,7 +77,7 @@ export default function Gameboard() {
 	const [winnerPlayerName, setWinnerPlayerName] = useState<string | null>(null);
 	const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
 	const [activeGameId, setActiveGameId] = useState<number | null>(null);
-	const [isRoadPlacementMode, setIsRoadPlacementMode] = useState<boolean>(false);
+	const [placementMode, setPlacementMode] = useState<"road" | "settlement" | "city" | null>(null);
 	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
 	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
 	const ports = Array.isArray(state.ports) ? state.ports : [];
@@ -125,6 +128,81 @@ export default function Gameboard() {
 
 	useEffect(() => {
 		let cancelled = false;
+
+		if (DEBUG_LOCAL) {
+			const mockBoard: BoardGetDTO = {
+				hexTiles: [
+					"SHEEP", "WHEAT", "WOOD",
+					"BRICK", "ORE", "SHEEP", "WHEAT",
+					"WOOD", "DESERT", "WOOD", "WHEAT", "BRICK",
+					"ORE", "WOOD", "ORE", "SHEEP",
+					"BRICK", "WHEAT", "SHEEP",
+				],
+				hexTile_DiceNumbers: [
+					10, 2, 9,
+					12, 6, 4, 10,
+					9, -1, 11, 3, 8,
+					8, 3, 4, 5,
+					5, 6, 11,
+				],
+				intersections: [],
+				edges: [],
+				ports: [],
+				boats: [],
+			};
+		
+			const mappedHexes = mapBoardDtoToHexes(mockBoard);
+		
+			setActiveGameId(999);
+			setBoardStatus("");
+			setState({
+				hexes: mappedHexes,
+				ports: [],
+				robberHexId: 9,
+				currentPlayerId: myPlayer?.id ? myPlayer.id : 1,
+				diceResult: 8,
+				turnPhase: "ACTION",
+				players: [
+					{
+						id: 1,
+						name: sessionUsername?.trim() ? sessionUsername : "Tester 1",
+						color: "#d13f34",
+						resources: {
+							wood: 100,
+							brick: 100,
+							wool: 100,
+							wheat: 100,
+							ore: 100,
+						},
+						victoryPoints: 3,
+						hasLongestRoad: false,
+						roadsOnEdges: [{ hexId: 9, edge: 0 }],
+						settlementsOnCorners: [{ hexId: 9, corner: 0 }],
+						citiesOnCorners: [],
+					},
+					{
+						id: 2,
+						name: "Bot Blue",
+						color: "#2e7ccf",
+						resources: {
+							wood: 5,
+							brick: 5,
+							wool: 5,
+							wheat: 5,
+							ore: 5,
+						},
+						victoryPoints: 2,
+						hasLongestRoad: false,
+						roadsOnEdges: [{ hexId: 5, edge: 2 }],
+						settlementsOnCorners: [{ hexId: 5, corner: 2 }],
+						citiesOnCorners: [],
+					},
+				],
+			});
+		
+			return;
+		}
+
 		syncedChatMessagesRef.current = new Set();
 		roadCacheRef.current = new Map();
 
@@ -408,7 +486,10 @@ export default function Gameboard() {
 
 	const currentPlayerIndex = state.players.findIndex((player) => player.id === state.currentPlayerId);
 	const currentPlayer = state.players.find((player) => player.id === state.currentPlayerId) ?? null;
-	const myPlayer = state.players.find((player) => player.name === sessionUsername) ?? null;
+	const myPlayer =
+		state.players.find((player) => player.name === sessionUsername) ??
+		state.players.find((player) => player.id === 1) ??
+		null;
 	const myPlayerIdRef = useRef<number | null>(null);
 	myPlayerIdRef.current = myPlayer?.id ?? null;
 	const isMyTurn = myPlayer !== null && myPlayer.id === state.currentPlayerId;
@@ -616,12 +697,289 @@ export default function Gameboard() {
 
 		const hasAdjacentOwnBuilding = ownsCornerBuilding(fromCorner) || ownsCornerBuilding(toCorner);
 
-		if (!hasAdjacentOwnRoad || !hasAdjacentOwnBuilding) {
-			addToLog("Road must connect to your own road and one of your buildings.");
+		if (!hasAdjacentOwnRoad && !hasAdjacentOwnBuilding) {
+			// addToLog("Road must connect to your own road or one of your buildings."); -> rule disabled because it caused bugs
 			return false;
 		}
 
 		return true;
+	};
+
+	const occupiedCornerKeys = useMemo(() => {
+		const occupied = new Set<string>();
+	
+		state.players.forEach((player) => {
+			player.settlementsOnCorners.forEach((settlement) => {
+				const hex = hexById.get(settlement.hexId);
+				if (!hex) {
+					return;
+				}
+				occupied.add(createCanonicalCornerKey(hex, settlement.corner));
+			});
+	
+			player.citiesOnCorners.forEach((city) => {
+				const hex = hexById.get(city.hexId);
+				if (!hex) {
+					return;
+				}
+				occupied.add(createCanonicalCornerKey(hex, city.corner));
+			});
+		});
+	
+		return occupied;
+	}, [state.players, hexById]);
+	
+	const doesPlayerOwnRoadAtCorner = (cornerKey: string): boolean => {
+		if (!myPlayer) {
+			return false;
+		}
+	
+		return myPlayer.roadsOnEdges.some((road) => {
+			const roadHex = hexById.get(road.hexId);
+			if (!roadHex) {
+				return false;
+			}
+	
+			const [fromCorner, toCorner] = getCanonicalRoadEndpoints(roadHex, road.edge);
+			return fromCorner === cornerKey || toCorner === cornerKey;
+		});
+	};
+	
+	const isLegalSettlementPlacement = (hexId: number, corner: number): boolean => {
+		if (!myPlayer) {
+			return false;
+		}
+	
+		const hex = hexById.get(hexId);
+		if (!hex) {
+			return false;
+		}
+	
+		const targetCornerKey = createCanonicalCornerKey(hex, corner);
+	
+		if (occupiedCornerKeys.has(targetCornerKey)) {
+			return false;
+		}
+	
+		const adjacentCorners = state.hexes.flatMap((candidateHex) =>
+			Array.from({ length: 6 }, (_, candidateCorner) => {
+				const candidateCornerKey = createCanonicalCornerKey(candidateHex, candidateCorner);
+				if (candidateCornerKey === targetCornerKey) {
+					return null;
+				}
+	
+				const candidatePoint = getCornerPoint(toPixel(candidateHex).cx, toPixel(candidateHex).cy, candidateCorner);
+				const targetPoint = getCornerPoint(toPixel(hex).cx, toPixel(hex).cy, corner);
+				const distance = Math.hypot(candidatePoint.x - targetPoint.x, candidatePoint.y - targetPoint.y);
+	
+				return distance < hexSize * 1.1 ? candidateCornerKey : null;
+			})
+		).filter((value): value is string => value !== null);
+	
+		const hasAdjacentBuilding = adjacentCorners.some((cornerKey) => occupiedCornerKeys.has(cornerKey));
+		if (hasAdjacentBuilding) {
+			// addToLog("Settlement cannot be placed next to another building."); -> rule disabled because it caused bugs
+			return false;
+		}
+	
+		if (!doesPlayerOwnRoadAtCorner(targetCornerKey)) {
+			// addToLog("Settlement must connect to one of your roads."); -> rule disabled because it caused bugs
+			return false;
+		}
+	
+		return true;
+	};
+
+	const canAffordSettlement =
+	!!myPlayer
+	&& myPlayer.resources.wood >= 1
+	&& myPlayer.resources.brick >= 1
+	&& myPlayer.resources.wool >= 1
+	&& myPlayer.resources.wheat >= 1;
+
+	const canAffordCity =
+		!!myPlayer
+		&& myPlayer.resources.wheat >= 2
+		&& myPlayer.resources.ore >= 3;
+
+	const isLegalCityPlacement = (hexId: number, corner: number): boolean => {
+		if (!myPlayer) {
+			return false;
+		}
+	
+		const hex = hexById.get(hexId);
+		if (!hex) {
+			return false;
+		}
+	
+		const targetCornerKey = createCanonicalCornerKey(hex, corner);
+	
+		return myPlayer.settlementsOnCorners.some((settlement) => {
+			const settlementHex = hexById.get(settlement.hexId);
+			if (!settlementHex) {
+				return false;
+			}
+	
+			return createCanonicalCornerKey(settlementHex, settlement.corner) === targetCornerKey;
+		});
+	};
+
+	const handleBuildSettlementAction = () => {
+		if (!isMyTurn || !myPlayer) {
+			return;
+		}
+
+		if (!canAffordSettlement) {
+			addToLog("Building a settlement costs 1 wood, 1 brick, 1 wool and 1 wheat.");
+			return;
+		}
+
+		setPlacementMode((previous) => {
+			const nextMode = previous === "settlement" ? null : "settlement";
+			addToLog(nextMode === "settlement" ? "Select a legal corner for your settlement." : "Settlement placement cancelled.");
+			return nextMode;
+		});
+	};
+
+	const handleBuildCityAction = () => {
+		if (!isMyTurn || !myPlayer) {
+			return;
+		}
+
+		if (!canAffordCity) {
+			addToLog("Building a city costs 2 wheat and 3 ore.");
+			return;
+		}
+
+		setPlacementMode((previous) => {
+			const nextMode = previous === "city" ? null : "city";
+			addToLog(nextMode === "city" ? "Select one of your settlements to upgrade." : "City placement cancelled.");
+			return nextMode;
+		});
+	};
+
+	const handleSettlementCornerClick = async (hexId: number, corner: number) => {
+		if (placementMode !== "settlement" || !isMyTurn || !myPlayer || !activeGameId) {
+			return;
+		}
+
+		if (!canAffordSettlement) {
+			addToLog("Building a settlement costs 1 wood, 1 brick, 1 wool and 1 wheat.");
+			return;
+		}
+
+		if (!isLegalSettlementPlacement(hexId, corner)) {
+			return;
+		}
+
+		if (DEBUG_LOCAL) {
+			setState((previousState) => ({
+				...previousState,
+				players: previousState.players.map((player) =>
+					player.id === myPlayer.id
+						? {
+								...player,
+								settlementsOnCorners: [...player.settlementsOnCorners, { hexId, corner }],
+								victoryPoints: player.victoryPoints + 1,
+								resources: {
+									...player.resources,
+									wood: player.resources.wood - 1,
+									brick: player.resources.brick - 1,
+									wool: player.resources.wool - 1,
+									wheat: player.resources.wheat - 1,
+								},
+						  }
+						: player
+				),
+			}));
+			setPlacementMode(null);
+			addToLog(`${myPlayer.name} built a settlement.`);
+			return;
+		}
+
+		try {
+			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+				type: "SETTLEMENT_BUILT",
+				sourcePlayerId: myPlayer.id,
+				hexId,
+				intersectionId: corner,
+			});
+		} catch {
+			addToLog("Could not build settlement. Please try again.");
+			return;
+		}
+
+		setPlacementMode(null);
+
+		void apiService.post<GameChatMessageDTO>(`/games/${activeGameId}/chat`, {
+			playerId: myPlayer.id,
+			playerName: myPlayer.name,
+			text: "built a settlement.",
+		});
+	};
+
+	const handleCityCornerClick = async (hexId: number, corner: number) => {
+		if (placementMode !== "city" || !isMyTurn || !myPlayer || !activeGameId) {
+			return;
+		}
+
+		if (!canAffordCity) {
+			addToLog("Building a city costs 2 wheat and 3 ore.");
+			return;
+		}
+
+		if (!isLegalCityPlacement(hexId, corner)) {
+			addToLog("You can only upgrade one of your own settlements.");
+			return;
+		}
+
+		if (DEBUG_LOCAL) {
+			setState((previousState) => ({
+				...previousState,
+				players: previousState.players.map((player) => {
+					if (player.id !== myPlayer.id) {
+						return player;
+					}
+		
+					return {
+						...player,
+						settlementsOnCorners: player.settlementsOnCorners.filter(
+							(settlement) => !(settlement.hexId === hexId && settlement.corner === corner)
+						),
+						citiesOnCorners: [...player.citiesOnCorners, { hexId, corner }],
+						victoryPoints: player.victoryPoints + 1,
+						resources: {
+							...player.resources,
+							wheat: player.resources.wheat - 2,
+							ore: player.resources.ore - 3,
+						},
+					};
+				}),
+			}));
+			setPlacementMode(null);
+			addToLog(`${myPlayer.name} built a city.`);
+			return;
+		}
+
+		try {
+			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+				type: "CITY_BUILT",
+				sourcePlayerId: myPlayer.id,
+				hexId,
+				intersectionId: corner,
+			});
+		} catch {
+			addToLog("Could not build city. Please try again.");
+			return;
+		}
+
+		setPlacementMode(null);
+
+		void apiService.post<GameChatMessageDTO>(`/games/${activeGameId}/chat`, {
+			playerId: myPlayer.id,
+			playerName: myPlayer.name,
+			text: "built a city.",
+		});
 	};
 
 	const applyGameEvent = (event: GameEventDTO) => {
@@ -777,6 +1135,10 @@ export default function Gameboard() {
 			return;
 		}
 
+		if (DEBUG_LOCAL) {
+			return;
+		}
+
 		const client = new Client({
 			webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`),
 			onConnect: () => {
@@ -927,7 +1289,7 @@ export default function Gameboard() {
 	};
 
 	const handleActionPlaceholder = (actionName: string) => {
-		setIsRoadPlacementMode(false);
+		setPlacementMode(null);
 		const message = `Action clicked: ${actionName} (implementation pending).`;
 		addToLog(message);
 		if (!activeGameId || !myPlayer) {
@@ -951,15 +1313,15 @@ export default function Gameboard() {
 			return;
 		}
 
-		setIsRoadPlacementMode((previous) => {
-			const nextMode = !previous;
-			addToLog(nextMode ? "Select a legal edge connected to your own road and building." : "Road placement cancelled.");
+		setPlacementMode((previous) => {
+			const nextMode = previous === "road" ? null : "road";
+			addToLog(nextMode === "road" ? "Select a legal edge for your road." : "Road placement cancelled.");
 			return nextMode;
 		});
 	};
 
 	const handleRoadEdgeClick = async (hexId: number, edge: number) => {
-		if (!isRoadPlacementMode || !isMyTurn || !myPlayer || !activeGameId) {
+		if (placementMode !== "road" || !isMyTurn || !myPlayer || !activeGameId) {
 			return;
 		}
 
@@ -983,6 +1345,28 @@ export default function Gameboard() {
 			return;
 		}
 
+		if (DEBUG_LOCAL) {
+			setState((previousState) => ({
+				...previousState,
+				players: previousState.players.map((player) =>
+					player.id === myPlayer.id
+						? {
+								...player,
+								roadsOnEdges: [...player.roadsOnEdges, { hexId, edge }],
+								resources: {
+									...player.resources,
+									wood: player.resources.wood - 1,
+									brick: player.resources.brick - 1,
+								},
+						  }
+						: player
+				),
+			}));
+			setPlacementMode(null);
+			addToLog(`${myPlayer.name} built a road.`);
+			return;
+		}
+
 		try {
 			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
 				type: "ROAD_BUILT",
@@ -995,7 +1379,7 @@ export default function Gameboard() {
 			return;
 		}
 
-		setIsRoadPlacementMode(false);
+		setPlacementMode(null);
 		const message = "built a road.";
 
 		void apiService.post<GameChatMessageDTO>(`/games/${activeGameId}/chat`, {
@@ -1017,7 +1401,7 @@ export default function Gameboard() {
 
 		const nextIndex = (currentIndex + 1) % state.players.length;
 		const nextPlayer = state.players[nextIndex];
-		setIsRoadPlacementMode(false);
+		setPlacementMode(null);
 
 		setState((previousState) => ({
 			...previousState,
@@ -1103,13 +1487,21 @@ export default function Gameboard() {
 					ports={ports}
 					hexById={hexById}
 					renderedRoadSegments={renderedRoadSegments}
-					isRoadPlacementMode={isRoadPlacementMode}
+					isRoadPlacementMode={placementMode === "road"}
+					isSettlementPlacementMode={placementMode === "settlement"}
+					isCityPlacementMode={placementMode === "city"}
 					isMyTurn={isMyTurn}
 					isLegalRoadPlacement={isLegalRoadPlacement}
+					isLegalSettlementPlacement={isLegalSettlementPlacement}
+					isLegalCityPlacement={isLegalCityPlacement}
 					handleRoadEdgeClick={handleRoadEdgeClick}
+					handleSettlementCornerClick={handleSettlementCornerClick}
+					handleCityCornerClick={handleCityCornerClick}
 					handleActionPlaceholder={handleActionPlaceholder}
 					handleRollDice={handleRollDice}
 					handleBuildRoadAction={handleBuildRoadAction}
+					handleBuildSettlementAction={handleBuildSettlementAction}
+					handleBuildCityAction={handleBuildCityAction}
 					handleEndTurn={handleEndTurn}
 				/>
 			<aside className={styles.rightPanel}>
