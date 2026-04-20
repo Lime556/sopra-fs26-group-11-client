@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, Users, Bot, Crown, Play } from "lucide-react";
+import { LogOut, Users, Bot, Crown, Play } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
 
@@ -40,6 +40,7 @@ export default function LobbyRoom() {
   const [error, setError] = useState("");
   const [startInfo, setStartInfo] = useState("");
   const [starting, setStarting] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   // Load lobby details on component mount
   useEffect(() => {
@@ -140,6 +141,21 @@ export default function LobbyRoom() {
     }
   };
 
+  const leaveLobby = async () => {
+    if (!lobby) return;
+    try {
+      setLeaving(true);
+      await apiService.post(`/lobbies/${lobby.id}/leave`, null);
+      router.push("/lobby");
+    } catch (err) {
+      console.error(err);
+      setStartInfo("Failed to leave lobby. Please try again.");
+    } finally {
+      setLeaving(false);
+    }
+  };
+
+
   if (error) {
     return <div className={styles.stateMessage}>{error}</div>;
   }
@@ -155,11 +171,12 @@ export default function LobbyRoom() {
       <div className={styles.header}>
         <div className={styles.headerInner}>
           <button
-            onClick={() => router.push("/lobby")}
+            onClick={() => void leaveLobby()}
             className={styles.backButton}
+            disabled={leaving}
           >
-            <ArrowLeft className="w-5 h-5" />
-            Back to Lobbies
+            <LogOut className={`${styles.leaveIcon} w-5 h-5`} />
+            {leaving ? "Leaving..." : "Leave Lobby"}
           </button>
           <h1 className={styles.headerTitle}>{lobby.name}</h1>
           <div className={styles.headerSpacer} />

@@ -36,21 +36,27 @@
   }
   
   .backButton {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: white;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    font: inherit;
-    transition: color 0.2s ease;
-  }
-  
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: white;
+      background: rgb(255, 34, 34);
+      border: none;
+      border-radius: 0.5rem;
+      padding: 0.625rem 1rem;
+      cursor: pointer;
+      font: inherit;
+      transition: background-color 0.2s ease;
+    }
+    
   .backButton:hover {
-    color: rgb(254, 249, 195);
-  }
-  
+      background: rgb(185, 28, 28);
+    }
+
+  .leaveIcon {
+      transform: rotate(180deg);
+    }
+    
   .headerTitle {
     font-size: 1.875rem;
     font-weight: 700;
