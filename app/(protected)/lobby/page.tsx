@@ -1,6 +1,6 @@
 "use client";
 import React, { useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
 import { LogOut } from "lucide-react";
@@ -45,7 +45,6 @@ export default function Lobby() {
 
   const apiService = useApi();
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const { value: token, clear: clearToken } = useLocalStorage<string>("token", "", { storage: "session" });
   const { value: userId, clear: clearUserId } = useLocalStorage<string>("userId", "", { storage: "session" });
@@ -114,12 +113,24 @@ export default function Lobby() {
   }, [loadLobbies]);
 
   useEffect(() => {
-    if (searchParams.get("kicked") === "1") {
+    if (typeof window === "undefined") return;
+
+    const flashReason = sessionStorage.getItem("lobbyFlashMessage");
+    if (!flashReason) return;
+    sessionStorage.removeItem("lobbyFlashMessage");
+
+    if (flashReason === "kicked") {
       setStatusMessage("You were kicked from the lobby.");
-      const timeout = setTimeout(() => setStatusMessage(""), 5000);
-      return () => clearTimeout(timeout);
+    } else if (flashReason === "closed") {
+      setStatusMessage("Lobby was closed by the host.");
     }
-  }, [searchParams]);
+  }, []);
+
+  useEffect(() => {
+    if (!statusMessage) return;
+    const timeout = setTimeout(() => setStatusMessage(""), 5000);
+    return () => clearTimeout(timeout);
+  }, [statusMessage]);
 
   const handleLogout = async () => {
     try {

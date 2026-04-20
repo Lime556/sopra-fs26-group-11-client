@@ -41,10 +41,18 @@ export default function LobbyRoom() {
   const [startInfo, setStartInfo] = useState("");
   const [starting, setStarting] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [kickingParticipantId, setKickingParticipantId] = useState<number | null>(null);
   const [transferringParticipantId, setTransferringParticipantId] = useState<number | null>(null);
   const [hostTransferMessage, setHostTransferMessage] = useState("");
   const currentUserId = userId ? Number(userId) : null;
+
+  const redirectWithFlash = (reason: "kicked" | "closed") => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("lobbyFlashMessage", reason);
+    }
+    router.push("/lobby");
+  };
 
   // Load lobby details on component mount
   useEffect(() => {
@@ -73,7 +81,7 @@ export default function LobbyRoom() {
         if (currentUserId !== null) {
           const stillInLobby = updatedLobby.participants.some((p) => p.userId === currentUserId);
           if (!stillInLobby) {
-            router.push("/lobby?kicked=1");
+            redirectWithFlash("kicked");
             return;
           }
         }
@@ -95,13 +103,17 @@ export default function LobbyRoom() {
         }
       } catch (err) {
         const status = err instanceof Error ? (err as { status?: number }).status : undefined;
-        if (status === 403 || status === 404) {
-          router.push("/lobby?kicked=1");
+        if (status === 404) {
+          redirectWithFlash("closed");
+          return;
+        }
+        if (status === 403) {
+          redirectWithFlash("kicked");
           return;
         }
         console.error("Failed to refresh lobby.", err);
       }
-    }, 2000);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [apiService, currentUserId, lobby, lobbyId, router]);
@@ -115,6 +127,20 @@ export default function LobbyRoom() {
   const currentParticipants = lobby?.currentParticipants ?? 0;
   const maxPlayers = lobby?.capacity ?? 4;
   const canAddBot = (lobby?.currentParticipants ?? 0) < maxPlayers;
+  const sortedParticipants = lobby
+    ? [...lobby.participants].sort((a, b) => {
+        const aIsHost = a.id === lobby.hostParticipantId;
+        const bIsHost = b.id === lobby.hostParticipantId;
+        if (aIsHost !== bIsHost) return aIsHost ? -1 : 1;
+
+        if (a.bot !== b.bot) return a.bot ? 1 : -1;
+
+        const nameCompare = a.username.localeCompare(b.username);
+        if (nameCompare !== 0) return nameCompare;
+
+        return a.id - b.id;
+      })
+    : [];
 
   // determining current user/host
   const currentParticipant = lobby?.participants.find((p) => p.userId === currentUserId);
@@ -184,6 +210,20 @@ export default function LobbyRoom() {
       setStartInfo("Failed to leave lobby. Please try again.");
     } finally {
       setLeaving(false);
+    }
+  };
+
+  const closeLobby = async () => {
+    if (!lobby || !isHost) return;
+    try {
+      setClosing(true);
+      await apiService.post(`/lobbies/${lobby.id}/close`, null);
+      redirectWithFlash("closed");
+    } catch (err) {
+      console.error(err);
+      setStartInfo("Failed to close lobby. Please try again.");
+    } finally {
+      setClosing(false);
     }
   };
 
@@ -263,24 +303,36 @@ export default function LobbyRoom() {
               </h2>
             </div>
 
-            <button
-              onClick={() => alert("Add Bot functionality not implemented yet.")}
-              disabled={!canAddBot}
-              className={`${styles.addBotButton} ${
-                canAddBot ? styles.addBotButtonEnabled : styles.addBotButtonDisabled
-              }`}
-            >
-              <Bot className="w-5 h-5" />
-              Add Bot
-            </button>
+            <div className={styles.topActions}>
+              {isHost && (
+                <button
+                  onClick={() => void closeLobby()}
+                  disabled={closing}
+                  className={styles.closeLobbyButton}
+                >
+                  {closing ? "Closing..." : "Close Lobby"}
+                </button>
+              )}
+              <button
+                onClick={() => alert("Add Bot functionality not implemented yet.")}
+                disabled={!canAddBot}
+                className={`${styles.addBotButton} ${
+                  canAddBot ? styles.addBotButtonEnabled : styles.addBotButtonDisabled
+                }`}
+              >
+                <Bot className="w-5 h-5" />
+                Add Bot
+              </button>
+            </div>
           </div>
           {hostTransferMessage && (
             <p className={styles.transferBanner}>{hostTransferMessage}</p>
           )}
 
           <div className={styles.participantList}>
-            {lobby.participants.map((participant) => {
+            {sortedParticipants.map((participant) => {
               const participantIsHost = participant.id === lobby.hostParticipantId;
+              const participantIsMe = participant.userId !== null && participant.userId === currentUserId;
               const canKick =
                 isHost &&
                 participant.userId !== null &&
@@ -308,6 +360,7 @@ export default function LobbyRoom() {
                             Host
                           </span>
                         )}
+                        {participantIsMe && <span className={styles.meBadge}>Me</span>}
                       </div>
 
                       <p className={styles.participantRole}>
