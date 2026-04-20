@@ -1,6 +1,6 @@
 "use client";
 import React, { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
 import { LogOut } from "lucide-react";
@@ -45,6 +45,7 @@ export default function Lobby() {
 
   const apiService = useApi();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const { value: token, clear: clearToken } = useLocalStorage<string>("token", "", { storage: "session" });
   const { value: userId, clear: clearUserId } = useLocalStorage<string>("userId", "", { storage: "session" });
@@ -75,6 +76,7 @@ export default function Lobby() {
   const [newLobbyIsPrivate, setNewLobbyIsPrivate] = useState(false);
   const [newLobbyPassword, setNewLobbyPassword] = useState("");
   const [createLobbyError, setCreateLobbyError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
   
   // Password change fields
   const [currentPassword, setCurrentPassword] = useState("");
@@ -110,6 +112,14 @@ export default function Lobby() {
   useEffect(() => {
     void loadLobbies();
   }, [loadLobbies]);
+
+  useEffect(() => {
+    if (searchParams.get("kicked") === "1") {
+      setStatusMessage("You were kicked from the lobby.");
+      const timeout = setTimeout(() => setStatusMessage(""), 5000);
+      return () => clearTimeout(timeout);
+    }
+  }, [searchParams]);
 
   const handleLogout = async () => {
     try {
@@ -409,6 +419,7 @@ export default function Lobby() {
           Logout
         </button>
       </div>
+      {statusMessage && <p className={styles.statusMessage}>{statusMessage}</p>}
 
       {/* Main Content */}
       <div className={styles.main}>
