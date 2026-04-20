@@ -57,7 +57,7 @@ import {
 	type TradeMode,
 } from "./types";
 
-const DEBUG_LOCAL = true;
+const DEBUG_LOCAL = false;
 
 export default function Gameboard() {
 	const router = useRouter();
