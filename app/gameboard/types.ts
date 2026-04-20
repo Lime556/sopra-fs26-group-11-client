@@ -108,7 +108,14 @@ export interface PlayerGetDTO {
 }
 
 export interface GameEventDTO {
-	type: "BANK_TRADE" | "PLAYER_TRADE" | "ACTION" | "TURN_END" | "ROAD_BUILT";
+	type:
+		| "BANK_TRADE"
+		| "PLAYER_TRADE"
+		| "ACTION"
+		| "TURN_END"
+		| "ROAD_BUILT"
+		| "SETTLEMENT_BUILT"
+		| "CITY_BUILT";
 	sourcePlayerId?: number;
 	targetPlayerId?: number;
 	giveResource?: ResourceType;
@@ -116,6 +123,7 @@ export interface GameEventDTO {
 	amount?: number;
 	hexId?: number;
 	edge?: number;
+	intersectionId?: number;
 	nextPlayerId?: number;
 	message?: string;
 }
