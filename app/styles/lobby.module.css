@@ -243,7 +243,7 @@
     background: #db0f0f;
   }
   
-  .fullWidthButton {
+.fullWidthButton {
     width: 100%;
     display: inline-flex;
     align-items: center;
@@ -257,6 +257,19 @@
     font-weight: 600;
     cursor: pointer;
   }
+
+.statusMessage {
+  position: relative;
+  z-index: 2;
+  margin: 16px auto 0;
+  max-width: 1500px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(220, 38, 38, 0.9);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
   
   .fullWidthButton:hover {
     background: #b87400;

@@ -75,6 +75,7 @@ export default function Lobby() {
   const [newLobbyIsPrivate, setNewLobbyIsPrivate] = useState(false);
   const [newLobbyPassword, setNewLobbyPassword] = useState("");
   const [createLobbyError, setCreateLobbyError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
   
   // Password change fields
   const [currentPassword, setCurrentPassword] = useState("");
@@ -110,6 +111,26 @@ export default function Lobby() {
   useEffect(() => {
     void loadLobbies();
   }, [loadLobbies]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const flashReason = sessionStorage.getItem("lobbyFlashMessage");
+    if (!flashReason) return;
+    sessionStorage.removeItem("lobbyFlashMessage");
+
+    if (flashReason === "kicked") {
+      setStatusMessage("You were kicked from the lobby.");
+    } else if (flashReason === "closed") {
+      setStatusMessage("Lobby was closed by the host.");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!statusMessage) return;
+    const timeout = setTimeout(() => setStatusMessage(""), 5000);
+    return () => clearTimeout(timeout);
+  }, [statusMessage]);
 
   const handleLogout = async () => {
     try {
@@ -409,6 +430,7 @@ export default function Lobby() {
           Logout
         </button>
       </div>
+      {statusMessage && <p className={styles.statusMessage}>{statusMessage}</p>}
 
       {/* Main Content */}
       <div className={styles.main}>

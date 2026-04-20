@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, Users, Bot, Crown, Play } from "lucide-react";
+import { LogOut, Users, Bot, Crown, Play, UserMinus } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
 
@@ -40,6 +40,19 @@ export default function LobbyRoom() {
   const [error, setError] = useState("");
   const [startInfo, setStartInfo] = useState("");
   const [starting, setStarting] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [kickingParticipantId, setKickingParticipantId] = useState<number | null>(null);
+  const [transferringParticipantId, setTransferringParticipantId] = useState<number | null>(null);
+  const [hostTransferMessage, setHostTransferMessage] = useState("");
+  const currentUserId = userId ? Number(userId) : null;
+
+  const redirectWithFlash = (reason: "kicked" | "closed") => {
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("lobbyFlashMessage", reason);
+    }
+    router.push("/lobby");
+  };
 
   // Load lobby details on component mount
   useEffect(() => {
@@ -53,40 +66,86 @@ export default function LobbyRoom() {
       }
     };
 
-      if (lobbyId) {
-        void loadLobby();
-      }
-    }, [apiService, lobbyId]);
-  
-  // Polling for lobby updates every 1.5 seconds
+    if (lobbyId) {
+      void loadLobby();
+    }
+  }, [apiService, lobbyId]);
+
+  // Polling for lobby updates every 2 seconds
   useEffect(() => {
     if (!lobbyId) return;
 
     const interval = setInterval(async () => {
       try {
         const updatedLobby = await apiService.get<LobbyGetDTO>(`/lobbies/${lobbyId}`);
+        if (currentUserId !== null) {
+          const stillInLobby = updatedLobby.participants.some((p) => p.userId === currentUserId);
+          if (!stillInLobby) {
+            redirectWithFlash("kicked");
+            return;
+          }
+        }
+
+        if (lobby && lobby.hostParticipantId !== updatedLobby.hostParticipantId) {
+          const newHost = updatedLobby.participants.find(
+            (p) => p.id === updatedLobby.hostParticipantId,
+          );
+          if (newHost) {
+            setHostTransferMessage(`Host role was transferred to ${newHost.username}.`);
+          } else {
+            setHostTransferMessage("Host role was transferred.");
+          }
+        }
         setLobby(updatedLobby);
 
         if (updatedLobby.gameId) {
           router.push(`/gameboard?gameId=${updatedLobby.gameId}`);
         }
       } catch (err) {
+        const status = err instanceof Error ? (err as { status?: number }).status : undefined;
+        if (status === 404) {
+          redirectWithFlash("closed");
+          return;
+        }
+        if (status === 403) {
+          redirectWithFlash("kicked");
+          return;
+        }
         console.error("Failed to refresh lobby.", err);
       }
-    }, 2000);
+    }, 1000);
 
     return () => clearInterval(interval);
-  }, [apiService, lobbyId, router]);
+  }, [apiService, currentUserId, lobby, lobbyId, router]);
+
+  useEffect(() => {
+    if (!hostTransferMessage) return;
+    const timeout = setTimeout(() => setHostTransferMessage(""), 5000);
+    return () => clearTimeout(timeout);
+  }, [hostTransferMessage]);
 
   const currentParticipants = lobby?.currentParticipants ?? 0;
   const maxPlayers = lobby?.capacity ?? 4;
   const canAddBot = (lobby?.currentParticipants ?? 0) < maxPlayers;
+  const sortedParticipants = lobby
+    ? [...lobby.participants].sort((a, b) => {
+        const aIsHost = a.id === lobby.hostParticipantId;
+        const bIsHost = b.id === lobby.hostParticipantId;
+        if (aIsHost !== bIsHost) return aIsHost ? -1 : 1;
+
+        if (a.bot !== b.bot) return a.bot ? 1 : -1;
+
+        const nameCompare = a.username.localeCompare(b.username);
+        if (nameCompare !== 0) return nameCompare;
+
+        return a.id - b.id;
+      })
+    : [];
 
   // determining current user/host
-  const currentUserId = userId ? Number(userId) : null;
   const currentParticipant = lobby?.participants.find((p) => p.userId === currentUserId);
-  const isHost = 
-    lobby !== null && 
+  const isHost =
+    lobby !== null &&
     currentParticipant !== undefined &&
     currentParticipant.id === lobby.hostParticipantId;
 
@@ -140,10 +199,76 @@ export default function LobbyRoom() {
     }
   };
 
+  const leaveLobby = async () => {
+    if (!lobby) return;
+    try {
+      setLeaving(true);
+      await apiService.post(`/lobbies/${lobby.id}/leave`, null);
+      router.push("/lobby");
+    } catch (err) {
+      console.error(err);
+      setStartInfo("Failed to leave lobby. Please try again.");
+    } finally {
+      setLeaving(false);
+    }
+  };
+
+  const closeLobby = async () => {
+    if (!lobby || !isHost) return;
+    try {
+      setClosing(true);
+      await apiService.post(`/lobbies/${lobby.id}/close`, null);
+      redirectWithFlash("closed");
+    } catch (err) {
+      console.error(err);
+      setStartInfo("Failed to close lobby. Please try again.");
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  const kickParticipant = async (targetUserId: number) => {
+    if (!lobby || !isHost) return;
+
+    try {
+      const targetParticipant = lobby.participants.find((p) => p.userId === targetUserId);
+      setKickingParticipantId(targetParticipant?.id ?? null);
+      setStartInfo("");
+      await apiService.post(`/lobbies/${lobby.id}/kick`, { userId: targetUserId });
+      const refreshedLobby = await apiService.get<LobbyGetDTO>(`/lobbies/${lobby.id}`);
+      setLobby(refreshedLobby);
+    } catch (err) {
+      console.error(err);
+      setStartInfo("Failed to remove participant.");
+    } finally {
+      setKickingParticipantId(null);
+    }
+  };
+
+  const transferHost = async (targetUserId: number) => {
+    if (!lobby || !isHost) return;
+
+    try {
+      const targetParticipant = lobby.participants.find((p) => p.userId === targetUserId);
+      setTransferringParticipantId(targetParticipant?.id ?? null);
+      setStartInfo("");
+      await apiService.post(`/lobbies/${lobby.id}/host-transfer`, {
+        userId: targetUserId,
+      });
+      const refreshedLobby = await apiService.get<LobbyGetDTO>(`/lobbies/${lobby.id}`);
+      setLobby(refreshedLobby);
+    } catch (err) {
+      console.error(err);
+      setStartInfo("Failed to transfer host.");
+    } finally {
+      setTransferringParticipantId(null);
+    }
+  };
+
   if (error) {
     return <div className={styles.stateMessage}>{error}</div>;
   }
-  
+
   if (!lobby) {
     return <div className={styles.stateMessage}>Loading lobby...</div>;
   }
@@ -155,11 +280,12 @@ export default function LobbyRoom() {
       <div className={styles.header}>
         <div className={styles.headerInner}>
           <button
-            onClick={() => router.push("/lobby")}
+            onClick={() => void leaveLobby()}
             className={styles.backButton}
+            disabled={leaving}
           >
-            <ArrowLeft className="w-5 h-5" />
-            Back to Lobbies
+            <LogOut className={`${styles.leaveIcon} w-5 h-5`} />
+            {leaving ? "Leaving..." : "Leave Lobby"}
           </button>
           <h1 className={styles.headerTitle}>{lobby.name}</h1>
           <div className={styles.headerSpacer} />
@@ -177,46 +303,97 @@ export default function LobbyRoom() {
               </h2>
             </div>
 
-            <button
-              onClick={() => alert("Add Bot functionality not implemented yet.")}
-              disabled={!canAddBot}
-              className={`${styles.addBotButton} ${
-                canAddBot ? styles.addBotButtonEnabled : styles.addBotButtonDisabled
-              }`}
-            >
-              <Bot className="w-5 h-5" />
-              Add Bot
-            </button>
+            <div className={styles.topActions}>
+              {isHost && (
+                <button
+                  onClick={() => void closeLobby()}
+                  disabled={closing}
+                  className={styles.closeLobbyButton}
+                >
+                  {closing ? "Closing..." : "Close Lobby"}
+                </button>
+              )}
+              <button
+                onClick={() => alert("Add Bot functionality not implemented yet.")}
+                disabled={!canAddBot}
+                className={`${styles.addBotButton} ${
+                  canAddBot ? styles.addBotButtonEnabled : styles.addBotButtonDisabled
+                }`}
+              >
+                <Bot className="w-5 h-5" />
+                Add Bot
+              </button>
+            </div>
           </div>
+          {hostTransferMessage && (
+            <p className={styles.transferBanner}>{hostTransferMessage}</p>
+          )}
 
           <div className={styles.participantList}>
-            {lobby?.participants.map((participant) => {
+            {sortedParticipants.map((participant) => {
               const participantIsHost = participant.id === lobby.hostParticipantId;
-              
-              return (
-              <div key={participant.id} className={styles.participantCard}>
-                <div className={styles.participantInfo}>
-                  <div className={styles.avatar}>
-                    {participant.bot ? <Bot className="w-6 h-6" /> : participant.username[0]}
-                  </div>
+              const participantIsMe = participant.userId !== null && participant.userId === currentUserId;
+              const canKick =
+                isHost &&
+                participant.userId !== null &&
+                !participantIsHost &&
+                participant.id !== currentParticipant?.id;
+              const canTransferHost =
+                isHost &&
+                participant.userId !== null &&
+                !participantIsHost &&
+                participant.id !== currentParticipant?.id;
 
-                  <div className={styles.participantText}>
-                    <div className={styles.nameRow}>
-                      <p className={styles.participantName}>{participant.username}</p>
-                      {participantIsHost && (
-                        <span className={styles.hostBadge}>
-                          <Crown className="w-4 h-4 text-yellow-600" />
-                          Host
-                        </span>
-                      )}
+              return (
+                <div key={participant.id} className={styles.participantCard}>
+                  <div className={styles.participantInfo}>
+                    <div className={styles.avatar}>
+                      {participant.bot ? <Bot className="w-6 h-6" /> : participant.username[0]}
                     </div>
 
-                    <p className={styles.participantRole}>
-                      {participant.bot ? "AI Player" : "Human Player"}
-                    </p>
+                    <div className={styles.participantText}>
+                      <div className={styles.nameRow}>
+                        <p className={styles.participantName}>{participant.username}</p>
+                        {participantIsHost && (
+                          <span className={styles.hostBadge}>
+                            <Crown className="w-4 h-4 text-yellow-600" />
+                            Host
+                          </span>
+                        )}
+                        {participantIsMe && <span className={styles.meBadge}>Me</span>}
+                      </div>
+
+                      <p className={styles.participantRole}>
+                        {participant.bot ? "AI Player" : "Human Player"}
+                      </p>
+                    </div>
                   </div>
+
+                  {(canKick || canTransferHost) && (
+                    <div className={styles.participantActions}>
+                      {canTransferHost && (
+                        <button
+                          className={styles.transferButton}
+                          onClick={() => void transferHost(participant.userId as number)}
+                          disabled={transferringParticipantId === participant.id}
+                        >
+                          <Crown className="w-4 h-4" />
+                          {transferringParticipantId === participant.id ? "Transferring..." : "Make Host"}
+                        </button>
+                      )}
+                      {canKick && (
+                        <button
+                          className={styles.kickButton}
+                          onClick={() => void kickParticipant(participant.userId as number)}
+                          disabled={kickingParticipantId === participant.id}
+                        >
+                          <UserMinus className="w-4 h-4" />
+                          {kickingParticipantId === participant.id ? "Removing..." : "Kick"}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
               );
             })}
 
@@ -251,9 +428,7 @@ export default function LobbyRoom() {
             </p>
           )}
 
-          {startInfo && (
-            <p className={styles.waitingText}>{startInfo}</p>
-          )}
+          {startInfo && <p className={styles.waitingText}>{startInfo}</p>}
         </div>
       </div>
     </div>
