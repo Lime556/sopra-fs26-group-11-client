@@ -205,6 +205,19 @@
   dominant-baseline: middle;
 }
 
+.knightHexSelectable {
+  fill: rgba(255, 255, 255, 0.18);
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 4;
+  cursor: pointer;
+  transition: fill 120ms ease, stroke-width 120ms ease, opacity 120ms ease;
+}
+
+.knightHexSelectable:hover {
+  fill: rgba(255, 255, 255, 0.3);
+  stroke-width: 6;
+}
+
 .roadEdgeSelectable {
   stroke: rgba(255, 255, 255, 0.55);
   stroke-width: 8;
@@ -529,6 +542,75 @@
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.5rem;
+}
+
+.devCardActionPanel {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.55rem 0.6rem 0.15rem;
+  border-radius: 12px;
+  border: 2px solid rgba(90, 72, 39, 0.34);
+  background: rgba(255, 250, 239, 0.65);
+}
+
+.devCardActionTitle {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #5c441f;
+}
+
+.devCardActionList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.devCardActionButton {
+  min-width: 128px;
+  border: 2px solid rgba(84, 62, 32, 0.28);
+  border-radius: 12px;
+  padding: 0.45rem 0.55rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.94);
+  color: #2d2115;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+}
+
+.devCardActionButtonPlayable {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 248, 255, 0.98));
+  border-color: rgba(66, 88, 160, 0.36);
+}
+
+.devCardActionButtonPlayable:hover {
+  border-color: rgba(66, 88, 160, 0.72);
+  box-shadow: 0 0 0 2px rgba(66, 88, 160, 0.16);
+}
+
+.devCardActionButtonLocked {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.devCardActionLabel {
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.devCardActionHint {
+  font-size: 0.62rem;
+  color: #6d5a40;
+}
+
+.devCardActionEmpty {
+  font-size: 0.68rem;
+  color: #6a5639;
 }
 
 .endTurnButton {

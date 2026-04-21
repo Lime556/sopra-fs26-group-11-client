@@ -23,14 +23,20 @@ interface BoardColumnProps {
 	isRoadPlacementMode: boolean;
 	isSettlementPlacementMode: boolean;
 	isCityPlacementMode: boolean;
+	isKnightPlacementMode: boolean;
 	isMyTurn: boolean;
 	isLegalRoadPlacement: (hexId: number, edge: number) => boolean;
 	isLegalSettlementPlacement: (hexId: number, corner: number) => boolean;
 	isLegalCityPlacement: (hexId: number, corner: number) => boolean;
 	handleRoadEdgeClick: (hexId: number, edge: number) => void;
+	handleKnightHexClick: (hexId: number) => void;
 	handleSettlementCornerClick: (hexId: number, corner: number) => void;
 	handleCityCornerClick: (hexId: number, corner: number) => void;
 	handleBuyDevelopmentCard: () => void;
+	developmentCards: string[];
+	isDevCardPlayMode: boolean;
+	handleToggleDevCardPlayMode: () => void;
+	handlePlayDevelopmentCard: (card: string) => void;
 	handleRollDice: () => void;
 	handleBuildRoadAction: () => void;
 	handleBuildSettlementAction: () => void;
@@ -47,20 +53,28 @@ export function BoardColumn({
 	isRoadPlacementMode,
 	isSettlementPlacementMode,
 	isCityPlacementMode,
+	isKnightPlacementMode,
 	isMyTurn,
 	isLegalRoadPlacement,
 	isLegalSettlementPlacement,
 	isLegalCityPlacement,
 	handleRoadEdgeClick,
+	handleKnightHexClick,
 	handleSettlementCornerClick,
 	handleCityCornerClick,
 	handleBuyDevelopmentCard,
+	developmentCards,
+	isDevCardPlayMode,
+	handleToggleDevCardPlayMode,
+	handlePlayDevelopmentCard,
 	handleRollDice,
 	handleBuildRoadAction,
 	handleBuildSettlementAction,
 	handleBuildCityAction,
 	handleEndTurn,
 }: BoardColumnProps) {
+	const playableDevelopmentCards = developmentCards.filter((card) => card !== "victory_point");
+
 	return (
 		<div className={styles.boardColumn}>
 			<main className={styles.boardViewport}>
@@ -154,6 +168,20 @@ export function BoardColumn({
 								<line x1={portX} y1={portY} x2={corner2.x} y2={corner2.y} stroke="#654321" strokeWidth={3} strokeLinecap="round" />
 
 								<g transform={`translate(${portX}, ${portY}) rotate(${edgeAngle})`}>
+
+					{isKnightPlacementMode && isMyTurn
+						? state.hexes.map((hex) => {
+							const { cx, cy } = toPixel(hex);
+							return (
+								<polygon
+									key={`select-knight-${hex.id}`}
+									className={styles.knightHexSelectable}
+									points={calculateHexPoints(cx, cy)}
+									onClick={() => handleKnightHexClick(hex.id)}
+								/>
+							);
+						})
+						: null}
 									<path d="M-20,5 L-15,15 L15,15 L20,5 L15,-5 L-15,-5 Z" fill="#8b5a3c" stroke="#654321" strokeWidth={2} />
 									<rect x={-15} y={-5} width={30} height={10} fill="#a0826d" stroke="#654321" strokeWidth={1} />
 									<line x1={0} y1={-5} x2={0} y2={-40} stroke="#654321" strokeWidth={2} />
@@ -443,7 +471,47 @@ export function BoardColumn({
 								</span>
 							) : null}
 						</button>
+
+						<button
+							type="button"
+							className={`${styles.actionSquareButton} ${styles.devCardButton}`}
+							onClick={handleToggleDevCardPlayMode}
+							disabled={!isMyTurn || state.turnPhase !== "ACTION" || playableDevelopmentCards.length === 0}
+						>
+							<span className={styles.actionEmoji}>🃏</span>
+							<span className={styles.actionLabel}>{isDevCardPlayMode ? "Cancel Dev" : "Play Dev Card"}</span>
+						</button>
 					</div>
+
+					{developmentCards.length > 0 ? (
+						<div className={styles.devCardActionPanel}>
+							<div className={styles.devCardActionTitle}>Development Cards</div>
+							<div className={styles.devCardActionList}>
+								{developmentCards.map((card, index) => {
+									const playable = card !== "victory_point" && isMyTurn && state.turnPhase === "ACTION" && isDevCardPlayMode;
+									return (
+										<button
+											type="button"
+											key={`action-dev-card-${card}-${index}`}
+											className={`${styles.devCardActionButton} ${playable ? styles.devCardActionButtonPlayable : styles.devCardActionButtonLocked}`}
+											onClick={() => {
+												if (playable) {
+													handlePlayDevelopmentCard(card);
+												}
+											}}
+											disabled={!playable}
+										>
+											<span className={styles.devCardActionLabel}>{card === "victory_point" ? "Victory Point" : card.replaceAll("_", " ")}</span>
+											{card === "victory_point" ? <span className={styles.devCardActionHint}>Applied automatically</span> : null}
+										</button>
+									);
+								})}
+							</div>
+							{playableDevelopmentCards.length === 0 ? (
+								<div className={styles.devCardActionEmpty}>No playable cards right now.</div>
+							) : null}
+						</div>
+					) : null}
 
 					<button
 						type="button"
