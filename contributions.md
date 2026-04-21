@@ -79,14 +79,17 @@ reason).
 |                | [14.04.] | https://github.com/Lime556/sopra-fs26-group-11-client/commit/2beb7bd6c958f49ae0950867fda58175834c1c41 | Sync lobby room and auto-redirect players when game starts (#27) | This ensures that all players in the lobby are automatically kept in sync and redirected into the game once the host starts the session. |
 ---
 
-## Contributions Week 3 - [Begin Date] to [End Date]
+## Contributions Week 3 - [16.04.] to [22.04.]
 
 | **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
 | **Ziske11** | 20.4.   | (https://github.com/Lime556/sopra-fs26-group-11-server/commit/b48f7802e106f27c3303158d0f768122f8cc4f54) | Added full Lobby Host functionality, kicking out players, transferring Lobby host, leaving and closing Lobbies | to be able to leave and join Lobbys and the giving the Lobby host permission to kick out players or assign them as the Lobby host.|
 |                    | 20.4.   | (https://github.com/Lime556/sopra-fs26-group-11-client/commit/a7b50499382f8a5f367e7febc11a6cba32be7c2c) | Added User Interface for the lobby, players in right order, Host and Myself tag on relevant players, transfer Host&Kick Player Buttons and temporary Messages| We need the buttons to be able to execute those commands, and the messages are important to follow what happens, if someone kicked anotherone out, or the host closed the lobby. |
-| **[@githubUser2]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **Gresay** | 17.04.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/1b17074f854524132dbf91989756f3cf180f6cf1 | Synchronize turn state across players | Knowing what others are doing and updating the board for all the same is neccesary for the game to be played |
+|                    | 17.04.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/c217e18fc9f127781a95d69a985b19de371efe32 | Road builing backend and longestroad | One step to get victory points is to build houses sonnectrd with roads. longest road is an additional way to get VPs to play the game and win. |
+|                    | 21.04.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/c613b4234e3235de407eb876117d14d0262bb145 | Development cards are implemented backend | For depth in strategy and gameplay development cards make it from a luck game to a strategy game. |
+| | 21.04.|https://github.com/Lime556/sopra-fs26-group-11-server/commit/75a93e48ae6038695813da02cc25d44599697f1e| Testing development cards.| Testing is important for code quaity|
+| | 21.04.|https://github.com/Lime556/sopra-fs26-group-11-client/commit/37fe3ca3d0dcdde1033fb8d7e3245251c6148006| Implementes Developmentcard frontend in an not final from for MVP| Implementation in the backend is nothing without any frontend support for Testin live without any rough design|
 | **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
