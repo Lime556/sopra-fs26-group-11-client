@@ -155,12 +155,27 @@ export default function Gameboard() {
 	const [chatMessage, setChatMessage] = useState<string>("");
 	const [winnerPlayerName, setWinnerPlayerName] = useState<string | null>(null);
 	const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
+	const [showDicePopup, setShowDicePopup] = useState<boolean>(false);
+	const [dicePopupValue, setDicePopupValue] = useState<number | null>(null);
 	const [activeGameId, setActiveGameId] = useState<number | null>(null);
 	const [placementMode, setPlacementMode] = useState<"road" | "settlement" | "city" | "knight" | null>(null);
 	const [isDevCardPlayMode, setIsDevCardPlayMode] = useState<boolean>(false);
 	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
 	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
+	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const ports = Array.isArray(state.ports) ? state.ports : [];
+
+	const showDiceResultPopup = (diceValue: number) => {
+		setDicePopupValue(diceValue);
+		setShowDicePopup(true);
+		if (dicePopupTimeoutRef.current !== null) {
+			globalThis.clearTimeout(dicePopupTimeoutRef.current);
+		}
+		dicePopupTimeoutRef.current = globalThis.setTimeout(() => {
+			setShowDicePopup(false);
+			dicePopupTimeoutRef.current = null;
+		}, 2600);
+	};
 
 	useEffect(() => {
 		if (!activeGameId) {
@@ -448,6 +463,16 @@ export default function Gameboard() {
 
 				const nextDiceValue = typeof diceDto?.diceValue === "number" ? diceDto.diceValue : null;
 				const nextSyncKey = `${diceDto?.diceRolledAt ?? "none"}:${nextDiceValue ?? "none"}`;
+				if (lastDiceSyncKey === null) {
+					lastDiceSyncKey = nextSyncKey;
+					if (nextDiceValue !== null) {
+						setState((previousState) => ({
+							...previousState,
+							diceResult: nextDiceValue,
+						}));
+					}
+					return "ok";
+				}
 				if (nextSyncKey === lastDiceSyncKey) {
 					return "ok";
 				}
@@ -458,6 +483,7 @@ export default function Gameboard() {
 						...previousState,
 						diceResult: nextDiceValue,
 					}));
+					showDiceResultPopup(nextDiceValue);
 				}
 
 				return "ok";
@@ -636,6 +662,10 @@ export default function Gameboard() {
 			}
 			if (dicePollHandle !== undefined) {
 				window.clearInterval(dicePollHandle);
+			}
+			if (dicePopupTimeoutRef.current !== null) {
+				globalThis.clearTimeout(dicePopupTimeoutRef.current);
+				dicePopupTimeoutRef.current = null;
 			}
 		};
 	}, [apiService, router, searchParams]);
@@ -1970,6 +2000,15 @@ export default function Gameboard() {
 				onBankTrade={handleBankTrade}
 				onPlayerTrade={handlePlayerTrade}
 			/>
+
+			{showDicePopup && dicePopupValue !== null ? (
+				<div className={styles.dicePopupOverlay}>
+					<div className={styles.dicePopupCard} role="status" aria-live="polite">
+						<div className={styles.dicePopupTitle}>Dice Rolled</div>
+						<div className={styles.dicePopupValue}>{dicePopupValue}</div>
+					</div>
+				</div>
+			) : null}
 
 			<div className={styles.layout}>
 				<BoardColumn
