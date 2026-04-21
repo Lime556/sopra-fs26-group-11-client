@@ -22,6 +22,10 @@ export interface Player {
 	color: string;
 	resources: Resources;
 	victoryPoints: number;
+	developmentCards: string[];
+	knightsPlayed: number;
+	developmentCardVictoryPoints: number;
+	freeRoadBuildsRemaining: number;
 	hasLongestRoad?: boolean;
 	settlementsOnCorners: { hexId: number; corner: number }[];
 	citiesOnCorners: { hexId: number; corner: number }[];
@@ -36,6 +40,7 @@ export interface GameState {
 	diceResult: number | null;
 	robberHexId: number | null;
 	turnPhase: string;
+	developmentDeck: DevelopmentDeckDTO | null;
 }
 
 export type PortType = "3:1" | ResourceType;
@@ -74,6 +79,7 @@ export interface GameGetDTO {
 	turnPhase?: string | null;
 	diceValue?: number | null;
 	robberTileIndex?: number | null;
+	developmentDeck?: DevelopmentDeckDTO | null;
 	players?: PlayerGetDTO[];
 	winner?: PlayerGetDTO | null;
 	leaderboard?: PlayerGetDTO[];
@@ -97,6 +103,9 @@ export interface PlayerGetDTO {
 	settlementPoints?: number | null;
 	cityPoints?: number | null;
 	developmentCardVictoryPoints?: number | null;
+	developmentCards?: string[] | null;
+	knightsPlayed?: number | null;
+	freeRoadBuildsRemaining?: number | null;
 	hasLongestRoad?: boolean | null;
 	hasLargestArmy?: boolean | null;
 	roadsOnEdges?: string[];
@@ -115,7 +124,12 @@ export interface GameEventDTO {
 		| "TURN_END"
 		| "ROAD_BUILT"
 		| "SETTLEMENT_BUILT"
-		| "CITY_BUILT";
+		| "CITY_BUILT"
+		| "DEVELOPMENT_CARD_BOUGHT"
+		| "DEVELOPMENT_CARD_PLAYED_KNIGHT"
+		| "DEVELOPMENT_CARD_PLAYED_ROAD_BUILDING"
+		| "DEVELOPMENT_CARD_PLAYED_YEAR_OF_PLENTY"
+		| "DEVELOPMENT_CARD_PLAYED_MONOPOLY";
 	sourcePlayerId?: number;
 	targetPlayerId?: number;
 	giveResource?: ResourceType;
@@ -126,10 +140,20 @@ export interface GameEventDTO {
 	intersectionId?: number;
 	nextPlayerId?: number;
 	message?: string;
+	secondResource?: ResourceType;
 }
 
 export interface GameChatMessageDTO {
 	playerId?: number;
 	playerName?: string;
 	text?: string;
+}
+
+export interface DevelopmentDeckDTO {
+	knight?: number | null;
+	victory_point?: number | null;
+	road_building?: number | null;
+	year_of_plenty?: number | null;
+	monopoly?: number | null;
+	remaining?: number | null;
 }

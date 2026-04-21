@@ -42,7 +42,7 @@ export const bankResourceColorByType: Record<ResourceType, string> = {
 	ore: "#475569",
 };
 
-export const developmentCardsRemaining = 21;
+export const developmentCardsRemaining = 25;
 
 export const boardCoordinatesById: Record<number, { x: number; y: number }> = {
 	1: { x: 1, y: 0 },

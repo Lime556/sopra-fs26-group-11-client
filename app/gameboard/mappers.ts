@@ -10,6 +10,7 @@ export function createInitialGameState(): GameState {
 		players: [],
 		robberHexId: null,
 		turnPhase: "ROLL_DICE",
+		developmentDeck: null,
 	};
 }
 

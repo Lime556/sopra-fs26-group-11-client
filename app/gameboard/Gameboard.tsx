@@ -49,6 +49,7 @@ import {
 	type GameChatMessageDTO,
 	type GameEventDTO,
 	type GameGetDTO,
+	type DevelopmentDeckDTO,
 	type GameState,
 	type GameStateDTO,
 	type HexTile,
@@ -57,7 +58,85 @@ import {
 	type TradeMode,
 } from "./types";
 
-const DEBUG_LOCAL = false;
+const DEBUG_LOCAL = false;    // Set to true to use a hardcoded board and player state 
+
+const developmentCardDisplayName: Record<string, string> = {
+	knight: "Knight",
+	victory_point: "Victory Point",
+	road_building: "Road Building",
+	year_of_plenty: "Year of Plenty",
+	monopoly: "Monopoly",
+};
+
+function formatDevelopmentCardName(cardName: string): string {
+	return developmentCardDisplayName[cardName] ?? cardName;
+}
+
+function drawLocalDevelopmentCard(deck: DevelopmentDeckDTO | null): { card: string; deck: DevelopmentDeckDTO } | null {
+	const currentDeck: DevelopmentDeckDTO = deck ?? {
+		knight: 14,
+		victory_point: 5,
+		road_building: 2,
+		year_of_plenty: 2,
+		monopoly: 2,
+		remaining: developmentCardsRemaining,
+	};
+
+	const counts = {
+		knight: Math.max(0, currentDeck.knight ?? 14),
+		victory_point: Math.max(0, currentDeck.victory_point ?? 5),
+		road_building: Math.max(0, currentDeck.road_building ?? 2),
+		year_of_plenty: Math.max(0, currentDeck.year_of_plenty ?? 2),
+		monopoly: Math.max(0, currentDeck.monopoly ?? 2),
+	};
+
+	const total = counts.knight + counts.victory_point + counts.road_building + counts.year_of_plenty + counts.monopoly;
+	if (total <= 0) {
+		return null;
+	}
+
+	const knightCount = counts.knight;
+	const victoryPointCount = counts.victory_point;
+	const roadBuildingCount = counts.road_building;
+	const yearOfPlentyCount = counts.year_of_plenty;
+	const monopolyCount = counts.monopoly;
+
+	let draw = Math.floor(Math.random() * total);
+	const nextDeck: DevelopmentDeckDTO = {
+		knight: knightCount,
+		victory_point: victoryPointCount,
+		road_building: roadBuildingCount,
+		year_of_plenty: yearOfPlentyCount,
+		monopoly: monopolyCount,
+		remaining: Math.max(0, (currentDeck.remaining ?? total) - 1),
+	};
+
+	if (draw < knightCount) {
+		nextDeck.knight = knightCount - 1;
+		return { card: "knight", deck: nextDeck };
+	}
+
+	draw -= knightCount;
+	if (draw < victoryPointCount) {
+		nextDeck.victory_point = victoryPointCount - 1;
+		return { card: "victory_point", deck: nextDeck };
+	}
+
+	draw -= victoryPointCount;
+	if (draw < roadBuildingCount) {
+		nextDeck.road_building = roadBuildingCount - 1;
+		return { card: "road_building", deck: nextDeck };
+	}
+
+	draw -= roadBuildingCount;
+	if (draw < yearOfPlentyCount) {
+		nextDeck.year_of_plenty = yearOfPlentyCount - 1;
+		return { card: "year_of_plenty", deck: nextDeck };
+	}
+
+	nextDeck.monopoly = monopolyCount - 1;
+	return { card: "monopoly", deck: nextDeck };
+}
 
 export default function Gameboard() {
 	const router = useRouter();
@@ -77,7 +156,8 @@ export default function Gameboard() {
 	const [winnerPlayerName, setWinnerPlayerName] = useState<string | null>(null);
 	const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
 	const [activeGameId, setActiveGameId] = useState<number | null>(null);
-	const [placementMode, setPlacementMode] = useState<"road" | "settlement" | "city" | null>(null);
+	const [placementMode, setPlacementMode] = useState<"road" | "settlement" | "city" | "knight" | null>(null);
+	const [isDevCardPlayMode, setIsDevCardPlayMode] = useState<boolean>(false);
 	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
 	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
 	const ports = Array.isArray(state.ports) ? state.ports : [];
@@ -162,6 +242,14 @@ export default function Gameboard() {
 				currentPlayerId: myPlayer?.id ? myPlayer.id : 1,
 				diceResult: 8,
 				turnPhase: "ACTION",
+				developmentDeck: {
+					knight: 14,
+					victory_point: 5,
+					road_building: 2,
+					year_of_plenty: 2,
+					monopoly: 2,
+					remaining: developmentCardsRemaining,
+				},
 				players: [
 					{
 						id: 1,
@@ -175,6 +263,10 @@ export default function Gameboard() {
 							ore: 100,
 						},
 						victoryPoints: 3,
+						developmentCards: [],
+						knightsPlayed: 0,
+						developmentCardVictoryPoints: 0,
+						freeRoadBuildsRemaining: 0,
 						hasLongestRoad: false,
 						roadsOnEdges: [{ hexId: 9, edge: 0 }],
 						settlementsOnCorners: [{ hexId: 9, corner: 0 }],
@@ -192,6 +284,10 @@ export default function Gameboard() {
 							ore: 5,
 						},
 						victoryPoints: 2,
+						developmentCards: [],
+						knightsPlayed: 0,
+						developmentCardVictoryPoints: 0,
+						freeRoadBuildsRemaining: 0,
 						hasLongestRoad: false,
 						roadsOnEdges: [{ hexId: 5, edge: 2 }],
 						settlementsOnCorners: [{ hexId: 5, corner: 2 }],
@@ -256,6 +352,7 @@ export default function Gameboard() {
 						hexes: mappedHexes,
 						ports: mappedPorts,
 						robberHexId: gameDto?.robberTileIndex ?? findDesertHexId(mappedHexes),
+						developmentDeck: gameDto?.developmentDeck ?? previousState.developmentDeck,
 						players:
 							serverPlayers.length > 0
 								? serverPlayers.map((serverPlayer, index) => {
@@ -272,6 +369,10 @@ export default function Gameboard() {
 										color: previousPlayer?.color ?? fallbackColorForPlayer(index),
 										resources: mapResourcesFromServer(serverPlayer),
 										victoryPoints: serverPlayer.victoryPoints ?? 0,
+										developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
+										knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
+										developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
+										freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
 										hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
 										settlementsOnCorners: previousPlayer?.settlementsOnCorners ?? [],
 										citiesOnCorners: previousPlayer?.citiesOnCorners ?? [],
@@ -496,6 +597,12 @@ export default function Gameboard() {
 	const otherPlayers = state.players.filter((player) => player.id !== state.currentPlayerId);
 
 	useEffect(() => {
+		if (!isMyTurn || state.turnPhase !== "ACTION") {
+			setIsDevCardPlayMode(false);
+		}
+	}, [isMyTurn, state.turnPhase]);
+
+	useEffect(() => {
 		if (otherPlayers.length > 0 && !targetPlayerId) {
 			setTargetPlayerId(otherPlayers[0].id);
 		}
@@ -596,6 +703,15 @@ export default function Gameboard() {
 		return { sender, message };
 	};
 
+	const parseResourceInput = (value: string | null): ResourceType | null => {
+		if (!value) {
+			return null;
+		}
+
+		const normalized = value.trim().toLowerCase();
+		return resourceTypes.includes(normalized as ResourceType) ? (normalized as ResourceType) : null;
+	};
+
 	const getPlayerTotalResources = (player: Player): number =>
 		resourceTypes.reduce((sum, resource) => sum + player.resources[resource], 0);
 	const occupiedEdgeKeys = useMemo(() => {
@@ -650,7 +766,9 @@ export default function Gameboard() {
 		});
 	}, [state.players, hexById]);
 
-	const canAffordRoad = !!myPlayer && myPlayer.resources.wood >= 1 && myPlayer.resources.brick >= 1;
+	const canAffordRoad = !!myPlayer && (myPlayer.freeRoadBuildsRemaining > 0 || (myPlayer.resources.wood >= 1 && myPlayer.resources.brick >= 1));
+	const canAffordDevelopmentCard = !!myPlayer && myPlayer.resources.wool >= 1 && myPlayer.resources.wheat >= 1 && myPlayer.resources.ore >= 1;
+	const developmentCardsLeft = Math.max(0, state.developmentDeck?.remaining ?? developmentCardsRemaining);
 
 	const isLegalRoadPlacement = (hexId: number, edge: number): boolean => {
 		if (!myPlayer) {
@@ -829,6 +947,8 @@ export default function Gameboard() {
 			return;
 		}
 
+		setIsDevCardPlayMode(false);
+
 		if (!canAffordSettlement) {
 			addToLog("Building a settlement costs 1 wood, 1 brick, 1 wool and 1 wheat.");
 			return;
@@ -845,6 +965,8 @@ export default function Gameboard() {
 		if (!isMyTurn || !myPlayer) {
 			return;
 		}
+
+		setIsDevCardPlayMode(false);
 
 		if (!canAffordCity) {
 			addToLog("Building a city costs 2 wheat and 3 ore.");
@@ -1166,6 +1288,10 @@ export default function Gameboard() {
 										color: previousPlayer?.color ?? fallbackColorForPlayer(index),
 										resources: mapResourcesFromServer(serverPlayer),
 										victoryPoints: serverPlayer.victoryPoints ?? 0,
+										developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
+										knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
+										developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
+										freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
 										hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
 										settlementsOnCorners: previousPlayer?.settlementsOnCorners ?? [],
 										citiesOnCorners: previousPlayer?.citiesOnCorners ?? [],
@@ -1173,6 +1299,7 @@ export default function Gameboard() {
 									};
 								})
 								: previousState.players,
+							developmentDeck: gameDto.developmentDeck ?? previousState.developmentDeck,
 							currentPlayerId: typeof gameDto.currentTurnIndex === "number" && Array.isArray(gameDto.players) && gameDto.players.length > 0
 								? gameDto.players[((gameDto.currentTurnIndex % gameDto.players.length) + gameDto.players.length) % gameDto.players.length].id
 								: previousState.currentPlayerId,
@@ -1288,25 +1415,311 @@ export default function Gameboard() {
 		});
 	};
 
-	const handleActionPlaceholder = (actionName: string) => {
-		setPlacementMode(null);
-		const message = `Action clicked: ${actionName} (implementation pending).`;
-		addToLog(message);
-		if (!activeGameId || !myPlayer) {
+	const getValidStealTargetsForHex = (hexId: number): Player[] => {
+		// Official Catan rules: can only steal from players with settlements/cities on hex corners adjacent to robber
+		return state.players.filter((player) => {
+			// Check if player has settlements on this hex
+			const settlementsOnHex = player.settlementsOnCorners?.filter((settlement) => settlement.hexId === hexId);
+			if (settlementsOnHex && settlementsOnHex.length > 0) {
+				return true;
+			}
+
+			// Check if player has cities on this hex
+			const citiesOnHex = player.citiesOnCorners?.filter((city) => city.hexId === hexId);
+			if (citiesOnHex && citiesOnHex.length > 0) {
+				return true;
+			}
+
+			return false;
+		});
+	};
+
+	const chooseRandomStealableResource = (player: Player): ResourceType | null => {
+		const availableResources = resourceTypes.filter((resource) => player.resources[resource] > 0);
+		if (availableResources.length === 0) {
+			return null;
+		}
+
+		return availableResources[Math.floor(Math.random() * availableResources.length)];
+	};
+
+	const playKnightCardAtHex = async (hexId: number) => {
+		if (!isMyTurn || !myPlayer || state.turnPhase !== "ACTION") {
 			return;
 		}
 
-		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-			type: "ACTION",
-			sourcePlayerId: myPlayer.id,
-			message,
-		});
+		const validTargets = getValidStealTargetsForHex(hexId);
+		const otherValidTargets = validTargets.filter((player) => player.id !== myPlayer.id);
+
+		let parsedTarget: number | null = null;
+
+		if (otherValidTargets.length === 0) {
+			addToLog("No other players have settlements or cities on hex " + hexId + ". No steal target selected.");
+		} else if (otherValidTargets.length === 1) {
+			parsedTarget = otherValidTargets[0].id;
+			addToLog("Only one valid target: " + otherValidTargets[0].name);
+		} else {
+			const targetsList = otherValidTargets.map((player) => player.id + " (" + player.name + ")").join(", ");
+			const targetInput = window.prompt(
+				"Knight: select target player id to steal from. Valid targets: " + targetsList + " (leave empty for none)",
+				String(otherValidTargets[0]?.id ?? "")
+			);
+
+			if (targetInput === null) {
+				return;
+			}
+
+			if (targetInput.trim().length > 0) {
+				parsedTarget = Number(targetInput.trim());
+				if (!Number.isInteger(parsedTarget)) {
+					addToLog("Invalid target player id.");
+					return;
+				}
+
+				if (!otherValidTargets.some((player) => player.id === parsedTarget)) {
+					addToLog("Selected player is not a valid target (must have settlement/city on hex " + hexId + ").");
+					return;
+				}
+			}
+		}
+
+		if (DEBUG_LOCAL) {
+			setState((previousState) => ({
+				...previousState,
+				robberHexId: hexId,
+				players: previousState.players.map((player) => {
+					if (player.id === myPlayer.id) {
+						const nextCards = [...player.developmentCards];
+						const removedIndex = nextCards.indexOf("knight");
+						if (removedIndex >= 0) {
+							nextCards.splice(removedIndex, 1);
+						}
+
+						return {
+							...player,
+							developmentCards: nextCards,
+							knightsPlayed: player.knightsPlayed + 1,
+						};
+					}
+
+					if (parsedTarget === null || player.id !== parsedTarget) {
+						return player;
+					}
+
+					const stolenResource = chooseRandomStealableResource(player);
+					if (!stolenResource) {
+						return player;
+					}
+
+					const nextResources = {
+						...player.resources,
+						[stolenResource]: player.resources[stolenResource] - 1,
+					};
+
+					return {
+						...player,
+						resources: nextResources,
+					};
+				}),
+			}));
+			setPlacementMode(null);
+			addToLog(`${myPlayer.name} played Knight.`);
+			return;
+		}
+
+		if (!activeGameId) {
+			return;
+		}
+
+		try {
+			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+				type: "DEVELOPMENT_CARD_PLAYED_KNIGHT",
+				sourcePlayerId: myPlayer.id,
+				hexId,
+				targetPlayerId: parsedTarget ?? undefined,
+			});
+			addToLog(`${myPlayer.name} played Knight.`);
+		} catch {
+			addToLog("Could not play development card. Please try again.");
+			return;
+		}
+
+		setPlacementMode(null);
+	};
+
+	const handleBuyDevelopmentCard = async () => {
+		setPlacementMode(null);
+		setIsDevCardPlayMode(false);
+		if (!isMyTurn || !activeGameId || !myPlayer) {
+			return;
+		}
+
+		if (developmentCardsLeft <= 0) {
+			addToLog("No development cards left in the bank.");
+			return;
+		}
+
+		if (!canAffordDevelopmentCard) {
+			addToLog("Buying a development card costs 1 wool, 1 wheat and 1 ore.");
+			return;
+		}
+
+		if (DEBUG_LOCAL) {
+			const draw = drawLocalDevelopmentCard(state.developmentDeck);
+			if (!draw) {
+				addToLog("No development cards left in the bank.");
+				return;
+			}
+
+			setState((previousState) => ({
+				...previousState,
+				developmentDeck: draw.deck,
+				players: previousState.players.map((player) =>
+					player.id === myPlayer.id
+						? {
+							...player,
+							resources: {
+								...player.resources,
+								wool: player.resources.wool - 1,
+								wheat: player.resources.wheat - 1,
+								ore: player.resources.ore - 1,
+							},
+							developmentCards: [...player.developmentCards, draw.card],
+									victoryPoints: draw.card === "victory_point" ? player.victoryPoints + 1 : player.victoryPoints,
+							developmentCardVictoryPoints:
+								draw.card === "victory_point"
+									? player.developmentCardVictoryPoints + 1
+									: player.developmentCardVictoryPoints,
+						}
+						: player
+				),
+			}));
+
+			addToLog(`${myPlayer.name} buys a development card.`);
+			return;
+		}
+
+		try {
+			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+				type: "DEVELOPMENT_CARD_BOUGHT",
+				sourcePlayerId: myPlayer.id,
+			});
+			addToLog(`${myPlayer.name} buys a development card.`);
+		} catch {
+			addToLog("Could not buy development card. Please try again.");
+		}
+	};
+
+	const handlePlayDevelopmentCard = async (card: string) => {
+		if (!isMyTurn || !activeGameId || !myPlayer || state.turnPhase !== "ACTION") {
+			return;
+		}
+
+		if (!isDevCardPlayMode) {
+			addToLog("Click 'Play Dev Card' first.");
+			return;
+		}
+
+		setIsDevCardPlayMode(false);
+
+		if (!myPlayer.developmentCards.includes(card)) {
+			addToLog("You do not own this development card.");
+			return;
+		}
+
+		try {
+			if (card === "knight") {
+				setPlacementMode("knight");
+				addToLog("Click a hexagon to place the robber.");
+				return;
+			}
+
+			if (card === "road_building") {
+				if (DEBUG_LOCAL) {
+					setState((previousState) => ({
+						...previousState,
+						players: previousState.players.map((player) =>
+							player.id === myPlayer.id
+								? {
+									...player,
+									developmentCards: (() => {
+										const nextCards = [...player.developmentCards];
+										const removedIndex = nextCards.indexOf("road_building");
+										if (removedIndex >= 0) {
+											nextCards.splice(removedIndex, 1);
+										}
+										return nextCards;
+									})(),
+									freeRoadBuildsRemaining: (player.freeRoadBuildsRemaining ?? 0) + 2,
+								}
+								: player
+						),
+					}));
+					setPlacementMode("road");
+					addToLog(`${myPlayer.name} played Road Building. Place 2 roads for free.`);
+					return;
+				}
+
+				await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+					type: "DEVELOPMENT_CARD_PLAYED_ROAD_BUILDING",
+					sourcePlayerId: myPlayer.id,
+				});
+				setPlacementMode("road");
+				addToLog(`${myPlayer.name} played Road Building. Place 2 roads for free.`);
+				return;
+			}
+
+			if (card === "year_of_plenty") {
+				const first = parseResourceInput(window.prompt("Year of Plenty: first resource (wood/brick/wool/wheat/ore)", "wood"));
+				if (!first) {
+					addToLog("Invalid first resource.");
+					return;
+				}
+
+				const second = parseResourceInput(window.prompt("Year of Plenty: second resource (wood/brick/wool/wheat/ore)", "brick"));
+				if (!second) {
+					addToLog("Invalid second resource.");
+					return;
+				}
+
+				await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+					type: "DEVELOPMENT_CARD_PLAYED_YEAR_OF_PLENTY",
+					sourcePlayerId: myPlayer.id,
+					giveResource: first,
+					secondResource: second,
+				});
+				addToLog(`${myPlayer.name} played Year of Plenty.`);
+				return;
+			}
+
+			if (card === "monopoly") {
+				const resource = parseResourceInput(window.prompt("Monopoly: resource to claim (wood/brick/wool/wheat/ore)", "wheat"));
+				if (!resource) {
+					addToLog("Invalid resource for Monopoly.");
+					return;
+				}
+
+				await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+					type: "DEVELOPMENT_CARD_PLAYED_MONOPOLY",
+					sourcePlayerId: myPlayer.id,
+					giveResource: resource,
+				});
+				addToLog(`${myPlayer.name} played Monopoly (${resource}).`);
+				return;
+			}
+
+			addToLog("Victory Point cards are applied automatically.");
+		} catch {
+			addToLog("Could not play development card. Please try again.");
+		}
 	};
 
 	const handleBuildRoadAction = () => {
 		if (!isMyTurn || !myPlayer) {
 			return;
 		}
+
+		setIsDevCardPlayMode(false);
 
 		if (!canAffordRoad) {
 			addToLog("Building a road costs 1 wood and 1 brick.");
@@ -1336,6 +1749,8 @@ export default function Gameboard() {
 			return;
 		}
 
+		const freeRoadBuildsRemaining = myPlayer.freeRoadBuildsRemaining ?? 0;
+
 		if (!canAffordRoad) {
 			addToLog("Building a road costs 1 wood and 1 brick.");
 			return;
@@ -1355,14 +1770,15 @@ export default function Gameboard() {
 								roadsOnEdges: [...player.roadsOnEdges, { hexId, edge }],
 								resources: {
 									...player.resources,
-									wood: player.resources.wood - 1,
-									brick: player.resources.brick - 1,
+									wood: freeRoadBuildsRemaining > 0 ? player.resources.wood : player.resources.wood - 1,
+									brick: freeRoadBuildsRemaining > 0 ? player.resources.brick : player.resources.brick - 1,
 								},
+								freeRoadBuildsRemaining: Math.max(0, freeRoadBuildsRemaining - 1),
 						  }
 						: player
 				),
 			}));
-			setPlacementMode(null);
+			setPlacementMode(freeRoadBuildsRemaining > 1 ? "road" : null);
 			addToLog(`${myPlayer.name} built a road.`);
 			return;
 		}
@@ -1379,7 +1795,7 @@ export default function Gameboard() {
 			return;
 		}
 
-		setPlacementMode(null);
+		setPlacementMode(freeRoadBuildsRemaining > 1 ? "road" : null);
 		const message = "built a road.";
 
 		void apiService.post<GameChatMessageDTO>(`/games/${activeGameId}/chat`, {
@@ -1402,6 +1818,7 @@ export default function Gameboard() {
 		const nextIndex = (currentIndex + 1) % state.players.length;
 		const nextPlayer = state.players[nextIndex];
 		setPlacementMode(null);
+		setIsDevCardPlayMode(false);
 
 		setState((previousState) => ({
 			...previousState,
@@ -1424,6 +1841,19 @@ export default function Gameboard() {
 			sourcePlayerId: myPlayer.id,
 			nextPlayerId: nextPlayer.id,
 			message,
+		});
+	};
+
+	const handleToggleDevCardPlayMode = () => {
+		if (!isMyTurn || state.turnPhase !== "ACTION") {
+			return;
+		}
+
+		setPlacementMode(null);
+		setIsDevCardPlayMode((previous) => {
+			const nextMode = !previous;
+			addToLog(nextMode ? "Select a development card to play." : "Development card play cancelled.");
+			return nextMode;
 		});
 	};
 
@@ -1490,14 +1920,20 @@ export default function Gameboard() {
 					isRoadPlacementMode={placementMode === "road"}
 					isSettlementPlacementMode={placementMode === "settlement"}
 					isCityPlacementMode={placementMode === "city"}
+					isKnightPlacementMode={placementMode === "knight"}
 					isMyTurn={isMyTurn}
 					isLegalRoadPlacement={isLegalRoadPlacement}
 					isLegalSettlementPlacement={isLegalSettlementPlacement}
 					isLegalCityPlacement={isLegalCityPlacement}
 					handleRoadEdgeClick={handleRoadEdgeClick}
+					handleKnightHexClick={playKnightCardAtHex}
 					handleSettlementCornerClick={handleSettlementCornerClick}
 					handleCityCornerClick={handleCityCornerClick}
-					handleActionPlaceholder={handleActionPlaceholder}
+					handleBuyDevelopmentCard={handleBuyDevelopmentCard}
+					developmentCards={myPlayer?.developmentCards ?? []}
+					isDevCardPlayMode={isDevCardPlayMode}
+					handleToggleDevCardPlayMode={handleToggleDevCardPlayMode}
+					handlePlayDevelopmentCard={handlePlayDevelopmentCard}
 					handleRollDice={handleRollDice}
 					handleBuildRoadAction={handleBuildRoadAction}
 					handleBuildSettlementAction={handleBuildSettlementAction}
@@ -1528,11 +1964,11 @@ export default function Gameboard() {
 									</div>
 									<div className={`${styles.playerStatCell} ${styles.devCardCell}`}>
 										<span className={styles.playerStatIcon}>🎴</span>
-										<span className={styles.playerStatValue}>0</span>
+										<span className={styles.playerStatValue}>{player.developmentCards.length}</span>
 									</div>
 									<div className={`${styles.playerStatCell} ${styles.knightCell}`}>
 										<span className={styles.playerStatIcon}>⚔️</span>
-										<span className={styles.playerStatValue}>0</span>
+										<span className={styles.playerStatValue}>{player.knightsPlayed}</span>
 									</div>
 									<div className={`${styles.playerStatCell} ${styles.roadCell} ${player.hasLongestRoad ? styles.roadCellHolder : ""}`}>
 										<span className={styles.playerStatIcon}>🛣️</span>
@@ -1555,6 +1991,9 @@ export default function Gameboard() {
 										<strong>{myPlayer.resources[resource]}</strong>
 									</div>
 								))}
+							</div>
+							<div className={styles.currentPlayerLine}>
+								Free roads available: {myPlayer.freeRoadBuildsRemaining}
 							</div>
 						</>
 					) : (
@@ -1581,7 +2020,7 @@ export default function Gameboard() {
 						<div className={styles.bankGrid}>
 							<div className={styles.devCardSlot}>
 								<div className={styles.devCardIcon}>🎴</div>
-								<div className={styles.devCardValue}>{developmentCardsRemaining}</div>
+								<div className={styles.devCardValue}>{developmentCardsLeft}</div>
 							</div>
 
 							{resourceTypes.map((resource) => (
