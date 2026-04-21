@@ -30,7 +30,7 @@ interface BoardColumnProps {
 	handleRoadEdgeClick: (hexId: number, edge: number) => void;
 	handleSettlementCornerClick: (hexId: number, corner: number) => void;
 	handleCityCornerClick: (hexId: number, corner: number) => void;
-	handleActionPlaceholder: (actionName: string) => void;
+	handleBuyDevelopmentCard: () => void;
 	handleRollDice: () => void;
 	handleBuildRoadAction: () => void;
 	handleBuildSettlementAction: () => void;
@@ -54,7 +54,7 @@ export function BoardColumn({
 	handleRoadEdgeClick,
 	handleSettlementCornerClick,
 	handleCityCornerClick,
-	handleActionPlaceholder,
+	handleBuyDevelopmentCard,
 	handleRollDice,
 	handleBuildRoadAction,
 	handleBuildSettlementAction,
@@ -365,11 +365,18 @@ export function BoardColumn({
 						<button
 							type="button"
 							className={`${styles.actionSquareButton} ${styles.knightButton}`}
-							onClick={() => handleActionPlaceholder("Knight")}
+							onClick={handleBuyDevelopmentCard}
 							disabled={!isMyTurn || state.turnPhase !== "ACTION"}
 						>
-							<span className={styles.actionEmoji}>⚔️</span>
-							<span className={styles.actionLabel}>Knight</span>
+							<span className={styles.actionEmoji}>🎴</span>
+							<span className={styles.actionLabel}>Buy Dev Card</span>
+							<span className={styles.roadCostOverlay} aria-hidden="true">
+								<span className={styles.roadCostChip}>🐑</span>
+								<span className={styles.roadCostPlus}>+</span>
+								<span className={styles.roadCostChip}>🌾</span>
+								<span className={styles.roadCostPlus}>+</span>
+								<span className={styles.roadCostChip}>⛰️</span>
+							</span>
 						</button>
 
 						<button

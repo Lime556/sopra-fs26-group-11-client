@@ -59,6 +59,18 @@ import {
 
 const DEBUG_LOCAL = false;
 
+const developmentCardDisplayName: Record<string, string> = {
+	knight: "Knight",
+	victory_point: "Victory Point",
+	road_building: "Road Building",
+	year_of_plenty: "Year of Plenty",
+	monopoly: "Monopoly",
+};
+
+function formatDevelopmentCardName(cardName: string): string {
+	return developmentCardDisplayName[cardName] ?? cardName;
+}
+
 export default function Gameboard() {
 	const router = useRouter();
 	const apiService = useApi();
@@ -162,6 +174,14 @@ export default function Gameboard() {
 				currentPlayerId: myPlayer?.id ? myPlayer.id : 1,
 				diceResult: 8,
 				turnPhase: "ACTION",
+				developmentDeck: {
+					knight: 14,
+					victory_point: 5,
+					road_building: 2,
+					year_of_plenty: 2,
+					monopoly: 2,
+					remaining: developmentCardsRemaining,
+				},
 				players: [
 					{
 						id: 1,
@@ -175,6 +195,10 @@ export default function Gameboard() {
 							ore: 100,
 						},
 						victoryPoints: 3,
+						developmentCards: [],
+						knightsPlayed: 0,
+						developmentCardVictoryPoints: 0,
+						freeRoadBuildsRemaining: 0,
 						hasLongestRoad: false,
 						roadsOnEdges: [{ hexId: 9, edge: 0 }],
 						settlementsOnCorners: [{ hexId: 9, corner: 0 }],
@@ -192,6 +216,10 @@ export default function Gameboard() {
 							ore: 5,
 						},
 						victoryPoints: 2,
+						developmentCards: [],
+						knightsPlayed: 0,
+						developmentCardVictoryPoints: 0,
+						freeRoadBuildsRemaining: 0,
 						hasLongestRoad: false,
 						roadsOnEdges: [{ hexId: 5, edge: 2 }],
 						settlementsOnCorners: [{ hexId: 5, corner: 2 }],
@@ -256,6 +284,7 @@ export default function Gameboard() {
 						hexes: mappedHexes,
 						ports: mappedPorts,
 						robberHexId: gameDto?.robberTileIndex ?? findDesertHexId(mappedHexes),
+						developmentDeck: gameDto?.developmentDeck ?? previousState.developmentDeck,
 						players:
 							serverPlayers.length > 0
 								? serverPlayers.map((serverPlayer, index) => {
@@ -272,6 +301,10 @@ export default function Gameboard() {
 										color: previousPlayer?.color ?? fallbackColorForPlayer(index),
 										resources: mapResourcesFromServer(serverPlayer),
 										victoryPoints: serverPlayer.victoryPoints ?? 0,
+										developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
+										knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
+										developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
+										freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
 										hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
 										settlementsOnCorners: previousPlayer?.settlementsOnCorners ?? [],
 										citiesOnCorners: previousPlayer?.citiesOnCorners ?? [],
@@ -596,6 +629,15 @@ export default function Gameboard() {
 		return { sender, message };
 	};
 
+	const parseResourceInput = (value: string | null): ResourceType | null => {
+		if (!value) {
+			return null;
+		}
+
+		const normalized = value.trim().toLowerCase();
+		return resourceTypes.includes(normalized as ResourceType) ? (normalized as ResourceType) : null;
+	};
+
 	const getPlayerTotalResources = (player: Player): number =>
 		resourceTypes.reduce((sum, resource) => sum + player.resources[resource], 0);
 	const occupiedEdgeKeys = useMemo(() => {
@@ -650,7 +692,9 @@ export default function Gameboard() {
 		});
 	}, [state.players, hexById]);
 
-	const canAffordRoad = !!myPlayer && myPlayer.resources.wood >= 1 && myPlayer.resources.brick >= 1;
+	const canAffordRoad = !!myPlayer && (myPlayer.freeRoadBuildsRemaining > 0 || (myPlayer.resources.wood >= 1 && myPlayer.resources.brick >= 1));
+	const canAffordDevelopmentCard = !!myPlayer && myPlayer.resources.wool >= 1 && myPlayer.resources.wheat >= 1 && myPlayer.resources.ore >= 1;
+	const developmentCardsLeft = Math.max(0, state.developmentDeck?.remaining ?? developmentCardsRemaining);
 
 	const isLegalRoadPlacement = (hexId: number, edge: number): boolean => {
 		if (!myPlayer) {
@@ -1166,6 +1210,10 @@ export default function Gameboard() {
 										color: previousPlayer?.color ?? fallbackColorForPlayer(index),
 										resources: mapResourcesFromServer(serverPlayer),
 										victoryPoints: serverPlayer.victoryPoints ?? 0,
+										developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
+										knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
+										developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
+										freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
 										hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
 										settlementsOnCorners: previousPlayer?.settlementsOnCorners ?? [],
 										citiesOnCorners: previousPlayer?.citiesOnCorners ?? [],
@@ -1173,6 +1221,7 @@ export default function Gameboard() {
 									};
 								})
 								: previousState.players,
+							developmentDeck: gameDto.developmentDeck ?? previousState.developmentDeck,
 							currentPlayerId: typeof gameDto.currentTurnIndex === "number" && Array.isArray(gameDto.players) && gameDto.players.length > 0
 								? gameDto.players[((gameDto.currentTurnIndex % gameDto.players.length) + gameDto.players.length) % gameDto.players.length].id
 								: previousState.currentPlayerId,
@@ -1288,19 +1337,176 @@ export default function Gameboard() {
 		});
 	};
 
-	const handleActionPlaceholder = (actionName: string) => {
+	const getValidStealTargetsForHex = (hexId: number): Player[] => {
+		// Official Catan rules: can only steal from players with settlements/cities on hex corners adjacent to robber
+		return state.players.filter((player) => {
+			// Check if player has settlements on this hex
+			const settlementsOnHex = player.settlementsOnCorners?.filter((settlement) => settlement.hexId === hexId);
+			if (settlementsOnHex && settlementsOnHex.length > 0) {
+				return true;
+			}
+
+			// Check if player has cities on this hex
+			const citiesOnHex = player.citiesOnCorners?.filter((city) => city.hexId === hexId);
+			if (citiesOnHex && citiesOnHex.length > 0) {
+				return true;
+			}
+
+			return false;
+		});
+	};
+
+	const handleBuyDevelopmentCard = async () => {
 		setPlacementMode(null);
-		const message = `Action clicked: ${actionName} (implementation pending).`;
-		addToLog(message);
-		if (!activeGameId || !myPlayer) {
+		if (!isMyTurn || !activeGameId || !myPlayer) {
 			return;
 		}
 
-		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-			type: "ACTION",
-			sourcePlayerId: myPlayer.id,
-			message,
-		});
+		if (developmentCardsLeft <= 0) {
+			addToLog("No development cards left in the bank.");
+			return;
+		}
+
+		if (!canAffordDevelopmentCard) {
+			addToLog("Buying a development card costs 1 wool, 1 wheat and 1 ore.");
+			return;
+		}
+
+		try {
+			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+				type: "DEVELOPMENT_CARD_BOUGHT",
+				sourcePlayerId: myPlayer.id,
+			});
+			addToLog(`${myPlayer.name} buys a development card.`);
+		} catch {
+			addToLog("Could not buy development card. Please try again.");
+		}
+	};
+
+	const handlePlayDevelopmentCard = async (card: string) => {
+		if (!isMyTurn || !activeGameId || !myPlayer || state.turnPhase !== "ACTION") {
+			return;
+		}
+
+		if (!myPlayer.developmentCards.includes(card)) {
+			addToLog("You do not own this development card.");
+			return;
+		}
+
+		try {
+			if (card === "knight") {
+				const hexInput = window.prompt("Knight: robber hex id (1-19)", String(state.robberHexId ?? 1));
+				if (hexInput === null) {
+					return;
+				}
+
+				const hexId = Number(hexInput.trim());
+				if (!Number.isInteger(hexId) || hexId < 1 || hexId > 19) {
+					addToLog("Invalid hex id for Knight.");
+					return;
+				}
+
+				// Get valid targets for this hex (official rules: must have settlement/city on hex corner)
+				const validTargets = getValidStealTargetsForHex(hexId);
+				const otherValidTargets = validTargets.filter((p) => p.id !== myPlayer.id);
+
+				let parsedTarget: number | null = null;
+
+				if (otherValidTargets.length === 0) {
+					addToLog("No other players have settlements or cities on hex " + hexId + ". No steal target selected.");
+				} else if (otherValidTargets.length === 1) {
+					// Only one valid target, automatically select it
+					parsedTarget = otherValidTargets[0].id;
+					addToLog("Only one valid target: " + otherValidTargets[0].name);
+				} else {
+					// Multiple valid targets, ask user
+					const targetsList = otherValidTargets.map((p) => p.id + " (" + p.name + ")").join(", ");
+					const targetInput = window.prompt(
+						"Knight: select target player id to steal from. Valid targets: " + targetsList + " (leave empty for none)",
+						String(otherValidTargets[0]?.id ?? "")
+					);
+
+					if (targetInput === null) {
+						return;
+					}
+
+					if (targetInput.trim().length > 0) {
+						parsedTarget = Number(targetInput.trim());
+						if (!Number.isInteger(parsedTarget)) {
+							addToLog("Invalid target player id.");
+							return;
+						}
+
+						// Validate that selected target is in valid list
+						if (!otherValidTargets.some((p) => p.id === parsedTarget)) {
+							addToLog("Selected player is not a valid target (must have settlement/city on hex " + hexId + ").");
+							return;
+						}
+					}
+				}
+
+				await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+					type: "DEVELOPMENT_CARD_PLAYED_KNIGHT",
+					sourcePlayerId: myPlayer.id,
+					hexId,
+					targetPlayerId: parsedTarget ?? undefined,
+				});
+				addToLog(`${myPlayer.name} played Knight.`);
+				return;
+			}
+
+			if (card === "road_building") {
+				await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+					type: "DEVELOPMENT_CARD_PLAYED_ROAD_BUILDING",
+					sourcePlayerId: myPlayer.id,
+				});
+				addToLog(`${myPlayer.name} played Road Building. Place 2 roads for free.`);
+				return;
+			}
+
+			if (card === "year_of_plenty") {
+				const first = parseResourceInput(window.prompt("Year of Plenty: first resource (wood/brick/wool/wheat/ore)", "wood"));
+				if (!first) {
+					addToLog("Invalid first resource.");
+					return;
+				}
+
+				const second = parseResourceInput(window.prompt("Year of Plenty: second resource (wood/brick/wool/wheat/ore)", "brick"));
+				if (!second) {
+					addToLog("Invalid second resource.");
+					return;
+				}
+
+				await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+					type: "DEVELOPMENT_CARD_PLAYED_YEAR_OF_PLENTY",
+					sourcePlayerId: myPlayer.id,
+					giveResource: first,
+					secondResource: second,
+				});
+				addToLog(`${myPlayer.name} played Year of Plenty.`);
+				return;
+			}
+
+			if (card === "monopoly") {
+				const resource = parseResourceInput(window.prompt("Monopoly: resource to claim (wood/brick/wool/wheat/ore)", "wheat"));
+				if (!resource) {
+					addToLog("Invalid resource for Monopoly.");
+					return;
+				}
+
+				await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+					type: "DEVELOPMENT_CARD_PLAYED_MONOPOLY",
+					sourcePlayerId: myPlayer.id,
+					giveResource: resource,
+				});
+				addToLog(`${myPlayer.name} played Monopoly (${resource}).`);
+				return;
+			}
+
+			addToLog("Victory Point cards are applied automatically.");
+		} catch {
+			addToLog("Could not play development card. Please try again.");
+		}
 	};
 
 	const handleBuildRoadAction = () => {
@@ -1497,7 +1703,7 @@ export default function Gameboard() {
 					handleRoadEdgeClick={handleRoadEdgeClick}
 					handleSettlementCornerClick={handleSettlementCornerClick}
 					handleCityCornerClick={handleCityCornerClick}
-					handleActionPlaceholder={handleActionPlaceholder}
+					handleBuyDevelopmentCard={handleBuyDevelopmentCard}
 					handleRollDice={handleRollDice}
 					handleBuildRoadAction={handleBuildRoadAction}
 					handleBuildSettlementAction={handleBuildSettlementAction}
@@ -1528,11 +1734,11 @@ export default function Gameboard() {
 									</div>
 									<div className={`${styles.playerStatCell} ${styles.devCardCell}`}>
 										<span className={styles.playerStatIcon}>🎴</span>
-										<span className={styles.playerStatValue}>0</span>
+										<span className={styles.playerStatValue}>{player.developmentCards.length}</span>
 									</div>
 									<div className={`${styles.playerStatCell} ${styles.knightCell}`}>
 										<span className={styles.playerStatIcon}>⚔️</span>
-										<span className={styles.playerStatValue}>0</span>
+										<span className={styles.playerStatValue}>{player.knightsPlayed}</span>
 									</div>
 									<div className={`${styles.playerStatCell} ${styles.roadCell} ${player.hasLongestRoad ? styles.roadCellHolder : ""}`}>
 										<span className={styles.playerStatIcon}>🛣️</span>
@@ -1555,6 +1761,28 @@ export default function Gameboard() {
 										<strong>{myPlayer.resources[resource]}</strong>
 									</div>
 								))}
+							</div>
+							<div className={styles.currentPlayerLine}>
+								Your Cards: {myPlayer.developmentCards.length > 0 ? myPlayer.developmentCards.map(formatDevelopmentCardName).join(", ") : "none"}
+							</div>
+							{myPlayer.developmentCards.length > 0 ? (
+								<div className={styles.currentPlayerLine}>
+									{myPlayer.developmentCards.map((card, index) => (
+										<button
+											type="button"
+											key={`dev-card-${card}-${index}`}
+											onClick={() => handlePlayDevelopmentCard(card)}
+											className={styles.tradeRequestButton}
+											style={{ marginTop: 6 }}
+											disabled={!isMyTurn || state.turnPhase !== "ACTION" || card === "victory_point"}
+										>
+											Play {formatDevelopmentCardName(card)}
+										</button>
+									))}
+								</div>
+							) : null}
+							<div className={styles.currentPlayerLine}>
+								Free roads available: {myPlayer.freeRoadBuildsRemaining}
 							</div>
 						</>
 					) : (
@@ -1581,7 +1809,7 @@ export default function Gameboard() {
 						<div className={styles.bankGrid}>
 							<div className={styles.devCardSlot}>
 								<div className={styles.devCardIcon}>🎴</div>
-								<div className={styles.devCardValue}>{developmentCardsRemaining}</div>
+								<div className={styles.devCardValue}>{developmentCardsLeft}</div>
 							</div>
 
 							{resourceTypes.map((resource) => (
