@@ -438,6 +438,41 @@ export default function Gameboard() {
 			}
 		};
 
+		let lastDiceSyncKey: string | null = null;
+		const syncDiceValue = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+			try {
+				const diceDto = await apiService.get<{ diceValue?: number | null; diceRolledAt?: string | null }>(`/games/${gameId}/dice`);
+				if (cancelled) {
+					return "ok";
+				}
+
+				const nextDiceValue = typeof diceDto?.diceValue === "number" ? diceDto.diceValue : null;
+				const nextSyncKey = `${diceDto?.diceRolledAt ?? "none"}:${nextDiceValue ?? "none"}`;
+				if (nextSyncKey === lastDiceSyncKey) {
+					return "ok";
+				}
+
+				lastDiceSyncKey = nextSyncKey;
+				if (nextDiceValue !== null) {
+					setState((previousState) => ({
+						...previousState,
+						diceResult: nextDiceValue,
+					}));
+				}
+
+				return "ok";
+			} catch (error) {
+				const status = (error as Partial<ApplicationError>)?.status;
+				if (status === 401) {
+					return "unauthorized";
+				}
+				if (status === 404) {
+					return "notfound";
+				}
+				return "error";
+			}
+		};
+
 		const createGameIfNeeded = async (): Promise<number | null> => {
 			let createdGame: GameGetDTO | null = null;
 			try {
@@ -558,23 +593,49 @@ export default function Gameboard() {
 				});
 			}, 6000);
 
+			void syncDiceValue(gameId as number);
+			const dicePoll = window.setInterval(() => {
+				void syncDiceValue(gameId as number).then((status) => {
+					if (cancelled || status === "ok") {
+						return;
+					}
+
+					if (status === "unauthorized") {
+						setBoardStatus("Session expired. Please log in again.");
+						router.replace("/login");
+						window.clearInterval(dicePoll);
+						return;
+					}
+
+					if (status === "notfound") {
+						window.clearInterval(dicePoll);
+					}
+				});
+			}, 1000);
+
 			if (cancelled) {
 				window.clearInterval(poll);
+				window.clearInterval(dicePoll);
 				return;
 			}
 
-			return poll;
+			return { poll, dicePoll };
 		};
 
 		let pollHandle: number | undefined;
-		void bootstrapBoard().then((poll) => {
-			pollHandle = poll;
+		let dicePollHandle: number | undefined;
+		void bootstrapBoard().then((handles) => {
+			pollHandle = handles?.poll;
+			dicePollHandle = handles?.dicePoll;
 		});
 
 		return () => {
 			cancelled = true;
 			if (pollHandle !== undefined) {
 				window.clearInterval(pollHandle);
+			}
+			if (dicePollHandle !== undefined) {
+				window.clearInterval(dicePollHandle);
 			}
 		};
 	}, [apiService, router, searchParams]);
