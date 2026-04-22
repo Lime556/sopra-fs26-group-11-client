@@ -40,6 +40,7 @@ export interface GameState {
 	diceResult: number | null;
 	robberHexId: number | null;
 	turnPhase: string;
+	gamePhase: string;
 	developmentDeck: DevelopmentDeckDTO | null;
 }
 
@@ -77,6 +78,7 @@ export interface GameGetDTO {
 	board?: BoardGetDTO | null;
 	currentTurnIndex?: number | null;
 	turnPhase?: string | null;
+	gamePhase?: string | null;
 	diceValue?: number | null;
 	robberTileIndex?: number | null;
 	developmentDeck?: DevelopmentDeckDTO | null;

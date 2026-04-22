@@ -24,6 +24,7 @@ interface BoardColumnProps {
 	isSettlementPlacementMode: boolean;
 	isCityPlacementMode: boolean;
 	isKnightPlacementMode: boolean;
+	isSetupPhase: boolean;
 	isMyTurn: boolean;
 	isLegalRoadPlacement: (hexId: number, edge: number) => boolean;
 	isLegalSettlementPlacement: (hexId: number, corner: number) => boolean;
@@ -54,6 +55,7 @@ export function BoardColumn({
 	isSettlementPlacementMode,
 	isCityPlacementMode,
 	isKnightPlacementMode,
+	isSetupPhase,
 	isMyTurn,
 	isLegalRoadPlacement,
 	isLegalSettlementPlacement,
@@ -74,6 +76,9 @@ export function BoardColumn({
 	handleEndTurn,
 }: BoardColumnProps) {
 	const playableDevelopmentCards = developmentCards.filter((card) => card !== "victory_point");
+	const canUseActionPhase = isMyTurn && state.turnPhase === "ACTION" && !isSetupPhase;
+	const canUseSetupPlacement = isMyTurn && isSetupPhase;
+	const canUseRoadOrSettlement = canUseActionPhase || canUseSetupPlacement;
 
 	return (
 		<div className={styles.boardColumn}>
@@ -381,9 +386,9 @@ export function BoardColumn({
 				<div className={styles.actionBox}>
 					<button
 						type="button"
-						className={`${styles.rollDiceButton} ${!isMyTurn || state.turnPhase !== "ROLL_DICE" ? styles.buttonDisabled : styles.rollDiceButton}`}
+						className={`${styles.rollDiceButton} ${!isMyTurn || state.turnPhase !== "ROLL_DICE" || isSetupPhase ? styles.buttonDisabled : styles.rollDiceButton}`}
 						onClick={handleRollDice}
-						disabled={!isMyTurn || state.turnPhase !== "ROLL_DICE"}
+						disabled={!isMyTurn || state.turnPhase !== "ROLL_DICE" || isSetupPhase}
 					>
 						<span className={styles.actionEmoji}>🎲</span>
 						<span>Roll Dice</span>
@@ -394,7 +399,7 @@ export function BoardColumn({
 							type="button"
 							className={`${styles.actionSquareButton} ${styles.knightButton}`}
 							onClick={handleBuyDevelopmentCard}
-							disabled={!isMyTurn || state.turnPhase !== "ACTION"}
+							disabled={!canUseActionPhase}
 						>
 							<span className={styles.actionEmoji}>🎴</span>
 							<span className={styles.actionLabel}>Buy Dev Card</span>
@@ -411,7 +416,7 @@ export function BoardColumn({
 							type="button"
 							className={`${styles.actionSquareButton} ${styles.roadButton}`}
 							onClick={handleBuildRoadAction}
-							disabled={!isMyTurn || state.turnPhase !== "ACTION"}
+							disabled={!canUseRoadOrSettlement}
 						>
 							<Minus size={26} />
 							<span className={styles.actionLabel}>{isRoadPlacementMode ? "Cancel Road" : "Road"}</span>
@@ -428,7 +433,7 @@ export function BoardColumn({
 							type="button"
 							className={`${styles.actionSquareButton} ${styles.settlementButton}`}
 							onClick={handleBuildSettlementAction}
-							disabled={!isMyTurn || state.turnPhase !== "ACTION"}
+							disabled={!canUseRoadOrSettlement}
 						>
 							<Home size={24} />
 							<span className={styles.actionLabel}>
@@ -451,7 +456,7 @@ export function BoardColumn({
 							type="button"
 							className={`${styles.actionSquareButton} ${styles.cityButton}`}
 							onClick={handleBuildCityAction}
-							disabled={!isMyTurn || state.turnPhase !== "ACTION"}
+							disabled={!canUseActionPhase}
 						>
 							<Castle size={24} />
 							<span className={styles.actionLabel}>
@@ -476,7 +481,7 @@ export function BoardColumn({
 							type="button"
 							className={`${styles.actionSquareButton} ${styles.devCardButton}`}
 							onClick={handleToggleDevCardPlayMode}
-							disabled={!isMyTurn || state.turnPhase !== "ACTION" || playableDevelopmentCards.length === 0}
+							disabled={!canUseActionPhase || playableDevelopmentCards.length === 0}
 						>
 							<span className={styles.actionEmoji}>🃏</span>
 							<span className={styles.actionLabel}>{isDevCardPlayMode ? "Cancel Dev" : "Play Dev Card"}</span>
@@ -488,7 +493,7 @@ export function BoardColumn({
 							<div className={styles.devCardActionTitle}>Development Cards</div>
 							<div className={styles.devCardActionList}>
 								{developmentCards.map((card, index) => {
-									const playable = card !== "victory_point" && isMyTurn && state.turnPhase === "ACTION" && isDevCardPlayMode;
+									const playable = card !== "victory_point" && canUseActionPhase && isDevCardPlayMode;
 									return (
 										<button
 											type="button"
@@ -515,9 +520,9 @@ export function BoardColumn({
 
 					<button
 						type="button"
-						className={`${styles.endTurnButton} ${!isMyTurn || state.turnPhase !== "ACTION" ? styles.buttonDisabled : styles.endTurnButton}`}
+						className={`${styles.endTurnButton} ${!canUseActionPhase ? styles.buttonDisabled : styles.endTurnButton}`}
 						onClick={handleEndTurn}
-						disabled={!isMyTurn || state.turnPhase !== "ACTION"}
+						disabled={!canUseActionPhase}
 					>
 						End Turn
 					</button>
