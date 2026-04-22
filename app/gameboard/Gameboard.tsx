@@ -1151,8 +1151,10 @@ export default function Gameboard() {
 			try {
 				await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/build-settlement`, {
 					playerId: myPlayer.id,
-					intersectionId,
+					intersectionId: corner,
+					hexId: hexId,
 				});
+				
 			} catch (error) {
 				const message = error instanceof Error ? error.message : "Unknown error";
 				addToLog(`Could not place setup settlement: ${message}`);
