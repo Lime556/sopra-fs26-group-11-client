@@ -156,12 +156,27 @@ export default function Gameboard() {
 	const [chatMessage, setChatMessage] = useState<string>("");
 	const [winnerPlayerName, setWinnerPlayerName] = useState<string | null>(null);
 	const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
+	const [showDicePopup, setShowDicePopup] = useState<boolean>(false);
+	const [dicePopupValue, setDicePopupValue] = useState<number | null>(null);
 	const [activeGameId, setActiveGameId] = useState<number | null>(null);
 	const [placementMode, setPlacementMode] = useState<"road" | "settlement" | "city" | "knight" | null>(null);
 	const [isDevCardPlayMode, setIsDevCardPlayMode] = useState<boolean>(false);
 	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
 	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
+	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const ports = Array.isArray(state.ports) ? state.ports : [];
+
+	const showDiceResultPopup = (diceValue: number) => {
+		setDicePopupValue(diceValue);
+		setShowDicePopup(true);
+		if (dicePopupTimeoutRef.current !== null) {
+			globalThis.clearTimeout(dicePopupTimeoutRef.current);
+		}
+		dicePopupTimeoutRef.current = globalThis.setTimeout(() => {
+			setShowDicePopup(false);
+			dicePopupTimeoutRef.current = null;
+		}, 2600);
+	};
 
 	useEffect(() => {
 		if (!activeGameId) {
@@ -441,6 +456,52 @@ export default function Gameboard() {
 			}
 		};
 
+		let lastDiceSyncKey: string | null = null;
+		const syncDiceValue = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+			try {
+				const diceDto = await apiService.get<{ diceValue?: number | null; diceRolledAt?: string | null }>(`/games/${gameId}/dice`);
+				if (cancelled) {
+					return "ok";
+				}
+
+				const nextDiceValue = typeof diceDto?.diceValue === "number" ? diceDto.diceValue : null;
+				const nextSyncKey = `${diceDto?.diceRolledAt ?? "none"}:${nextDiceValue ?? "none"}`;
+				if (lastDiceSyncKey === null) {
+					lastDiceSyncKey = nextSyncKey;
+					if (nextDiceValue !== null) {
+						setState((previousState) => ({
+							...previousState,
+							diceResult: nextDiceValue,
+						}));
+					}
+					return "ok";
+				}
+				if (nextSyncKey === lastDiceSyncKey) {
+					return "ok";
+				}
+
+				lastDiceSyncKey = nextSyncKey;
+				if (nextDiceValue !== null) {
+					setState((previousState) => ({
+						...previousState,
+						diceResult: nextDiceValue,
+					}));
+					showDiceResultPopup(nextDiceValue);
+				}
+
+				return "ok";
+			} catch (error) {
+				const status = (error as Partial<ApplicationError>)?.status;
+				if (status === 401) {
+					return "unauthorized";
+				}
+				if (status === 404) {
+					return "notfound";
+				}
+				return "error";
+			}
+		};
+
 		const createGameIfNeeded = async (): Promise<number | null> => {
 			let createdGame: GameGetDTO | null = null;
 			try {
@@ -561,23 +622,53 @@ export default function Gameboard() {
 				});
 			}, 6000);
 
+			void syncDiceValue(gameId as number);
+			const dicePoll = window.setInterval(() => {
+				void syncDiceValue(gameId as number).then((status) => {
+					if (cancelled || status === "ok") {
+						return;
+					}
+
+					if (status === "unauthorized") {
+						setBoardStatus("Session expired. Please log in again.");
+						router.replace("/login");
+						window.clearInterval(dicePoll);
+						return;
+					}
+
+					if (status === "notfound") {
+						window.clearInterval(dicePoll);
+					}
+				});
+			}, 1000);
+
 			if (cancelled) {
 				window.clearInterval(poll);
+				window.clearInterval(dicePoll);
 				return;
 			}
 
-			return poll;
+			return { poll, dicePoll };
 		};
 
 		let pollHandle: number | undefined;
-		void bootstrapBoard().then((poll) => {
-			pollHandle = poll;
+		let dicePollHandle: number | undefined;
+		void bootstrapBoard().then((handles) => {
+			pollHandle = handles?.poll;
+			dicePollHandle = handles?.dicePoll;
 		});
 
 		return () => {
 			cancelled = true;
 			if (pollHandle !== undefined) {
 				window.clearInterval(pollHandle);
+			}
+			if (dicePollHandle !== undefined) {
+				window.clearInterval(dicePollHandle);
+			}
+			if (dicePopupTimeoutRef.current !== null) {
+				globalThis.clearTimeout(dicePopupTimeoutRef.current);
+				dicePopupTimeoutRef.current = null;
 			}
 		};
 	}, [apiService, router, searchParams]);
@@ -2124,6 +2215,15 @@ export default function Gameboard() {
 				onBankTrade={handleBankTrade}
 				onPlayerTrade={handlePlayerTrade}
 			/>
+
+			{showDicePopup && dicePopupValue !== null ? (
+				<div className={styles.dicePopupOverlay}>
+					<div className={styles.dicePopupCard} role="status" aria-live="polite">
+						<div className={styles.dicePopupTitle}>Dice Rolled</div>
+						<div className={styles.dicePopupValue}>{dicePopupValue}</div>
+					</div>
+				</div>
+			) : null}
 
 			<div className={styles.layout}>
 				<BoardColumn
