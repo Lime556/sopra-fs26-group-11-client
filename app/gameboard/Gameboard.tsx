@@ -58,8 +58,6 @@ import {
 	type TradeMode,
 } from "./types";
 
-const DEBUG_LOCAL = false;    // Set to true to use a hardcoded board and player state 
-
 const developmentCardDisplayName: Record<string, string> = {
 	knight: "Knight",
 	victory_point: "Victory Point",
@@ -70,72 +68,6 @@ const developmentCardDisplayName: Record<string, string> = {
 
 function formatDevelopmentCardName(cardName: string): string {
 	return developmentCardDisplayName[cardName] ?? cardName;
-}
-
-function drawLocalDevelopmentCard(deck: DevelopmentDeckDTO | null): { card: string; deck: DevelopmentDeckDTO } | null {
-	const currentDeck: DevelopmentDeckDTO = deck ?? {
-		knight: 14,
-		victory_point: 5,
-		road_building: 2,
-		year_of_plenty: 2,
-		monopoly: 2,
-		remaining: developmentCardsRemaining,
-	};
-
-	const counts = {
-		knight: Math.max(0, currentDeck.knight ?? 14),
-		victory_point: Math.max(0, currentDeck.victory_point ?? 5),
-		road_building: Math.max(0, currentDeck.road_building ?? 2),
-		year_of_plenty: Math.max(0, currentDeck.year_of_plenty ?? 2),
-		monopoly: Math.max(0, currentDeck.monopoly ?? 2),
-	};
-
-	const total = counts.knight + counts.victory_point + counts.road_building + counts.year_of_plenty + counts.monopoly;
-	if (total <= 0) {
-		return null;
-	}
-
-	const knightCount = counts.knight;
-	const victoryPointCount = counts.victory_point;
-	const roadBuildingCount = counts.road_building;
-	const yearOfPlentyCount = counts.year_of_plenty;
-	const monopolyCount = counts.monopoly;
-
-	let draw = Math.floor(Math.random() * total);
-	const nextDeck: DevelopmentDeckDTO = {
-		knight: knightCount,
-		victory_point: victoryPointCount,
-		road_building: roadBuildingCount,
-		year_of_plenty: yearOfPlentyCount,
-		monopoly: monopolyCount,
-		remaining: Math.max(0, (currentDeck.remaining ?? total) - 1),
-	};
-
-	if (draw < knightCount) {
-		nextDeck.knight = knightCount - 1;
-		return { card: "knight", deck: nextDeck };
-	}
-
-	draw -= knightCount;
-	if (draw < victoryPointCount) {
-		nextDeck.victory_point = victoryPointCount - 1;
-		return { card: "victory_point", deck: nextDeck };
-	}
-
-	draw -= victoryPointCount;
-	if (draw < roadBuildingCount) {
-		nextDeck.road_building = roadBuildingCount - 1;
-		return { card: "road_building", deck: nextDeck };
-	}
-
-	draw -= roadBuildingCount;
-	if (draw < yearOfPlentyCount) {
-		nextDeck.year_of_plenty = yearOfPlentyCount - 1;
-		return { card: "year_of_plenty", deck: nextDeck };
-	}
-
-	nextDeck.monopoly = monopolyCount - 1;
-	return { card: "monopoly", deck: nextDeck };
 }
 
 export default function Gameboard() {
@@ -209,97 +141,6 @@ export default function Gameboard() {
 
 	useEffect(() => {
 		let cancelled = false;
-
-		if (DEBUG_LOCAL) {
-			const mockBoard: BoardGetDTO = {
-				hexTiles: [
-					"SHEEP", "WHEAT", "WOOD",
-					"BRICK", "ORE", "SHEEP", "WHEAT",
-					"WOOD", "DESERT", "WOOD", "WHEAT", "BRICK",
-					"ORE", "WOOD", "ORE", "SHEEP",
-					"BRICK", "WHEAT", "SHEEP",
-				],
-				hexTile_DiceNumbers: [
-					10, 2, 9,
-					12, 6, 4, 10,
-					9, -1, 11, 3, 8,
-					8, 3, 4, 5,
-					5, 6, 11,
-				],
-				intersections: [],
-				edges: [],
-				ports: [],
-				boats: [],
-			};
-		
-			const mappedHexes = mapBoardDtoToHexes(mockBoard);
-		
-			setActiveGameId(999);
-			setBoardStatus("");
-			setState({
-				hexes: mappedHexes,
-				ports: [],
-				robberHexId: 9,
-				currentPlayerId: myPlayer?.id ? myPlayer.id : 1,
-				diceResult: 8,
-				turnPhase: "ACTION",
-				gamePhase: "ACTIVE",
-				developmentDeck: {
-					knight: 14,
-					victory_point: 5,
-					road_building: 2,
-					year_of_plenty: 2,
-					monopoly: 2,
-					remaining: developmentCardsRemaining,
-				},
-				players: [
-					{
-						id: 1,
-						name: sessionUsername?.trim() ? sessionUsername : "Tester 1",
-						color: "#d13f34",
-						resources: {
-							wood: 100,
-							brick: 100,
-							wool: 100,
-							wheat: 100,
-							ore: 100,
-						},
-						victoryPoints: 3,
-						developmentCards: [],
-						knightsPlayed: 0,
-						developmentCardVictoryPoints: 0,
-						freeRoadBuildsRemaining: 0,
-						hasLongestRoad: false,
-						roadsOnEdges: [{ hexId: 9, edge: 0 }],
-						settlementsOnCorners: [{ hexId: 9, corner: 0 }],
-						citiesOnCorners: [],
-					},
-					{
-						id: 2,
-						name: "Bot Blue",
-						color: "#2e7ccf",
-						resources: {
-							wood: 5,
-							brick: 5,
-							wool: 5,
-							wheat: 5,
-							ore: 5,
-						},
-						victoryPoints: 2,
-						developmentCards: [],
-						knightsPlayed: 0,
-						developmentCardVictoryPoints: 0,
-						freeRoadBuildsRemaining: 0,
-						hasLongestRoad: false,
-						roadsOnEdges: [{ hexId: 5, edge: 2 }],
-						settlementsOnCorners: [{ hexId: 5, corner: 2 }],
-						citiesOnCorners: [],
-					},
-				],
-			});
-		
-			return;
-		}
 
 		syncedChatMessagesRef.current = new Set();
 		roadCacheRef.current = new Map();
@@ -595,7 +436,6 @@ export default function Gameboard() {
 	const myPlayer =
 		(hasSessionUserId ? state.players.find((player) => player.id === parsedSessionUserId) : null) ??
 		state.players.find((player) => player.name === sessionUsername) ??
-		(DEBUG_LOCAL ? state.players.find((player) => player.id === 1) : null) ??
 		null;
 	const myPlayerIdRef = useRef<number | null>(null);
 	myPlayerIdRef.current = myPlayer?.id ?? null;
@@ -1110,31 +950,6 @@ export default function Gameboard() {
 			return;
 		}
 
-		if (DEBUG_LOCAL) {
-			setState((previousState) => ({
-				...previousState,
-				players: previousState.players.map((player) =>
-					player.id === myPlayer.id
-						? {
-								...player,
-								settlementsOnCorners: [...player.settlementsOnCorners, { hexId, corner }],
-								victoryPoints: player.victoryPoints + 1,
-								resources: {
-									...player.resources,
-									wood: isSetupPhase ? player.resources.wood : player.resources.wood - 1,
-									brick: isSetupPhase ? player.resources.brick : player.resources.brick - 1,
-									wool: isSetupPhase ? player.resources.wool : player.resources.wool - 1,
-									wheat: isSetupPhase ? player.resources.wheat : player.resources.wheat - 1,
-								},
-						  }
-						: player
-				),
-			}));
-			setPlacementMode(isSetupPhase ? "road" : null);
-			addToLog(isSetupPhase ? `${myPlayer.name} placed a setup settlement. Place your attached road.` : `${myPlayer.name} built a settlement.`);
-			return;
-		}
-
 		if (isSetupPhase) {
 			const selectedHex = hexById.get(hexId);
 			if (!selectedHex) {
@@ -1210,34 +1025,6 @@ export default function Gameboard() {
 
 		if (!isLegalCityPlacement(hexId, corner)) {
 			addToLog("You can only upgrade one of your own settlements.");
-			return;
-		}
-
-		if (DEBUG_LOCAL) {
-			setState((previousState) => ({
-				...previousState,
-				players: previousState.players.map((player) => {
-					if (player.id !== myPlayer.id) {
-						return player;
-					}
-		
-					return {
-						...player,
-						settlementsOnCorners: player.settlementsOnCorners.filter(
-							(settlement) => !(settlement.hexId === hexId && settlement.corner === corner)
-						),
-						citiesOnCorners: [...player.citiesOnCorners, { hexId, corner }],
-						victoryPoints: player.victoryPoints + 1,
-						resources: {
-							...player.resources,
-							wheat: player.resources.wheat - 2,
-							ore: player.resources.ore - 3,
-						},
-					};
-				}),
-			}));
-			setPlacementMode(null);
-			addToLog(`${myPlayer.name} built a city.`);
 			return;
 		}
 
@@ -1412,10 +1199,6 @@ export default function Gameboard() {
 
 	useEffect(() => {
 		if (!activeGameId) {
-			return;
-		}
-
-		if (DEBUG_LOCAL) {
 			return;
 		}
 
@@ -1642,50 +1425,6 @@ export default function Gameboard() {
 			}
 		}
 
-		if (DEBUG_LOCAL) {
-			setState((previousState) => ({
-				...previousState,
-				robberHexId: hexId,
-				players: previousState.players.map((player) => {
-					if (player.id === myPlayer.id) {
-						const nextCards = [...player.developmentCards];
-						const removedIndex = nextCards.indexOf("knight");
-						if (removedIndex >= 0) {
-							nextCards.splice(removedIndex, 1);
-						}
-
-						return {
-							...player,
-							developmentCards: nextCards,
-							knightsPlayed: player.knightsPlayed + 1,
-						};
-					}
-
-					if (parsedTarget === null || player.id !== parsedTarget) {
-						return player;
-					}
-
-					const stolenResource = chooseRandomStealableResource(player);
-					if (!stolenResource) {
-						return player;
-					}
-
-					const nextResources = {
-						...player.resources,
-						[stolenResource]: player.resources[stolenResource] - 1,
-					};
-
-					return {
-						...player,
-						resources: nextResources,
-					};
-				}),
-			}));
-			setPlacementMode(null);
-			addToLog(`${myPlayer.name} played Knight.`);
-			return;
-		}
-
 		if (!activeGameId) {
 			return;
 		}
@@ -1720,41 +1459,6 @@ export default function Gameboard() {
 
 		if (!canAffordDevelopmentCard) {
 			addToLog("Buying a development card costs 1 wool, 1 wheat and 1 ore.");
-			return;
-		}
-
-		if (DEBUG_LOCAL) {
-			const draw = drawLocalDevelopmentCard(state.developmentDeck);
-			if (!draw) {
-				addToLog("No development cards left in the bank.");
-				return;
-			}
-
-			setState((previousState) => ({
-				...previousState,
-				developmentDeck: draw.deck,
-				players: previousState.players.map((player) =>
-					player.id === myPlayer.id
-						? {
-							...player,
-							resources: {
-								...player.resources,
-								wool: player.resources.wool - 1,
-								wheat: player.resources.wheat - 1,
-								ore: player.resources.ore - 1,
-							},
-							developmentCards: [...player.developmentCards, draw.card],
-									victoryPoints: draw.card === "victory_point" ? player.victoryPoints + 1 : player.victoryPoints,
-							developmentCardVictoryPoints:
-								draw.card === "victory_point"
-									? player.developmentCardVictoryPoints + 1
-									: player.developmentCardVictoryPoints,
-						}
-						: player
-				),
-			}));
-
-			addToLog(`${myPlayer.name} buys a development card.`);
 			return;
 		}
 
@@ -1794,31 +1498,6 @@ export default function Gameboard() {
 			}
 
 			if (card === "road_building") {
-				if (DEBUG_LOCAL) {
-					setState((previousState) => ({
-						...previousState,
-						players: previousState.players.map((player) =>
-							player.id === myPlayer.id
-								? {
-									...player,
-									developmentCards: (() => {
-										const nextCards = [...player.developmentCards];
-										const removedIndex = nextCards.indexOf("road_building");
-										if (removedIndex >= 0) {
-											nextCards.splice(removedIndex, 1);
-										}
-										return nextCards;
-									})(),
-									freeRoadBuildsRemaining: (player.freeRoadBuildsRemaining ?? 0) + 2,
-								}
-								: player
-						),
-					}));
-					setPlacementMode("road");
-					addToLog(`${myPlayer.name} played Road Building. Place 2 roads for free.`);
-					return;
-				}
-
 				await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
 					type: "DEVELOPMENT_CARD_PLAYED_ROAD_BUILDING",
 					sourcePlayerId: myPlayer.id,
@@ -1924,29 +1603,6 @@ export default function Gameboard() {
 		}
 
 		if (!isLegalRoadPlacement(hexId, edge)) {
-			return;
-		}
-
-		if (DEBUG_LOCAL) {
-			setState((previousState) => ({
-				...previousState,
-				players: previousState.players.map((player) =>
-					player.id === myPlayer.id
-						? {
-								...player,
-								roadsOnEdges: [...player.roadsOnEdges, { hexId, edge }],
-								resources: {
-									...player.resources,
-									wood: isSetupPhase || freeRoadBuildsRemaining > 0 ? player.resources.wood : player.resources.wood - 1,
-									brick: isSetupPhase || freeRoadBuildsRemaining > 0 ? player.resources.brick : player.resources.brick - 1,
-								},
-								freeRoadBuildsRemaining: Math.max(0, freeRoadBuildsRemaining - 1),
-						  }
-						: player
-				),
-			}));
-			setPlacementMode(freeRoadBuildsRemaining > 1 ? "road" : null);
-			addToLog(isSetupPhase ? `${myPlayer.name} placed a setup road.` : `${myPlayer.name} built a road.`);
 			return;
 		}
 
