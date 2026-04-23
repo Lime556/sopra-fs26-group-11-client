@@ -217,8 +217,8 @@ export default function Gameboard() {
 										developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
 										freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
 										hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
-										settlementsOnCorners: previousPlayer?.settlementsOnCorners ?? [],
-										citiesOnCorners: previousPlayer?.citiesOnCorners ?? [],
+										settlementsOnCorners: serverPlayer.settlementsOnCorners ?? previousPlayer?.settlementsOnCorners ?? [],
+										citiesOnCorners: serverPlayer.citiesOnCorners ?? previousPlayer?.citiesOnCorners ?? [],
 										roadsOnEdges: mergedRoads,
 									};
 								})
@@ -1122,6 +1122,85 @@ export default function Gameboard() {
 			return;
 		}
 
+		if (event.type === "SETTLEMENT_BUILT") {
+			if (
+				typeof event.sourcePlayerId !== "number"
+				|| typeof event.hexId !== "number"
+				|| typeof event.intersectionId !== "number"
+			) {
+				return;
+			}
+
+			if (typeof localPlayerId === "number" && event.sourcePlayerId === localPlayerId) {
+				return;
+			}
+
+			setState((previousState) => {
+				const sourceIndex = previousState.players.findIndex((p) => p.id === event.sourcePlayerId);
+				if (sourceIndex < 0) return previousState;
+
+				const source = previousState.players[sourceIndex];
+				const alreadyPlaced = source.settlementsOnCorners.some(
+					(s) => s.hexId === event.hexId && s.corner === event.intersectionId
+				);
+				if (alreadyPlaced) return previousState;
+
+				const nextPlayers = [...previousState.players];
+				nextPlayers[sourceIndex] = {
+					...source,
+					settlementsOnCorners: [
+						...source.settlementsOnCorners,
+						{ hexId: event.hexId!, corner: event.intersectionId! },
+					],
+				};
+
+				return { ...previousState, players: nextPlayers };
+			});
+
+			if (event.message) addToLog(event.message);
+			return;
+		}
+
+		if (event.type === "CITY_BUILT") {
+			if (
+				typeof event.sourcePlayerId !== "number"
+				|| typeof event.hexId !== "number"
+				|| typeof event.intersectionId !== "number"
+			) {
+				return;
+			}
+
+			if (typeof localPlayerId === "number" && event.sourcePlayerId === localPlayerId) {
+				return;
+			}
+
+			setState((previousState) => {
+				const sourceIndex = previousState.players.findIndex((p) => p.id === event.sourcePlayerId);
+				if (sourceIndex < 0) return previousState;
+
+				const source = previousState.players[sourceIndex];
+				// Remove the settlement being upgraded and add the city
+				const remainingSettlements = source.settlementsOnCorners.filter(
+					(s) => !(s.hexId === event.hexId && s.corner === event.intersectionId)
+				);
+				
+				const nextPlayers = [...previousState.players];
+				nextPlayers[sourceIndex] = {
+					...source,
+					settlementsOnCorners: remainingSettlements,
+					citiesOnCorners: [
+						...source.citiesOnCorners,
+						{ hexId: event.hexId!, corner: event.intersectionId! },
+					],
+				};
+
+				return { ...previousState, players: nextPlayers };
+			});
+
+			if (event.message) addToLog(event.message);
+			return;
+		}
+
 		if (event.type === "TURN_END") {
 			if (typeof event.nextPlayerId === "number") {
 				setState((previousState) => ({
@@ -1234,8 +1313,8 @@ export default function Gameboard() {
 										developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
 										freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
 										hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
-										settlementsOnCorners: previousPlayer?.settlementsOnCorners ?? [],
-										citiesOnCorners: previousPlayer?.citiesOnCorners ?? [],
+										settlementsOnCorners: serverPlayer.settlementsOnCorners ?? previousPlayer?.settlementsOnCorners ?? [],
+										citiesOnCorners: serverPlayer.citiesOnCorners ?? previousPlayer?.citiesOnCorners ?? [],
 										roadsOnEdges: mergedRoads,
 									};
 								})
