@@ -618,8 +618,12 @@ export default function Gameboard() {
 	const isSetupPhase = state.gamePhase === "SETUP" || state.gamePhase === "SETUP_SECOND_ROUND";
 	const mySetupSettlementCount = myPlayer?.settlementsOnCorners.length ?? 0;
 	const mySetupRoadCount = myPlayer?.roadsOnEdges.length ?? 0;
-	const canPlaceSetupSettlement = isSetupPhase && isMyTurn && mySetupSettlementCount === mySetupRoadCount && mySetupSettlementCount < 2;
-	const canPlaceSetupRoad = isSetupPhase && isMyTurn && mySetupRoadCount < mySetupSettlementCount;
+	const canPlaceSetupSettlement = isSetupPhase && isMyTurn && mySetupSettlementCount === mySetupRoadCount && 
+		((state.gamePhase === "SETUP" && mySetupSettlementCount === 0) || 
+		 (state.gamePhase === "SETUP_SECOND_ROUND" && mySetupSettlementCount === 1));
+	const canPlaceSetupRoad = isSetupPhase && isMyTurn && 
+		((state.gamePhase === "SETUP" && mySetupRoadCount === 0 && mySetupSettlementCount === 1) || 
+		 (state.gamePhase === "SETUP_SECOND_ROUND" && mySetupRoadCount === 1 && mySetupSettlementCount === 2));
 
 	useEffect(() => {
 		if (!isSetupPhase || !isMyTurn || !myPlayer) {
@@ -1760,38 +1764,48 @@ export default function Gameboard() {
 			return;
 		}
 
-		const currentIndex = state.players.findIndex((player) => player.id === state.currentPlayerId);
-		if (currentIndex < 0) {
-			return;
-		}
-
-		const nextIndex = (currentIndex + 1) % state.players.length;
-		const nextPlayer = state.players[nextIndex];
 		setPlacementMode(null);
 		setIsDevCardPlayMode(false);
 
-		setState((previousState) => ({
-			...previousState,
-			currentPlayerId: nextPlayer.id,
-			turnPhase: "ROLL_DICE",
-			diceResult: null,
-		}));
-
-		const message = `${myPlayer.name} ended turn. ${nextPlayer.name} is now active.`;
-		addToLog(message);
-
 		try {
-			await apiService.post<GameStateDTO>(`/games/${activeGameId}/actions/end-turn`, {});
-		} catch {
+			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/end-turn`, {});
+			const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : state.players;
+			let nextPlayerId = state.currentPlayerId;
+
+			if (typeof gameDto.currentTurnIndex === "number" && serverPlayers.length > 0) {
+				const normalizedIndex = ((gameDto.currentTurnIndex % serverPlayers.length) + serverPlayers.length) % serverPlayers.length;
+				nextPlayerId = serverPlayers[normalizedIndex].id;
+			}
+
+			const nextPlayer = serverPlayers.find((p) => p.id === nextPlayerId);
+			const message = `${myPlayer.name} ended turn. ${nextPlayer?.name ?? "Next player"}'s turn.`;
+			addToLog(message);
+			
+			setState((previousState) => {
+				// Derive newIsSetupPhase from gameDto.gamePhase to ensure it's up-to-date
+				const newGamePhase = gameDto.gamePhase ?? previousState.gamePhase;
+				const newIsSetupPhase = newGamePhase === "SETUP" || newGamePhase === "SETUP_SECOND_ROUND";
+
+				return {
+					...previousState,
+					currentPlayerId: nextPlayerId,
+					turnPhase: gameDto.turnPhase ?? (newIsSetupPhase ? previousState.turnPhase : "ROLL_DICE"),
+					gamePhase: newGamePhase,
+					diceResult: null,
+				};
+			});
+
+			void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+				type: "TURN_END",
+				sourcePlayerId: myPlayer.id,
+				nextPlayerId: nextPlayerId,
+				message,
+			});
+		} catch (error) {
+			const appError = error as Partial<ApplicationError>;
+			addToLog(appError.message || "Failed to end turn. Please try again.");
 			// Keep local progression even if persistence fails; polling will eventually re-sync.
 		}
-
-		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-			type: "TURN_END",
-			sourcePlayerId: myPlayer.id,
-			nextPlayerId: nextPlayer.id,
-			message,
-		});
 	};
 
 	const handleToggleDevCardPlayMode = () => {
