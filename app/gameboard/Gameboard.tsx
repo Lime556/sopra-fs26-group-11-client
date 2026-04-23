@@ -1151,7 +1151,7 @@ export default function Gameboard() {
 			try {
 				await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/build-settlement`, {
 					playerId: myPlayer.id,
-					intersectionId: corner,
+					intersectionId: intersectionId,
 					hexId: hexId,
 				});
 				setState((prev) => ({
@@ -1167,7 +1167,7 @@ export default function Gameboard() {
 
 				setPlacementMode("road");
 				addToLog(`${myPlayer.name} placed a setup settlement. Place your attached road.`);
-
+				
 			} catch (error) {
 				const message = error instanceof Error ? error.message : "Unknown error";
 				addToLog(`Could not place setup settlement: ${message}`);
