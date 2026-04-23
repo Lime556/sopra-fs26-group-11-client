@@ -1154,15 +1154,26 @@ export default function Gameboard() {
 					intersectionId: corner,
 					hexId: hexId,
 				});
-				
+				setState((prev) => ({
+					...prev,
+					players: prev.players.map((p) =>
+						p.id === myPlayer.id
+							? { ...p, settlementsOnCorners: [...p.settlementsOnCorners, { hexId, corner }] }
+							: p
+					),
+					
+			
+            }));
+
+				setPlacementMode("road");
+				addToLog(`${myPlayer.name} placed a setup settlement. Place your attached road.`);
+
 			} catch (error) {
 				const message = error instanceof Error ? error.message : "Unknown error";
 				addToLog(`Could not place setup settlement: ${message}`);
 				return;
 			}
 
-			setPlacementMode("road");
-			addToLog(`${myPlayer.name} placed a setup settlement. Place your attached road.`);
 			return;
 		}
 
@@ -1966,14 +1977,24 @@ export default function Gameboard() {
 					playerId: myPlayer.id,
 					edgeId,
 				});
+
+				setState((prev) => ({
+					...prev,
+					players: prev.players.map((p) =>
+						p.id === myPlayer.id
+							? { ...p, roadsOnEdges: [...p.roadsOnEdges, { hexId, edge }] }
+							: p
+					),
+				}));
+				
+				setPlacementMode(null);
+				addToLog(`${myPlayer.name} placed a setup road.`);
 			} catch (error) {
 				const message = error instanceof Error ? error.message : "Unknown error";
 				addToLog(`Could not place setup road: ${message}`);
 				return;
 			}
 
-			setPlacementMode(null);
-			addToLog(`${myPlayer.name} placed a setup road.`);
 			return;
 		}
 
