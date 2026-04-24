@@ -1311,6 +1311,16 @@ export default function Gameboard() {
 
 		const client = new Client({
 			webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`),
+			reconnectDelay: 5000,
+			heartbeatIncoming: 4000,
+			heartbeatOutgoing: 4000,
+			onWebSocketError: (event) => {
+				console.error("WebSocket connection error:", event);
+			},
+			onStompError: (frame) => {
+				console.error("STOMP protocol error:", frame.headers.message);
+				console.error("Details:", frame.body);
+			},
 			onConnect: () => {
 				client.subscribe(`/topic/games/${activeGameId}/state`, (message) => {
 					try {
