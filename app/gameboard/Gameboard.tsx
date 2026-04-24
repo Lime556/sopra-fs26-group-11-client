@@ -215,15 +215,18 @@ export default function Gameboard() {
 							serverPlayers.length > 0
 								? serverPlayers.map((serverPlayer: any, index) => {
 									const previousPlayer = previousState.players.find((player: any) => player.id === serverPlayer.id);
-									const cachedRoads = Array.from(roadCacheRef.current.get(serverPlayer.id) ?? []).map((entry: string) => parseRoadEntry(entry)).filter((entry: any): entry is { hexId: number; edge: number } => entry !== null);
+									const cachedRoads = Array.from(roadCacheRef.current.get(serverPlayer.id) ?? [])
+										.map((entry: any) => (typeof entry === "string" ? parseRoadEntry(entry) : entry))
+										.filter((entry: any): entry is { hexId: number; edge: number } => entry !== null);
+									
 									const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
-										? serverPlayer.roadsOnEdges.map((entry: any) => {
-											if (typeof entry === "string") return parseRoadEntry(entry);
-											if (entry && typeof entry.hexId === "number") {
-												return { hexId: entry.hexId, edge: entry.edge ?? entry.edgeIndex };
-											}
-											return null;
-										}).filter((entry: any): entry is { hexId: number; edge: number } => entry !== null)
+										? serverPlayer.roadsOnEdges.map((entry: any) => (
+											typeof entry === "string" 
+												? parseRoadEntry(entry) 
+												: (entry && typeof entry.hexId === "number" 
+													? { hexId: entry.hexId, edge: entry.edge ?? entry.edgeIndex } 
+													: null)
+										)).filter((entry: any): entry is { hexId: number; edge: number } => entry !== null)
 										: [];
 									const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
 									rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
@@ -1413,15 +1416,18 @@ export default function Gameboard() {
 							players: Array.isArray(gameDto.players)
 								? gameDto.players.map((serverPlayer: any, index) => {
 									const previousPlayer = previousState.players.find((player: any) => player.id === serverPlayer.id);
-									const cachedRoads = Array.from(roadCacheRef.current.get(serverPlayer.id) ?? []).map((entry: string) => parseRoadEntry(entry)).filter((entry: any): entry is { hexId: number; edge: number } => entry !== null);
+									const cachedRoads = Array.from(roadCacheRef.current.get(serverPlayer.id) ?? [])
+										.map((entry: any) => (typeof entry === "string" ? parseRoadEntry(entry) : entry))
+										.filter((entry: any): entry is { hexId: number; edge: number } => entry !== null);
+
 									const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
-										? serverPlayer.roadsOnEdges.map((entry: any) => {
-											if (typeof entry === "string") return parseRoadEntry(entry);
-											if (entry && typeof entry.hexId === "number") {
-												return { hexId: entry.hexId, edge: entry.edge ?? entry.edgeIndex };
-											}
-											return null;
-										}).filter((entry: any): entry is { hexId: number; edge: number } => entry !== null)
+										? serverPlayer.roadsOnEdges.map((entry: any) => (
+											typeof entry === "string" 
+												? parseRoadEntry(entry) 
+												: (entry && typeof entry.hexId === "number" 
+													? { hexId: entry.hexId, edge: entry.edge ?? entry.edgeIndex } 
+													: null)
+										)).filter((entry: any): entry is { hexId: number; edge: number } => entry !== null)
 										: [];
 									const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
 									rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
@@ -1898,15 +1904,15 @@ export default function Gameboard() {
 
 		try {
 			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/end-turn`, {});
-			const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : state.players;
+			const serverPlayersFromResponse = Array.isArray(gameDto.players) ? gameDto.players : state.players;
 			let nextPlayerId = state.currentPlayerId;
 
-			if (typeof gameDto.currentTurnIndex === "number" && serverPlayers.length > 0) {
-				const normalizedIndex = ((gameDto.currentTurnIndex % serverPlayers.length) + serverPlayers.length) % serverPlayers.length;
-				nextPlayerId = serverPlayers[normalizedIndex].id;
+			if (typeof gameDto.currentTurnIndex === "number" && serverPlayersFromResponse.length > 0) {
+				const normalizedIndex = ((gameDto.currentTurnIndex % serverPlayersFromResponse.length) + serverPlayersFromResponse.length) % serverPlayersFromResponse.length;
+				nextPlayerId = serverPlayersFromResponse[normalizedIndex].id;
 			}
 
-			const nextPlayer = serverPlayers.find((p) => p.id === nextPlayerId);
+			const nextPlayer = serverPlayersFromResponse.find((p: any) => p.id === nextPlayerId);
 			const message = `${myPlayer.name} ended turn. ${nextPlayer?.name ?? "Next player"}'s turn.`;
 			addToLog(message);
 			
@@ -1914,22 +1920,22 @@ export default function Gameboard() {
 				// Derive newIsSetupPhase from gameDto.gamePhase to ensure it's up-to-date
 				const newGamePhase = gameDto.gamePhase ?? previousState.gamePhase;
 				const newIsSetupPhase = newGamePhase === "SETUP" || newGamePhase === "SETUP_SECOND_ROUND";
-								const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : previousState.players;
+				const syncPlayers = Array.isArray(gameDto.players) ? gameDto.players : previousState.players;
 
-				const updatedPlayers = serverPlayers.map((serverPlayer: any, index) => {
+				const updatedPlayers = syncPlayers.map((serverPlayer: any, index) => {
 					const previousPlayer = previousState.players.find((player: any) => player.id === serverPlayer.id);
 					const cachedRoads = Array.from(roadCacheRef.current.get(serverPlayer.id) ?? [])
-						.map((entry: string) => parseRoadEntry(entry))
+						.map((entry: any) => (typeof entry === "string" ? parseRoadEntry(entry) : entry))
 						.filter((entry: any): entry is { hexId: number; edge: number } => entry !== null);
 					
 					const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
-						? serverPlayer.roadsOnEdges.map((entry: any) => {
-							if (typeof entry === "string") return parseRoadEntry(entry);
-							if (entry && typeof entry.hexId === "number") {
-								return { hexId: entry.hexId, edge: entry.edge ?? entry.edgeIndex };
-							}
-							return null;
-						}).filter((entry: any): entry is { hexId: number; edge: number } => entry !== null)
+						? serverPlayer.roadsOnEdges.map((entry: any) => (
+							typeof entry === "string" 
+								? parseRoadEntry(entry) 
+								: (entry && typeof entry.hexId === "number" 
+									? { hexId: entry.hexId, edge: entry.edge ?? entry.edgeIndex } 
+									: null)
+						)).filter((entry: any): entry is { hexId: number; edge: number } => entry !== null)
 						: [];
 					
 					const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
