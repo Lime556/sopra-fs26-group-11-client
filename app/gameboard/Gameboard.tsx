@@ -470,7 +470,7 @@ export default function Gameboard() {
 						});
 					}
 				});
-			}, 6000);
+			}, 2000);
 
 			void syncDiceValue(gameId as number);
 			const dicePoll = window.setInterval(() => {
@@ -1185,56 +1185,9 @@ export default function Gameboard() {
 				return;
 			}
 
-			const targetHexId = event.hexId;
-			const targetEdge = event.edge;
-
 			if (typeof localPlayerId === "number" && event.sourcePlayerId === localPlayerId) {
 				return;
 			}
-
-			setState((previousState) => {
-				const sourceIndex = previousState.players.findIndex((player) => player.id === event.sourcePlayerId);
-				if (sourceIndex < 0) {
-					return previousState;
-				}
-
-				const previousHexById = new Map<number, HexTile>();
-				previousState.hexes.forEach((hex) => previousHexById.set(hex.id, hex));
-
-				const targetHexFromState = previousHexById.get(targetHexId);
-				if (!targetHexFromState) {
-					return previousState;
-				}
-
-				const targetEdgeKey = createCanonicalEdgeKey(targetHexFromState, targetEdge);
-
-				const edgeAlreadyOccupied = previousState.players.some((player) =>
-					player.roadsOnEdges.some((road) => {
-						const roadHex = previousHexById.get(road.hexId);
-						return roadHex ? createCanonicalEdgeKey(roadHex, road.edge) === targetEdgeKey : false;
-					})
-				);
-				if (edgeAlreadyOccupied) {
-					return previousState;
-				}
-
-				const source = previousState.players[sourceIndex];
-				const alreadyPlaced = source.roadsOnEdges.some((road) => road.hexId === targetHexId && road.edge === targetEdge);
-				if (alreadyPlaced) {
-					return previousState;
-				}
-
-				const nextPlayers = [...previousState.players];
-				nextPlayers[sourceIndex] = {
-					...source,
-					roadsOnEdges: [...source.roadsOnEdges, { hexId: targetHexId, edge: targetEdge }],
-				};
-
-				return {
-					...previousState,
-					players: nextPlayers,
-				};
-			});
 
 			if (event.message) {
 				addToLog(event.message);
@@ -1255,28 +1208,6 @@ export default function Gameboard() {
 				return;
 			}
 
-			setState((previousState) => {
-				const sourceIndex = previousState.players.findIndex((p) => p.id === event.sourcePlayerId);
-				if (sourceIndex < 0) return previousState;
-
-				const source = previousState.players[sourceIndex];
-				const alreadyPlaced = source.settlementsOnCorners.some(
-					(s) => s.hexId === event.hexId && s.corner === event.intersectionId
-				);
-				if (alreadyPlaced) return previousState;
-
-				const nextPlayers = [...previousState.players];
-				nextPlayers[sourceIndex] = {
-					...source,
-					settlementsOnCorners: [
-						...source.settlementsOnCorners,
-						{ hexId: event.hexId!, corner: event.intersectionId! },
-					],
-				};
-
-				return { ...previousState, players: nextPlayers };
-			});
-
 			if (event.message) addToLog(event.message);
 			return;
 		}
@@ -1293,29 +1224,6 @@ export default function Gameboard() {
 			if (typeof localPlayerId === "number" && event.sourcePlayerId === localPlayerId) {
 				return;
 			}
-
-			setState((previousState) => {
-				const sourceIndex = previousState.players.findIndex((p) => p.id === event.sourcePlayerId);
-				if (sourceIndex < 0) return previousState;
-
-				const source = previousState.players[sourceIndex];
-				// Remove the settlement being upgraded and add the city
-				const remainingSettlements = source.settlementsOnCorners.filter(
-					(s) => !(s.hexId === event.hexId && s.corner === event.intersectionId)
-				);
-				
-				const nextPlayers = [...previousState.players];
-				nextPlayers[sourceIndex] = {
-					...source,
-					settlementsOnCorners: remainingSettlements,
-					citiesOnCorners: [
-						...source.citiesOnCorners,
-						{ hexId: event.hexId!, corner: event.intersectionId! },
-					],
-				};
-
-				return { ...previousState, players: nextPlayers };
-			});
 
 			if (event.message) addToLog(event.message);
 			return;
