@@ -72,10 +72,11 @@ export default function Register() {
             className={styles["form-item"]}
             rules={[{ required: true, message: "Choose a username" }]}
           >
-            <div className={styles["input-wrapper"]}>
-              <UserOutlined className={styles["input-icon"]} />
-              <Input placeholder="Enter your username" />
-            </div>
+            <Input
+              className={styles["login-register-input"]}
+              prefix={<UserOutlined className={styles["input-icon"]} />}
+              placeholder="Enter your username"
+            />
           </Form.Item>
 
           <Form.Item
@@ -94,10 +95,11 @@ export default function Register() {
               },
             ]}
           >
-            <div className={styles["input-wrapper"]}>
-              <MailOutlined className={styles["input-icon"]} />
-              <Input placeholder="Enter an email" />
-            </div>
+            <Input
+              className={styles["login-register-input"]}
+              prefix={<MailOutlined className={styles["input-icon"]} />}
+              placeholder="Enter an email"
+            />
           </Form.Item>
 
           <Form.Item
@@ -106,10 +108,11 @@ export default function Register() {
             className={styles["form-item"]}
             rules={[{ required: true, message: "Please input your password!" }]}
           >
-            <div className={styles["input-wrapper"]}>
-              <LockOutlined className={styles["input-icon"]} />
-              <Input.Password placeholder="Enter at least 6 characters" />
-            </div>
+            <Input.Password
+              className={styles["login-register-input"]}
+              prefix={<LockOutlined className={styles["input-icon"]} />}
+              placeholder="Enter at least 6 characters"
+            />
           </Form.Item>
 
           <Form.Item
@@ -128,10 +131,11 @@ export default function Register() {
               }),
             ]}
           >
-            <div className={styles["input-wrapper"]}>
-              <LockOutlined className={styles["input-icon"]} />
-              <Input.Password placeholder="Repeat your password" />
-            </div>
+            <Input.Password
+              className={styles["login-register-input"]}
+              prefix={<LockOutlined className={styles["input-icon"]} />}
+              placeholder="Repeat your password"
+            />
           </Form.Item>
 
           <Form.Item>

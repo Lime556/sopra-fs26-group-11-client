@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
 import { User } from "@/types/user";
@@ -17,12 +18,14 @@ const Login: React.FC = () => {
   const router = useRouter();
   const apiService = useApi();
   const [form] = Form.useForm();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { set: setToken } = useLocalStorage<string>("token", "", { storage: "session" });
   const { set: setUserId } = useLocalStorage<string>("userId", "", { storage: "session" });
   const { set: setUsername } = useLocalStorage<string>("username", "", { storage: "session" });
 
   const handleLogin = async (values: FormFieldProps) => {
+    setIsSubmitting(true);
     try {
       const response = await apiService.post<User>("/login", values);
 
@@ -36,6 +39,8 @@ const Login: React.FC = () => {
       } else {
         console.error("Unknown error during login");
       }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -58,10 +63,11 @@ const Login: React.FC = () => {
             className={styles["form-item"]}
             rules={[{ required: true, message: "Please input your username!" }]}
           >
-            <div className={styles["input-wrapper"]}>
-              <UserOutlined className={styles["input-icon"]} />
-              <Input placeholder="Enter your username" />
-            </div>
+            <Input
+              className={styles["login-register-input"]}
+              prefix={<UserOutlined className={styles["input-icon"]} />}
+              placeholder="Enter your username"
+            />
           </Form.Item>
 
           {/* Password */}
@@ -71,16 +77,18 @@ const Login: React.FC = () => {
             className={styles["form-item"]}
             rules={[{ required: true, message: "Please input your password!" }]}
           >
-            <div className={styles["input-wrapper"]}>
-              <LockOutlined className={styles["input-icon"]} />
-              <Input.Password placeholder="Enter your password" />
-            </div>
+            <Input.Password
+              className={styles["login-register-input"]}
+              prefix={<LockOutlined className={styles["input-icon"]} />}
+              placeholder="Enter your password"
+            />
           </Form.Item>
 
           <Form.Item>
             <Button
               htmlType="submit"
               className={styles["login-register-button"]}
+              loading={isSubmitting}
             >
               Login
             </Button>

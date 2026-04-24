@@ -68,13 +68,22 @@
   color: #000 !important;
 }
 
+.login-register-input,
+.login-register-input:global(.ant-input-affix-wrapper) {
+  min-height: 41.6px;
+  border-radius: 10px;
+  border: 0.8px solid #D08700;
+  color: #000 !important;
+}
+
+.login-register-input:global(.ant-input-affix-wrapper-focused),
+.login-register-input:global(.ant-input-affix-wrapper:hover) {
+  border-color: #733E0A !important;
+  box-shadow: none !important;
+}
+
 .input-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
   color: #733E0A !important;
-  z-index: 1;
 }
 
 .login-register-button {
