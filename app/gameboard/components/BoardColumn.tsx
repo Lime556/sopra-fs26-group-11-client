@@ -78,7 +78,15 @@ export function BoardColumn({
 	const playableDevelopmentCards = developmentCards.filter((card) => card !== "victory_point");
 	const canUseActionPhase = isMyTurn && state.turnPhase === "ACTION" && !isSetupPhase;
 	const canUseSetupPlacement = isMyTurn && isSetupPhase;
-	const canUseRoadOrSettlement = canUseActionPhase || canUseSetupPlacement;
+
+	const mySetupSettlementCount = state.players.find(p => p.id === state.currentPlayerId)?.settlementsOnCorners.length ?? 0;
+	const mySetupRoadCount = state.players.find(p => p.id === state.currentPlayerId)?.roadsOnEdges.length ?? 0;
+	const setupRoundFinished = isSetupPhase && 
+		((state.gamePhase === "SETUP" && mySetupSettlementCount >= 1 && mySetupRoadCount >= 1) ||
+		 (state.gamePhase === "SETUP_SECOND_ROUND" && mySetupSettlementCount >= 2 && mySetupRoadCount >= 2));
+
+	const canEndTurn = canUseActionPhase || (isMyTurn && setupRoundFinished);
+	const canUseRoadOrSettlement = canUseActionPhase || (canUseSetupPlacement && !setupRoundFinished);
 
 	return (
 		<div className={styles.boardColumn}>
@@ -520,9 +528,9 @@ export function BoardColumn({
 
 					<button
 						type="button"
-						className={`${styles.endTurnButton} ${!canUseActionPhase ? styles.buttonDisabled : styles.endTurnButton}`}
+						className={`${styles.endTurnButton} ${!canEndTurn ? styles.buttonDisabled : styles.endTurnButton}`}
 						onClick={handleEndTurn}
-						disabled={!canUseActionPhase}
+						disabled={!canEndTurn}
 					>
 						End Turn
 					</button>

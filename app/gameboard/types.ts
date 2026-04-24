@@ -111,6 +111,8 @@ export interface PlayerGetDTO {
 	hasLongestRoad?: boolean | null;
 	hasLargestArmy?: boolean | null;
 	roadsOnEdges?: string[];
+	settlementsOnCorners?: { hexId: number; corner: number }[];
+	citiesOnCorners?: { hexId: number; corner: number }[];
 	wood?: number | null;
 	brick?: number | null;
 	wool?: number | null;
