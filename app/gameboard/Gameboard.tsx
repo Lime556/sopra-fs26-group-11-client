@@ -66,10 +66,6 @@ const developmentCardDisplayName: Record<string, string> = {
 	monopoly: "Monopoly",
 };
 
-function formatDevelopmentCardName(cardName: string): string {
-	return developmentCardDisplayName[cardName] ?? cardName;
-}
-
 export default function Gameboard() {
 	const router = useRouter();
 	const apiService = useApi();
@@ -1301,7 +1297,8 @@ export default function Gameboard() {
 		}
 
 		const client = new Client({
-			webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`),
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`, null, { withCredentials: true } as any),
 			reconnectDelay: 5000,
 			heartbeatIncoming: 4000,
 			heartbeatOutgoing: 4000,
