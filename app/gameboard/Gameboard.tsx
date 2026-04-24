@@ -146,15 +146,6 @@ export default function Gameboard() {
 	}, [activeGameId, gameLog]);
 
 	useEffect(() => {
-		if (!Array.isArray(state.ports)) {
-			setState((previousState) => ({
-				...previousState,
-				ports: [],
-			}));
-		}
-	}, [state.ports]);
-
-	useEffect(() => {
 		let cancelled = false;
 
 		syncedChatMessagesRef.current = new Set();
@@ -1315,7 +1306,7 @@ export default function Gameboard() {
 			heartbeatIncoming: 4000,
 			heartbeatOutgoing: 4000,
 			onWebSocketError: (event) => {
-				console.error("WebSocket connection error:", event);
+				console.error("WebSocket connection failed. This is likely a CORS or server-side mapping issue:", event);
 			},
 			onStompError: (frame) => {
 				console.error("STOMP protocol error:", frame.headers.message);

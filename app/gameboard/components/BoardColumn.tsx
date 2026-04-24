@@ -182,19 +182,6 @@ export function BoardColumn({
 
 								<g transform={`translate(${portX}, ${portY}) rotate(${edgeAngle})`}>
 
-					{isKnightPlacementMode && isMyTurn
-						? state.hexes.map((hex) => {
-							const { cx, cy } = toPixel(hex);
-							return (
-								<polygon
-									key={`select-knight-${hex.id}`}
-									className={styles.knightHexSelectable}
-									points={calculateHexPoints(cx, cy)}
-									onClick={() => handleKnightHexClick(hex.id)}
-								/>
-							);
-						})
-						: null}
 									<path d="M-20,5 L-15,15 L15,15 L20,5 L15,-5 L-15,-5 Z" fill="#8b5a3c" stroke="#654321" strokeWidth={2} />
 									<rect x={-15} y={-5} width={30} height={10} fill="#a0826d" stroke="#654321" strokeWidth={1} />
 									<line x1={0} y1={-5} x2={0} y2={-40} stroke="#654321" strokeWidth={2} />
@@ -226,6 +213,20 @@ export function BoardColumn({
 							</g>
 						);
 					})}
+
+					{isKnightPlacementMode && isMyTurn
+						? state.hexes.map((hex) => {
+							const { cx, cy } = toPixel(hex);
+							return (
+								<polygon
+									key={`select-knight-${hex.id}`}
+									className={styles.knightHexSelectable}
+									points={calculateHexPoints(cx, cy)}
+									onClick={() => handleKnightHexClick(hex.id)}
+								/>
+							);
+						})
+						: null}
 
 					{isRoadPlacementMode && isMyTurn
 						? state.hexes.flatMap((hex) =>
