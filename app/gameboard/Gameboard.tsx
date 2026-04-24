@@ -217,7 +217,13 @@ export default function Gameboard() {
 									const previousPlayer = previousState.players.find((player) => player.id === serverPlayer.id);
 									const cachedRoads = Array.from(roadCacheRef.current.get(serverPlayer.id) ?? []).map((entry) => parseRoadEntry(entry)).filter((entry): entry is { hexId: number; edge: number } => entry !== null);
 									const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
-										? serverPlayer.roadsOnEdges.map((entry) => parseRoadEntry(entry)).filter((entry): entry is { hexId: number; edge: number } => entry !== null)
+										? serverPlayer.roadsOnEdges.map((entry: any) => {
+											if (typeof entry === "string") return parseRoadEntry(entry);
+											if (entry && typeof entry.hexId === "number") {
+												return { hexId: entry.hexId, edge: entry.edge ?? entry.edgeIndex };
+											}
+											return null;
+										}).filter((entry): entry is { hexId: number; edge: number } => entry !== null)
 										: [];
 									const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
 									rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
@@ -1087,12 +1093,20 @@ export default function Gameboard() {
 			return;
 		}
 
+		const selectedHex = hexById.get(hexId);
+		const cornerKey = selectedHex ? createCanonicalCornerKey(selectedHex, corner) : null;
+		const globalIntersectionId = cornerKey ? setupTopology.cornerToIntersectionId.get(cornerKey) : null;
+
+		if (globalIntersectionId === null || globalIntersectionId === undefined) {
+			return;
+		}
+
 		try {
 			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
 				type: "SETTLEMENT_BUILT",
 				sourcePlayerId: myPlayer.id,
 				hexId,
-				intersectionId: corner,
+				intersectionId: globalIntersectionId,
 			});
 		} catch {
 			addToLog("Could not build settlement. Please try again.");
@@ -1123,12 +1137,20 @@ export default function Gameboard() {
 			return;
 		}
 
+		const selectedHex = hexById.get(hexId);
+		const cornerKey = selectedHex ? createCanonicalCornerKey(selectedHex, corner) : null;
+		const globalIntersectionId = cornerKey ? setupTopology.cornerToIntersectionId.get(cornerKey) : null;
+
+		if (globalIntersectionId === null || globalIntersectionId === undefined) {
+			return;
+		}
+
 		try {
 			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
 				type: "CITY_BUILT",
 				sourcePlayerId: myPlayer.id,
 				hexId,
-				intersectionId: corner,
+				intersectionId: globalIntersectionId,
 			});
 		} catch {
 			addToLog("Could not build city. Please try again.");
@@ -1393,7 +1415,13 @@ export default function Gameboard() {
 									const previousPlayer = previousState.players.find((player) => player.id === serverPlayer.id);
 									const cachedRoads = Array.from(roadCacheRef.current.get(serverPlayer.id) ?? []).map((entry) => parseRoadEntry(entry)).filter((entry): entry is { hexId: number; edge: number } => entry !== null);
 									const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
-										? serverPlayer.roadsOnEdges.map((entry) => parseRoadEntry(entry)).filter((entry): entry is { hexId: number; edge: number } => entry !== null)
+										? serverPlayer.roadsOnEdges.map((entry: any) => {
+											if (typeof entry === "string") return parseRoadEntry(entry);
+											if (entry && typeof entry.hexId === "number") {
+												return { hexId: entry.hexId, edge: entry.edge ?? entry.edgeIndex };
+											}
+											return null;
+										}).filter((entry): entry is { hexId: number; edge: number } => entry !== null)
 										: [];
 									const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
 									rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
@@ -1828,12 +1856,22 @@ export default function Gameboard() {
 			return;
 		}
 
+		const selectedHex = hexById.get(hexId);
+		const [fromKey, toKey] = selectedHex ? getCanonicalRoadEndpoints(selectedHex, edge) : [null, null];
+		const iA = fromKey ? setupTopology.cornerToIntersectionId.get(fromKey) : null;
+		const iB = toKey ? setupTopology.cornerToIntersectionId.get(toKey) : null;
+		const globalEdgeId = (typeof iA === "number" && typeof iB === "number") ? setupTopology.edgeToEdgeId.get(`${Math.min(iA, iB)}|${Math.max(iA, iB)}`) : null;
+
+		if (globalEdgeId === null || globalEdgeId === undefined) {
+			return;
+		}
+
 		try {
 			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
 				type: "ROAD_BUILT",
 				sourcePlayerId: myPlayer.id,
 				hexId,
-				edge,
+				edge: globalEdgeId,
 			});
 		} catch {
 			addToLog("Could not build road. Please try again.");
