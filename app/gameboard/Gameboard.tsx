@@ -1297,8 +1297,7 @@ export default function Gameboard() {
 		}
 
 		const client = new Client({
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`, null, { withCredentials: true } as any),
+			webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`, null, { withCredentials: true } as Record<string, unknown>),
 			reconnectDelay: 5000,
 			heartbeatIncoming: 4000,
 			heartbeatOutgoing: 4000,
