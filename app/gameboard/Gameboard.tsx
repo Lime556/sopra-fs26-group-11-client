@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
-import { Client } from "@stomp/stompjs";
-import SockJS from "sockjs-client";
-import { getApiDomain } from "@/utils/domain";
+// Previous WebSocket implementation kept for traceability:
+// import { Client } from "@stomp/stompjs";
+// import SockJS from "sockjs-client";
+// import { getApiDomain } from "@/utils/domain";
 import { LogOut, Send } from "lucide-react";
 import styles from "@/styles/gameboard.module.css";
 import { ApplicationError } from "@/types/error";
@@ -457,7 +458,7 @@ export default function Gameboard() {
 						});
 					}
 				});
-			}, 2000);
+			}, 1000);
 
 			void syncDiceValue(gameId as number);
 			const dicePoll = window.setInterval(() => {
@@ -1288,114 +1289,124 @@ export default function Gameboard() {
 		}
 	};
 
-	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
-	applyGameEventRef.current = applyGameEvent;
+	void applyGameEvent;
 
-	useEffect(() => {
-		if (!activeGameId) {
-			return;
-		}
-
-		const client = new Client({
-			webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`, null, { withCredentials: true } as Record<string, unknown>),
-			reconnectDelay: 5000,
-			heartbeatIncoming: 4000,
-			heartbeatOutgoing: 4000,
-			onWebSocketError: (event) => {
-				console.error("WebSocket connection failed. This is likely a CORS or server-side mapping issue:", event);
-			},
-			onStompError: (frame) => {
-				console.error("STOMP protocol error:", frame.headers.message);
-				console.error("Details:", frame.body);
-			},
-			onConnect: () => {
-				client.subscribe(`/topic/games/${activeGameId}/state`, (message) => {
-					try {
-						const gameDto = JSON.parse(message.body) as GameGetDTO;
-						if (!gameDto) {
-							return;
-						}
-
-						setState((previousState) => ({
-							...previousState,
-							players: Array.isArray(gameDto.players)
-								? gameDto.players.map((serverPlayer: Parameters<typeof mapResourcesFromServer>[0], index) => {
-									const previousPlayer = previousState.players.find((p) => p.id === (serverPlayer as { id: number }).id);
-									const cachedRoads = Array.from(roadCacheRef.current.get((serverPlayer as { id: number }).id) ?? [])
-										.map((entry: unknown) => (typeof entry === "string" ? parseRoadEntry(entry as string) : entry))
-										.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null);
-
-									const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
-										? serverPlayer.roadsOnEdges.map((entry: unknown) => (
-											typeof entry === "string" 
-												? parseRoadEntry(entry) 
-												: (entry && typeof (entry as { hexId?: number }).hexId === "number" 
-													? { hexId: (entry as { hexId: number }).hexId, edge: (entry as { edge?: number; edgeIndex?: number }).edge ?? (entry as { edge?: number; edgeIndex?: number }).edgeIndex } 
-													: null)
-										)).filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null)
-										: [];
-									const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
-									rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
-									return {
-										id: (serverPlayer as { id: number }).id,
-										name: (serverPlayer as { name: string }).name,
-										color: previousPlayer?.color ?? fallbackColorForPlayer(index),
-										resources: mapResourcesFromServer(serverPlayer as Parameters<typeof mapResourcesFromServer>[0]),
-										victoryPoints: serverPlayer.victoryPoints ?? 0,
-										developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
-										knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
-										developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
-										freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
-										hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
-										settlementsOnCorners: serverPlayer.settlementsOnCorners ?? previousPlayer?.settlementsOnCorners ?? [],
-										citiesOnCorners: serverPlayer.citiesOnCorners ?? previousPlayer?.citiesOnCorners ?? [],
-										roadsOnEdges: mergedRoads,
-									};
-								})
-								: previousState.players,
-							developmentDeck: gameDto.developmentDeck ?? previousState.developmentDeck,
-							currentPlayerId: typeof gameDto.currentTurnIndex === "number" && Array.isArray(gameDto.players) && gameDto.players.length > 0
-								? gameDto.players[((gameDto.currentTurnIndex % gameDto.players.length) + gameDto.players.length) % gameDto.players.length].id
-								: previousState.currentPlayerId,
-							robberHexId: gameDto.robberTileIndex ?? previousState.robberHexId,
-							turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
-							gamePhase: gameDto.gamePhase ?? previousState.gamePhase,
-							diceResult: gameDto.diceValue ?? previousState.diceResult,
-						}));
-					} catch {
-						// Ignore malformed state messages.
-					}
-				});
-
-				client.subscribe(`/topic/games/${activeGameId}/events`, (message) => {
-					try {
-						applyGameEventRef.current(JSON.parse(message.body) as GameEventDTO);
-					} catch {
-						// Ignore malformed messages.
-					}
-				});
-
-				client.subscribe(`/topic/games/${activeGameId}/chat`, (message) => {
-					try {
-						const payload = JSON.parse(message.body) as GameChatMessageDTO;
-						if (payload?.text) {
-							const logEntry = `${payload.playerName ?? "Player"}: ${payload.text}`;
-							syncedChatMessagesRef.current.add(logEntry);
-							addToLog(logEntry);
-						}
-					} catch {
-						// Ignore malformed messages.
-					}
-				});
-			},
-		});
-
-		client.activate();
-
-		return () => {
-			void client.deactivate();
-		};
-	}, [activeGameId]);
+	/*
+	 * Previous WebSocket implementation kept for traceability.
+	 * Disabled because SockJS/STOMP WebSocket upgrades failed in the Vercel +
+	 * Google App Engine deployment. Game state and chat are now refreshed through
+	 * REST polling in the bootstrapBoard effect above.
+	 *
+	 * const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
+	 * applyGameEventRef.current = applyGameEvent;
+	 *
+	 * useEffect(() => {
+	 * 	if (!activeGameId) {
+	 * 		return;
+	 * 	}
+	 *
+	 * 	const client = new Client({
+	 * 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	 * 		webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`, null, { withCredentials: true } as any),
+	 * 		reconnectDelay: 5000,
+	 * 		heartbeatIncoming: 4000,
+	 * 		heartbeatOutgoing: 4000,
+	 * 		onWebSocketError: (event) => {
+	 * 			console.error("WebSocket connection failed. This is likely a CORS or server-side mapping issue:", event);
+	 * 		},
+	 * 		onStompError: (frame) => {
+	 * 			console.error("STOMP protocol error:", frame.headers.message);
+	 * 			console.error("Details:", frame.body);
+	 * 		},
+	 * 		onConnect: () => {
+	 * 			client.subscribe(`/topic/games/${activeGameId}/state`, (message) => {
+	 * 				try {
+	 * 					const gameDto = JSON.parse(message.body) as GameGetDTO;
+	 * 					if (!gameDto) {
+	 * 						return;
+	 * 					}
+	 *
+	 * 					setState((previousState) => ({
+	 * 						...previousState,
+	 * 						players: Array.isArray(gameDto.players)
+	 * 							? gameDto.players.map((serverPlayer: Parameters<typeof mapResourcesFromServer>[0], index) => {
+	 * 								const previousPlayer = previousState.players.find((p) => p.id === (serverPlayer as { id: number }).id);
+	 * 								const cachedRoads = Array.from(roadCacheRef.current.get((serverPlayer as { id: number }).id) ?? [])
+	 * 									.map((entry: unknown) => (typeof entry === "string" ? parseRoadEntry(entry as string) : entry))
+	 * 									.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null);
+	 *
+	 * 								const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
+	 * 									? serverPlayer.roadsOnEdges.map((entry: unknown) => (
+	 * 										typeof entry === "string"
+	 * 											? parseRoadEntry(entry)
+	 * 											: (entry && typeof (entry as { hexId?: number }).hexId === "number"
+	 * 												? { hexId: (entry as { hexId: number }).hexId, edge: (entry as { edge?: number; edgeIndex?: number }).edge ?? (entry as { edge?: number; edgeIndex?: number }).edgeIndex }
+	 * 												: null)
+	 * 									)).filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null)
+	 * 									: [];
+	 * 								const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
+	 * 								rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
+	 * 								return {
+	 * 									id: (serverPlayer as { id: number }).id,
+	 * 									name: (serverPlayer as { name: string }).name,
+	 * 									color: previousPlayer?.color ?? fallbackColorForPlayer(index),
+	 * 									resources: mapResourcesFromServer(serverPlayer as Parameters<typeof mapResourcesFromServer>[0]),
+	 * 									victoryPoints: serverPlayer.victoryPoints ?? 0,
+	 * 									developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
+	 * 									knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
+	 * 									developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
+	 * 									freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
+	 * 									hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
+	 * 									settlementsOnCorners: serverPlayer.settlementsOnCorners ?? previousPlayer?.settlementsOnCorners ?? [],
+	 * 									citiesOnCorners: serverPlayer.citiesOnCorners ?? previousPlayer?.citiesOnCorners ?? [],
+	 * 									roadsOnEdges: mergedRoads,
+	 * 								};
+	 * 							})
+	 * 							: previousState.players,
+	 * 						developmentDeck: gameDto.developmentDeck ?? previousState.developmentDeck,
+	 * 						currentPlayerId: typeof gameDto.currentTurnIndex === "number" && Array.isArray(gameDto.players) && gameDto.players.length > 0
+	 * 							? gameDto.players[((gameDto.currentTurnIndex % gameDto.players.length) + gameDto.players.length) % gameDto.players.length].id
+	 * 							: previousState.currentPlayerId,
+	 * 						robberHexId: gameDto.robberTileIndex ?? previousState.robberHexId,
+	 * 						turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
+	 * 						gamePhase: gameDto.gamePhase ?? previousState.gamePhase,
+	 * 						diceResult: gameDto.diceValue ?? previousState.diceResult,
+	 * 					}));
+	 * 				} catch {
+	 * 					// Ignore malformed state messages.
+	 * 				}
+	 * 			});
+	 *
+	 * 			client.subscribe(`/topic/games/${activeGameId}/events`, (message) => {
+	 * 				try {
+	 * 					applyGameEventRef.current(JSON.parse(message.body) as GameEventDTO);
+	 * 				} catch {
+	 * 					// Ignore malformed messages.
+	 * 				}
+	 * 			});
+	 *
+	 * 			client.subscribe(`/topic/games/${activeGameId}/chat`, (message) => {
+	 * 				try {
+	 * 					const payload = JSON.parse(message.body) as GameChatMessageDTO;
+	 * 					if (payload?.text) {
+	 * 						const logEntry = `${payload.playerName ?? "Player"}: ${payload.text}`;
+	 * 						syncedChatMessagesRef.current.add(logEntry);
+	 * 						addToLog(logEntry);
+	 * 					}
+	 * 				} catch {
+	 * 					// Ignore malformed messages.
+	 * 				}
+	 * 			});
+	 * 		},
+	 * 	});
+	 *
+	 * 	client.activate();
+	 *
+	 * 	return () => {
+	 * 		void client.deactivate();
+	 * 	};
+	 * }, [activeGameId]);
+	 */
 
 	const handleBankTrade = () => {
 		if (currentPlayerIndex < 0 || !currentPlayer || !activeGameId) {

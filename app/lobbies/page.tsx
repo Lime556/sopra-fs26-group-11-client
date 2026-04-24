@@ -16,9 +16,10 @@ import {
   UnlockOutlined,
 } from "@ant-design/icons";
 import { Input, Modal } from "antd";
-import { Client } from "@stomp/stompjs";
-import SockJS from "sockjs-client";
-import { getApiDomain } from "@/utils/domain";
+// Previous WebSocket implementation kept for traceability:
+// import { Client } from "@stomp/stompjs";
+// import SockJS from "sockjs-client";
+// import { getApiDomain } from "@/utils/domain";
 import { ApplicationError } from "@/types/error";
 import styles from "@/styles/lobbies.module.css";
 
@@ -80,22 +81,40 @@ export default function Lobbies() {
 
   useEffect(() => {
     if (!token) return;
-    const client = new Client({
-      webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`),
-      onConnect: () => {
-        client.subscribe("/topic/lobbies", (msg) => {
-          const updated: LobbyGetDTO = JSON.parse(msg.body) as LobbyGetDTO;
-          setLobbies((prev) =>
-            prev.some((l) => l.id === updated.id)
-              ? prev.map((l) => (l.id === updated.id ? updated : l))
-              : [...prev, updated]
-          );
-        });
-      },
-    });
-    client.activate();
-    return () => { void client.deactivate(); };
-  }, [token]);
+
+    const interval = window.setInterval(() => {
+      void loadLobbies();
+    }, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [token, loadLobbies]);
+
+  /*
+   * Previous WebSocket implementation kept for traceability.
+   * Disabled because SockJS/STOMP WebSocket upgrades failed in the Vercel +
+   * Google App Engine deployment. The lobby list is now refreshed by polling.
+   *
+   * useEffect(() => {
+   *   if (!token) return;
+   *   const client = new Client({
+   *     webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`),
+   *     onConnect: () => {
+   *       client.subscribe("/topic/lobbies", (msg) => {
+   *         const updated: LobbyGetDTO = JSON.parse(msg.body) as LobbyGetDTO;
+   *         setLobbies((prev) =>
+   *           prev.some((l) => l.id === updated.id)
+   *             ? prev.map((l) => (l.id === updated.id ? updated : l))
+   *             : [...prev, updated]
+   *         );
+   *       });
+   *     },
+   *   });
+   *   client.activate();
+   *   return () => { void client.deactivate(); };
+   * }, [token]);
+   */
 
   const handleLogout = () => {
     clearToken();
