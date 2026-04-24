@@ -1301,7 +1301,7 @@ export default function Gameboard() {
 		}
 
 		const client = new Client({
-			webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`, null, { withCredentials: true }),
+			webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`, null, { withCredentials: true } as any),
 			reconnectDelay: 5000,
 			heartbeatIncoming: 4000,
 			heartbeatOutgoing: 4000,
