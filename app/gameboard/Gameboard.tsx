@@ -56,6 +56,7 @@ import {
 	type HexTile,
 	type Player,
 	type ResourceType,
+	type Resources,
 	type TradeMode,
 } from "./types";
 
@@ -92,6 +93,7 @@ export default function Gameboard() {
 	const [isDevCardPlayMode, setIsDevCardPlayMode] = useState<boolean>(false);
 	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
 	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
+	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const ports = Array.isArray(state.ports) ? state.ports : [];
 
@@ -193,6 +195,9 @@ export default function Gameboard() {
 					const serverChatMessages = Array.isArray(gameDto?.chatMessages)
 						? gameDto.chatMessages.filter((entry: unknown): entry is string => typeof entry === "string" && entry.trim().length > 0)
 						: [];
+					if (gameDto?.bankResources) {
+						setBankResourcesState(gameDto.bankResources as Resources);
+					}
 					setState((previousState) => ({
 						...previousState,
 						hexes: mappedHexes,
@@ -1061,16 +1066,8 @@ export default function Gameboard() {
 					intersectionId: intersectionId,
 					hexId: hexId,
 				});
-				setState((prev) => ({
-					...prev,
-					players: prev.players.map((p) =>
-						p.id === myPlayer.id
-							? { ...p, settlementsOnCorners: [...p.settlementsOnCorners, { hexId, corner }] }
-							: p
-					),
-					
-			
-            }));
+				// The backend will deduct resources from the player and add them to the bank.
+				// The syncGameState will then update the player's resources and bank's resources.
 
 				setPlacementMode("road");
 				addToLog(`${myPlayer.name} placed a setup settlement. Place your attached road.`);
@@ -1099,7 +1096,9 @@ export default function Gameboard() {
 				hexId,
 				intersectionId: globalIntersectionId,
 			});
-		} catch {
+			// The backend will deduct resources from the player and add them to the bank.
+			// The syncGameState will then update the player's resources and bank's resources.
+		} catch { // eslint-disable-line no-empty
 			addToLog("Could not build settlement. Please try again.");
 			return;
 		}
@@ -1279,7 +1278,7 @@ export default function Gameboard() {
 		try {
 			await apiService.post(`/games/${activeGameId}/actions/roll-dice`, {});
 			addToLog("Dice rolled.");
-		} catch (error) {
+		} catch (error) { // The resource distribution and bank updates will be handled by the backend and reflected in the next syncGameState call.
 			const appError = error as Partial<ApplicationError>;
 			if (appError.status === 409) {
 				addToLog("Cannot roll dice: " + (appError.message || "Invalid turn phase"));
@@ -1437,6 +1436,8 @@ export default function Gameboard() {
 			amount: tradeAmount,
 			message: logMessage,
 		});
+		// The backend will deduct resources from the player and add them to the bank.
+		// The syncGameState will then update the player's resources and bank's resources.
 	};
 
 	const handlePlayerTrade = () => {
@@ -1479,6 +1480,8 @@ export default function Gameboard() {
 			amount: tradeAmount,
 			message: logMessage,
 		});
+		// The backend will deduct resources from the current player and add to target player, and vice versa.
+		// The syncGameState will then update both players' resources.
 	};
 
 	const getValidStealTargetsForHex = (hexId: number): Player[] => {
@@ -1582,7 +1585,7 @@ export default function Gameboard() {
 				type: "DEVELOPMENT_CARD_BOUGHT",
 				sourcePlayerId: myPlayer.id,
 			});
-			addToLog(`${myPlayer.name} buys a development card.`);
+			addToLog(`${myPlayer.name} buys a development card.`); // The backend will deduct resources from the player and add them to the bank. // The syncGameState will then update the player's resources and bank's resources.
 		} catch {
 			addToLog("Could not buy development card. Please try again.");
 		}
@@ -1748,15 +1751,8 @@ export default function Gameboard() {
 					playerId: myPlayer.id,
 					edgeId,
 				});
-
-				setState((prev) => ({
-					...prev,
-					players: prev.players.map((p) =>
-						p.id === myPlayer.id
-							? { ...p, roadsOnEdges: [...p.roadsOnEdges, { hexId, edge }] }
-							: p
-					),
-				}));
+				// The backend will deduct resources from the player and add them to the bank.
+				// The syncGameState will then update the player's resources and bank's resources.
 				
 				setPlacementMode(null);
 				addToLog(`${myPlayer.name} placed a setup road.`);
@@ -2080,7 +2076,7 @@ export default function Gameboard() {
 							{resourceTypes.map((resource) => (
 								<div key={`bank-${resource}`} className={styles.bankResourceCell} style={{ backgroundColor: bankResourceColorByType[resource] }}>
 									<span className={styles.bankResourceIcon}>{resourceEmojiByType[resource]}</span>
-									<span className={styles.bankResourceValue}>{bankResources[resource]}</span>
+									<span className={styles.bankResourceValue}>{bankResourcesState[resource]}</span>
 								</div>
 							))}
 						</div>

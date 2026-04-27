@@ -76,6 +76,7 @@ export interface BoatGetDTO {
 export interface GameGetDTO {
 	id: number;
 	board?: BoardGetDTO | null;
+	bankResources?: Resources | null;
 	currentTurnIndex?: number | null;
 	turnPhase?: string | null;
 	gamePhase?: string | null;
