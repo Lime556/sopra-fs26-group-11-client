@@ -140,6 +140,12 @@ export interface GameEventDTO {
 	giveResource?: ResourceType;
 	receiveResource?: ResourceType;
 	amount?: number;
+	giveAmount?: number;
+	receiveAmount?: number;
+	giveResources?: Partial<Resources>;
+	receiveResources?: Partial<Resources>;
+	tradeAction?: "REQUEST" | "ACCEPT" | "DENY";
+	tradeRequestId?: string;
 	hexId?: number;
 	edge?: number;
 	intersectionId?: number;
