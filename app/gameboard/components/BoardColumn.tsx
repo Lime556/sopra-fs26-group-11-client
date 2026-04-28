@@ -255,6 +255,153 @@ export function BoardColumn({
 							)
 						: null}
 
+					<g>
+						{renderedRoadSegments.map((segment) => (
+							<line
+								key={segment.key}
+								x1={segment.x1}
+								y1={segment.y1}
+								x2={segment.x2}
+								y2={segment.y2}
+								stroke={segment.color}
+								strokeWidth={9}
+								strokeLinecap="round"
+							/>
+						))}
+					</g>
+
+					<g>
+						{state.players.flatMap((player) =>
+							player.settlementsOnCorners.map((settlement, index) => {
+								const hex = hexById.get(settlement.hexId);
+
+								if (!hex) {
+									return null;
+								}
+
+								const { cx, cy } = toPixel(hex);
+								const point = getCornerPoint(cx, cy, settlement.corner);
+								const size = 28;
+
+								return (
+									<g key={`settlement-${player.id}-${settlement.hexId}-${settlement.corner}-${index}`}>
+										{/* Building shadow */}
+										<ellipse
+											cx={point.x}
+											cy={point.y + size / 2 + 1}
+											rx={size / 1.5}
+											ry={size / 3}
+											fill="rgba(0, 0, 0, 0.2)"
+										/>
+										{/* Main building body */}
+										<path
+											d={`M ${point.x - size / 2} ${point.y + size / 3}
+												L ${point.x - size / 2} ${point.y - size / 4}
+												L ${point.x} ${point.y - size / 2}
+												L ${point.x + size / 2} ${point.y - size / 4}
+												L ${point.x + size / 2} ${point.y + size / 3}
+												Z`}
+											fill={player.color}
+											stroke="#ffffff"
+											strokeWidth={2}
+										/>
+										{/* Door */}
+										<rect
+											x={point.x - size / 8}
+											y={point.y}
+											width={size / 4}
+											height={size / 3}
+											fill="rgba(0, 0, 0, 0.4)"
+											stroke="#ffffff"
+											strokeWidth={1}
+										/>
+									</g>
+								);
+							})
+						)}
+
+						{state.players.flatMap((player) =>
+							player.citiesOnCorners.map((city, index) => {
+								const hex = hexById.get(city.hexId);
+
+								if (!hex) {
+									return null;
+								}
+
+								const { cx, cy } = toPixel(hex);
+								const point = getCornerPoint(cx, cy, city.corner);
+								const size = 38;
+
+								return (
+									<g key={`city-${player.id}-${city.hexId}-${city.corner}-${index}`}>
+									{/* Shadow (slightly wider) */}
+									<ellipse
+										cx={point.x}
+										cy={point.y + size / 2 + 1}
+										rx={size / 1.2}
+										ry={size / 3}
+										fill="rgba(0, 0, 0, 0.2)"
+									/>
+
+									{/* Main building body*/}
+									<path
+										d={`M ${point.x - size / 2} ${point.y + size / 3}
+											L ${point.x - size / 2} ${point.y - size / 4}
+											L ${point.x - size / 4} ${point.y - size / 2}
+											L ${point.x} ${point.y - size / 4}
+											L ${point.x + size / 2} ${point.y - size / 4}
+											L ${point.x + size / 2} ${point.y + size / 3}
+											Z`}
+										fill={player.color}
+										stroke="#ffffff"
+										strokeWidth={2}
+										strokeLinejoin="round"
+									/>
+
+									{/* Door */}
+										<rect
+											x={point.x - size / 3}
+											y={point.y}
+											width={size / 5}
+											height={size / 3}
+											fill="rgba(0, 0, 0, 0.4)"
+											stroke="#ffffff"
+											strokeWidth={1}
+										/>
+
+									{/* Window */}
+									<rect
+										x={point.x + size / 7.75}
+										y={point.y}
+										width={size / 4.75}
+										height={size / 4.75}
+										fill="rgba(0, 0, 0, 0.4)"
+										stroke="#ffffff"
+										strokeWidth={1}
+									/>
+									</g>
+								);
+							})
+						)}
+					</g>
+
+					{(() => {
+						const fallbackRobberHexId = findDesertHexId(state.hexes);
+						const robberHex = hexById.get(state.robberHexId ?? fallbackRobberHexId ?? -1);
+						if (!robberHex) {
+							return null;
+						}
+
+						const { cx, cy } = toPixel(robberHex);
+						return (
+							<g key="robber">
+								<circle cx={cx} cy={cy + 10} r={12} fill="#1a1a1a" stroke="#000" strokeWidth={2} />
+								<ellipse cx={cx} cy={cy - 5} rx={10} ry={15} fill="#1a1a1a" stroke="#000" strokeWidth={2} />
+								<circle cx={cx} cy={cy - 20} r={8} fill="#1a1a1a" stroke="#000" strokeWidth={2} />
+							</g>
+						);
+					})()}
+
 					{isSettlementPlacementMode && isMyTurn
 						? state.hexes.flatMap((hex) =>
 								Array.from({ length: 6 }, (_, corner) => {
@@ -300,94 +447,6 @@ export function BoardColumn({
 								})
 							)
 						: null}
-
-					<g>
-						{renderedRoadSegments.map((segment) => (
-							<line
-								key={segment.key}
-								x1={segment.x1}
-								y1={segment.y1}
-								x2={segment.x2}
-								y2={segment.y2}
-								stroke={segment.color}
-								strokeWidth={9}
-								strokeLinecap="round"
-							/>
-						))}
-					</g>
-
-					<g>
-						{state.players.flatMap((player) =>
-							player.settlementsOnCorners.map((settlement, index) => {
-								const hex = hexById.get(settlement.hexId);
-
-								if (!hex) {
-									return null;
-								}
-
-								const { cx, cy } = toPixel(hex);
-								const point = getCornerPoint(cx, cy, settlement.corner);
-
-								return (
-									<rect
-										key={`settlement-${player.id}-${settlement.hexId}-${settlement.corner}-${index}`}
-										x={point.x - 8}
-										y={point.y - 8}
-										width={16}
-										height={16}
-										rx={2}
-										fill={player.color}
-										stroke="#ffffff"
-										strokeWidth={2}
-									/>
-								);
-							})
-						)}
-
-						{state.players.flatMap((player) =>
-							player.citiesOnCorners.map((city, index) => {
-								const hex = hexById.get(city.hexId);
-
-								if (!hex) {
-									return null;
-								}
-
-								const { cx, cy } = toPixel(hex);
-								const point = getCornerPoint(cx, cy, city.corner);
-
-								return (
-									<rect
-										key={`city-${player.id}-${city.hexId}-${city.corner}-${index}`}
-										x={point.x - 11}
-										y={point.y - 11}
-										width={22}
-										height={22}
-										rx={3}
-										fill={player.color}
-										stroke="#ffffff"
-										strokeWidth={3}
-									/>
-								);
-							})
-						)}
-					</g>
-
-					{(() => {
-						const fallbackRobberHexId = findDesertHexId(state.hexes);
-						const robberHex = hexById.get(state.robberHexId ?? fallbackRobberHexId ?? -1);
-						if (!robberHex) {
-							return null;
-						}
-
-						const { cx, cy } = toPixel(robberHex);
-						return (
-							<g key="robber">
-								<circle cx={cx} cy={cy + 10} r={12} fill="#1a1a1a" stroke="#000" strokeWidth={2} />
-								<ellipse cx={cx} cy={cy - 5} rx={10} ry={15} fill="#1a1a1a" stroke="#000" strokeWidth={2} />
-								<circle cx={cx} cy={cy - 20} r={8} fill="#1a1a1a" stroke="#000" strokeWidth={2} />
-							</g>
-						);
-					})()}
 				</svg>
 			</main>
 
