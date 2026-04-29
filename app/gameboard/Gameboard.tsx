@@ -3,18 +3,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
-// Previous WebSocket implementation kept for traceability:
-// import { Client } from "@stomp/stompjs";
-// import SockJS from "sockjs-client";
-// import { getApiDomain } from "@/utils/domain";
+import { getApiDomain } from "@/utils/domain";
 import { LogOut, Send } from "lucide-react";
 import styles from "@/styles/gameboard.module.css";
 import { ApplicationError } from "@/types/error";
 import { BoardColumn } from "./components/BoardColumn";
 import { EndGameOverlay } from "./components/EndGameOverlay";
 import { TradeModal } from "./components/TradeModal";
+import { TradeRequestPopup } from "./components/TradeRequestPopup";
+import { TradeRequestSummaryPopup } from "./components/TradeRequestSummaryPopup";
 import {
 	bankResourceColorByType,
 	bankResources,
@@ -56,6 +57,7 @@ import {
 	type HexTile,
 	type Player,
 	type ResourceType,
+	type Resources,
 	type TradeMode,
 } from "./types";
 
@@ -65,6 +67,20 @@ const developmentCardDisplayName: Record<string, string> = {
 	road_building: "Road Building",
 	year_of_plenty: "Year of Plenty",
 	monopoly: "Monopoly",
+};
+
+const createEmptyTradeResources = (): Resources => ({
+	wood: 0,
+	brick: 0,
+	wool: 0,
+	wheat: 0,
+	ore: 0,
+});
+
+type TradeResponseStatus = "PENDING" | "ACCEPTED" | "DENIED";
+
+const createTradeRequestId = (): string => {
+	return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
 export default function Gameboard() {
@@ -77,11 +93,14 @@ export default function Gameboard() {
 	const [boardStatus, setBoardStatus] = useState<string>("Loading board...");
 	const [gameLog, setGameLog] = useState<string[]>(["Trading ready."]);
 	const [tradeMode, setTradeMode] = useState<TradeMode>("bank");
-	const [giveResource, setGiveResource] = useState<ResourceType>("wood");
-	const [receiveResource, setReceiveResource] = useState<ResourceType>("wheat");
-	const [tradeAmount, setTradeAmount] = useState<number>(1);
-	const [targetPlayerId, setTargetPlayerId] = useState<number | null>(null);
+	const [playerGiveResources, setPlayerGiveResources] = useState<Resources>(createEmptyTradeResources);
+	const [playerReceiveResources, setPlayerReceiveResources] = useState<Resources>(createEmptyTradeResources);
+	const [bankGiveResources, setBankGiveResources] = useState<Resources>(createEmptyTradeResources);
+	const [bankReceiveResources, setBankReceiveResources] = useState<Resources>(createEmptyTradeResources);
 	const [showTradePopup, setShowTradePopup] = useState<boolean>(false);
+	const [activeTradeRequest, setActiveTradeRequest] = useState<GameEventDTO | null>(null);
+	const [activeOutgoingTradeRequest, setActiveOutgoingTradeRequest] = useState<GameEventDTO | null>(null);
+	const [activeOutgoingTradeResponses, setActiveOutgoingTradeResponses] = useState<Record<number, TradeResponseStatus>>({});
 	const [chatMessage, setChatMessage] = useState<string>("");
 	const [winnerPlayerName, setWinnerPlayerName] = useState<string | null>(null);
 	const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
@@ -92,6 +111,7 @@ export default function Gameboard() {
 	const [isDevCardPlayMode, setIsDevCardPlayMode] = useState<boolean>(false);
 	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
 	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
+	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const ports = Array.isArray(state.ports) ? state.ports : [];
 
@@ -193,6 +213,9 @@ export default function Gameboard() {
 					const serverChatMessages = Array.isArray(gameDto?.chatMessages)
 						? gameDto.chatMessages.filter((entry: unknown): entry is string => typeof entry === "string" && entry.trim().length > 0)
 						: [];
+					if (gameDto?.bankResources) {
+						setBankResourcesState(gameDto.bankResources as Resources);
+					}
 					setState((previousState) => ({
 						...previousState,
 						hexes: mappedHexes,
@@ -528,19 +551,30 @@ export default function Gameboard() {
 	const myPlayerIdRef = useRef<number | null>(null);
 	myPlayerIdRef.current = myPlayer?.id ?? null;
 	const isMyTurn = myPlayer !== null && myPlayer.id === state.currentPlayerId;
-	const otherPlayers = state.players.filter((player) => player.id !== state.currentPlayerId);
+	const activeTradeRequestSourcePlayer = activeTradeRequest
+		? state.players.find((player) => player.id === activeTradeRequest.sourcePlayerId) ?? null
+		: null;
+	const activeOutgoingTradeSourcePlayer = activeOutgoingTradeRequest
+		? state.players.find((player) => player.id === activeOutgoingTradeRequest.sourcePlayerId) ?? null
+		: null;
+	const activeOutgoingTradeResponseEntries = useMemo(
+		() => activeOutgoingTradeRequest
+			? state.players
+				.filter((player) => player.id !== activeOutgoingTradeRequest.sourcePlayerId)
+				.map((player) => ({
+					playerId: player.id,
+					playerName: player.name,
+					status: activeOutgoingTradeResponses[player.id] ?? "PENDING",
+				}))
+			: [],
+		[activeOutgoingTradeRequest, activeOutgoingTradeResponses, state.players]
+	);
 
 	useEffect(() => {
 		if (!isMyTurn || state.turnPhase !== "ACTION") {
 			setIsDevCardPlayMode(false);
 		}
 	}, [isMyTurn, state.turnPhase]);
-
-	useEffect(() => {
-		if (otherPlayers.length > 0 && !targetPlayerId) {
-			setTargetPlayerId(otherPlayers[0].id);
-		}
-	}, [otherPlayers, targetPlayerId]);
 
 	const leaderboardPlayers = useMemo(
 		() =>
@@ -1061,16 +1095,8 @@ export default function Gameboard() {
 					intersectionId: intersectionId,
 					hexId: hexId,
 				});
-				setState((prev) => ({
-					...prev,
-					players: prev.players.map((p) =>
-						p.id === myPlayer.id
-							? { ...p, settlementsOnCorners: [...p.settlementsOnCorners, { hexId, corner }] }
-							: p
-					),
-					
-			
-            }));
+				// The backend will deduct resources from the player and add them to the bank.
+				// The syncGameState will then update the player's resources and bank's resources.
 
 				setPlacementMode("road");
 				addToLog(`${myPlayer.name} placed a setup settlement. Place your attached road.`);
@@ -1099,7 +1125,9 @@ export default function Gameboard() {
 				hexId,
 				intersectionId: globalIntersectionId,
 			});
-		} catch {
+			// The backend will deduct resources from the player and add them to the bank.
+			// The syncGameState will then update the player's resources and bank's resources.
+		} catch { // eslint-disable-line no-empty
 			addToLog("Could not build settlement. Please try again.");
 			return;
 		}
@@ -1245,14 +1273,6 @@ export default function Gameboard() {
 			return;
 		}
 
-		if (typeof localPlayerId === "number" && event.sourcePlayerId === localPlayerId) {
-			return;
-		}
-
-		if (!event.giveResource || !event.receiveResource || typeof event.amount !== "number") {
-			return;
-		}
-
 		if (event.type === "BANK_TRADE") {
 			if (event.message) {
 				addToLog(event.message);
@@ -1261,13 +1281,103 @@ export default function Gameboard() {
 		}
 
 		if (event.type === "PLAYER_TRADE") {
-			if (typeof event.targetPlayerId !== "number") {
+			if (event.tradeAction === "REQUEST") {
+				if (typeof localPlayerId === "number" && event.sourcePlayerId === localPlayerId) {
+					setActiveOutgoingTradeRequest(event);
+					setActiveOutgoingTradeResponses((previous) => {
+						if (Object.keys(previous).length > 0) {
+							return previous;
+						}
+
+						return state.players
+							.filter((player) => player.id !== event.sourcePlayerId)
+							.reduce<Record<number, TradeResponseStatus>>((accumulator, player) => {
+								accumulator[player.id] = "PENDING";
+								return accumulator;
+							}, {});
+					});
+					return;
+				}
+
+				if (activeTradeRequest?.tradeRequestId && activeTradeRequest.tradeRequestId === event.tradeRequestId) {
+					return;
+				}
+
+				setActiveTradeRequest(event);
+
+				if (event.message) {
+					addToLog(event.message);
+				}
 				return;
+			}
+
+			if (event.tradeAction === "DENY") {
+				if (typeof localPlayerId === "number" && event.sourcePlayerId === localPlayerId && typeof event.targetPlayerId === "number") {
+					setActiveOutgoingTradeResponses((previous) => ({
+						...previous,
+						[event.targetPlayerId as number]: "DENIED",
+					}));
+				}
+
+				if (typeof localPlayerId === "number" && event.targetPlayerId === localPlayerId) {
+					setActiveTradeRequest(null);
+				}
+
+				if (event.message) {
+					addToLog(event.message);
+				}
+				return;
+			}
+
+			if (typeof localPlayerId === "number" && event.sourcePlayerId === localPlayerId && typeof event.targetPlayerId === "number") {
+				setActiveOutgoingTradeResponses((previous) => ({
+					...previous,
+					[event.targetPlayerId as number]: "ACCEPTED",
+				}));
+			}
+
+			if (typeof localPlayerId === "number" && event.targetPlayerId === localPlayerId) {
+				setActiveTradeRequest(null);
 			}
 
 			if (event.message) {
 				addToLog(event.message);
 			}
+			return;
+		}
+
+		if (
+			typeof localPlayerId === "number"
+			&& typeof event.sourcePlayerId === "number"
+			&& event.sourcePlayerId === localPlayerId
+			&& activeOutgoingTradeRequest?.tradeRequestId
+			&& event.tradeRequestId
+			&& activeOutgoingTradeRequest.tradeRequestId === event.tradeRequestId
+		) {
+			setActiveOutgoingTradeRequest(null);
+			setActiveOutgoingTradeResponses({});
+		}
+
+		if (
+			event.tradeAction !== "REQUEST"
+			&& event.tradeAction !== "ACCEPT"
+			&& event.tradeAction !== "DENY"
+		) {
+			setActiveTradeRequest((previous) => {
+				if (previous?.tradeRequestId && event.tradeRequestId && previous.tradeRequestId === event.tradeRequestId) {
+					return null;
+				}
+
+				if (
+					previous
+					&& previous.sourcePlayerId === event.sourcePlayerId
+					&& previous.targetPlayerId === event.targetPlayerId
+				) {
+					return null;
+				}
+
+				return previous;
+			});
 		}
 	};
 
@@ -1279,7 +1389,7 @@ export default function Gameboard() {
 		try {
 			await apiService.post(`/games/${activeGameId}/actions/roll-dice`, {});
 			addToLog("Dice rolled.");
-		} catch (error) {
+		} catch (error) { // The resource distribution and bank updates will be handled by the backend and reflected in the next syncGameState call.
 			const appError = error as Partial<ApplicationError>;
 			if (appError.status === 409) {
 				addToLog("Cannot roll dice: " + (appError.message || "Invalid turn phase"));
@@ -1289,124 +1399,36 @@ export default function Gameboard() {
 		}
 	};
 
-	void applyGameEvent;
+	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
+	applyGameEventRef.current = applyGameEvent;
 
-	/*
-	 * Previous WebSocket implementation kept for traceability.
-	 * Disabled because SockJS/STOMP WebSocket upgrades failed in the Vercel +
-	 * Google App Engine deployment. Game state and chat are now refreshed through
-	 * REST polling in the bootstrapBoard effect above.
-	 *
-	 * const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
-	 * applyGameEventRef.current = applyGameEvent;
-	 *
-	 * useEffect(() => {
-	 * 	if (!activeGameId) {
-	 * 		return;
-	 * 	}
-	 *
-	 * 	const client = new Client({
-	 * 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	 * 		webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`, null, { withCredentials: true } as any),
-	 * 		reconnectDelay: 5000,
-	 * 		heartbeatIncoming: 4000,
-	 * 		heartbeatOutgoing: 4000,
-	 * 		onWebSocketError: (event) => {
-	 * 			console.error("WebSocket connection failed. This is likely a CORS or server-side mapping issue:", event);
-	 * 		},
-	 * 		onStompError: (frame) => {
-	 * 			console.error("STOMP protocol error:", frame.headers.message);
-	 * 			console.error("Details:", frame.body);
-	 * 		},
-	 * 		onConnect: () => {
-	 * 			client.subscribe(`/topic/games/${activeGameId}/state`, (message) => {
-	 * 				try {
-	 * 					const gameDto = JSON.parse(message.body) as GameGetDTO;
-	 * 					if (!gameDto) {
-	 * 						return;
-	 * 					}
-	 *
-	 * 					setState((previousState) => ({
-	 * 						...previousState,
-	 * 						players: Array.isArray(gameDto.players)
-	 * 							? gameDto.players.map((serverPlayer: Parameters<typeof mapResourcesFromServer>[0], index) => {
-	 * 								const previousPlayer = previousState.players.find((p) => p.id === (serverPlayer as { id: number }).id);
-	 * 								const cachedRoads = Array.from(roadCacheRef.current.get((serverPlayer as { id: number }).id) ?? [])
-	 * 									.map((entry: unknown) => (typeof entry === "string" ? parseRoadEntry(entry as string) : entry))
-	 * 									.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null);
-	 *
-	 * 								const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
-	 * 									? serverPlayer.roadsOnEdges.map((entry: unknown) => (
-	 * 										typeof entry === "string"
-	 * 											? parseRoadEntry(entry)
-	 * 											: (entry && typeof (entry as { hexId?: number }).hexId === "number"
-	 * 												? { hexId: (entry as { hexId: number }).hexId, edge: (entry as { edge?: number; edgeIndex?: number }).edge ?? (entry as { edge?: number; edgeIndex?: number }).edgeIndex }
-	 * 												: null)
-	 * 									)).filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null)
-	 * 									: [];
-	 * 								const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
-	 * 								rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
-	 * 								return {
-	 * 									id: (serverPlayer as { id: number }).id,
-	 * 									name: (serverPlayer as { name: string }).name,
-	 * 									color: previousPlayer?.color ?? fallbackColorForPlayer(index),
-	 * 									resources: mapResourcesFromServer(serverPlayer as Parameters<typeof mapResourcesFromServer>[0]),
-	 * 									victoryPoints: serverPlayer.victoryPoints ?? 0,
-	 * 									developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
-	 * 									knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
-	 * 									developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
-	 * 									freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
-	 * 									hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
-	 * 									settlementsOnCorners: serverPlayer.settlementsOnCorners ?? previousPlayer?.settlementsOnCorners ?? [],
-	 * 									citiesOnCorners: serverPlayer.citiesOnCorners ?? previousPlayer?.citiesOnCorners ?? [],
-	 * 									roadsOnEdges: mergedRoads,
-	 * 								};
-	 * 							})
-	 * 							: previousState.players,
-	 * 						developmentDeck: gameDto.developmentDeck ?? previousState.developmentDeck,
-	 * 						currentPlayerId: typeof gameDto.currentTurnIndex === "number" && Array.isArray(gameDto.players) && gameDto.players.length > 0
-	 * 							? gameDto.players[((gameDto.currentTurnIndex % gameDto.players.length) + gameDto.players.length) % gameDto.players.length].id
-	 * 							: previousState.currentPlayerId,
-	 * 						robberHexId: gameDto.robberTileIndex ?? previousState.robberHexId,
-	 * 						turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
-	 * 						gamePhase: gameDto.gamePhase ?? previousState.gamePhase,
-	 * 						diceResult: gameDto.diceValue ?? previousState.diceResult,
-	 * 					}));
-	 * 				} catch {
-	 * 					// Ignore malformed state messages.
-	 * 				}
-	 * 			});
-	 *
-	 * 			client.subscribe(`/topic/games/${activeGameId}/events`, (message) => {
-	 * 				try {
-	 * 					applyGameEventRef.current(JSON.parse(message.body) as GameEventDTO);
-	 * 				} catch {
-	 * 					// Ignore malformed messages.
-	 * 				}
-	 * 			});
-	 *
-	 * 			client.subscribe(`/topic/games/${activeGameId}/chat`, (message) => {
-	 * 				try {
-	 * 					const payload = JSON.parse(message.body) as GameChatMessageDTO;
-	 * 					if (payload?.text) {
-	 * 						const logEntry = `${payload.playerName ?? "Player"}: ${payload.text}`;
-	 * 						syncedChatMessagesRef.current.add(logEntry);
-	 * 						addToLog(logEntry);
-	 * 					}
-	 * 				} catch {
-	 * 					// Ignore malformed messages.
-	 * 				}
-	 * 			});
-	 * 		},
-	 * 	});
-	 *
-	 * 	client.activate();
-	 *
-	 * 	return () => {
-	 * 		void client.deactivate();
-	 * 	};
-	 * }, [activeGameId]);
-	 */
+	useEffect(() => {
+		if (!activeGameId) {
+			return;
+		}
+
+		const client = new Client({
+			webSocketFactory: () => new SockJS(`${getApiDomain()}/ws`),
+			reconnectDelay: 4000,
+			heartbeatIncoming: 4000,
+			heartbeatOutgoing: 4000,
+			onConnect: () => {
+				client.subscribe(`/topic/games/${activeGameId}/events`, (message) => {
+					try {
+						applyGameEventRef.current(JSON.parse(message.body) as GameEventDTO);
+					} catch {
+						// Ignore malformed messages.
+					}
+				});
+			},
+		});
+
+		client.activate();
+
+		return () => {
+			void client.deactivate();
+		};
+	}, [activeGameId]);
 
 	const handleBankTrade = () => {
 		if (currentPlayerIndex < 0 || !currentPlayer || !activeGameId) {
@@ -1414,71 +1436,201 @@ export default function Gameboard() {
 			return;
 		}
 
-		if (giveResource === receiveResource) {
-			addToLog("Choose different resources for bank trade.");
+		const sumBundle = (bundle: Resources): number =>
+			resourceTypes.reduce((sum, resource) => sum + Math.max(0, bundle[resource] ?? 0), 0);
+
+		const formatBundle = (bundle: Resources): string => {
+			const parts = resourceTypes
+				.filter((resource) => (bundle[resource] ?? 0) > 0)
+				.map((resource) => `${bundle[resource]} ${resource}`);
+			return parts.length > 0 ? parts.join(" + ") : "nothing";
+		};
+
+		const giveTotal = sumBundle(bankGiveResources);
+		const receiveTotal = sumBundle(bankReceiveResources);
+		if (giveTotal <= 0 || receiveTotal <= 0) {
+			addToLog("Select at least one resource to give and receive for bank trade.");
 			return;
 		}
 
-		const ratio = 4;
-		const giveAmount = ratio * tradeAmount;
-
-		if (currentPlayer.resources[giveResource] < giveAmount) {
-			addToLog(`${currentPlayer.name} needs ${giveAmount} ${giveResource} for this trade.`);
+		if (giveTotal !== receiveTotal * 4) {
+			addToLog("Bank trade ratio is 4:1. Total give must equal 4x total receive.");
 			return;
 		}
 
-		const logMessage = `${currentPlayer.name} trades ${giveAmount} ${giveResource} for ${tradeAmount} ${receiveResource} with bank.`;
+		const lacksGiveResource = resourceTypes.find((resource) => (bankGiveResources[resource] ?? 0) > (currentPlayer.resources[resource] ?? 0));
+		if (lacksGiveResource) {
+			addToLog(`${currentPlayer.name} lacks ${lacksGiveResource} for this bank trade.`);
+			return;
+		}
+
+		const lacksBankResource = resourceTypes.find((resource) => (bankReceiveResources[resource] ?? 0) > (bankResourcesState[resource] ?? 0));
+		if (lacksBankResource) {
+			addToLog(`Bank lacks ${lacksBankResource} for this trade.`);
+			return;
+		}
+
+		const logMessage = `${currentPlayer.name} trades ${formatBundle(bankGiveResources)} for ${formatBundle(bankReceiveResources)} with bank.`;
 		addToLog(logMessage);
 		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
 			type: "BANK_TRADE",
 			sourcePlayerId: currentPlayer.id,
-			giveResource,
-			receiveResource,
-			amount: tradeAmount,
+			giveResources: bankGiveResources,
+			receiveResources: bankReceiveResources,
+			amount: receiveTotal,
 			message: logMessage,
 		});
 	};
 
 	const handlePlayerTrade = () => {
-		if (currentPlayerIndex < 0 || !currentPlayer || !targetPlayerId || !activeGameId) {
-			addToLog("Select a trade partner first.");
+		if (currentPlayerIndex < 0 || !currentPlayer || !activeGameId) {
+			addToLog("No active player for trading.");
+			return;
+		}
+		const tradeRequestId = createTradeRequestId();
+
+		const sumBundle = (bundle: Resources): number =>
+			resourceTypes.reduce((sum, resource) => sum + Math.max(0, bundle[resource] ?? 0), 0);
+
+		const formatBundle = (bundle: Resources): string => {
+			const parts = resourceTypes
+				.filter((resource) => (bundle[resource] ?? 0) > 0)
+				.map((resource) => `${bundle[resource]} ${resource}`);
+			return parts.length > 0 ? parts.join(" + ") : "nothing";
+		};
+
+		if (sumBundle(playerGiveResources) <= 0 || sumBundle(playerReceiveResources) <= 0) {
+			addToLog("Select at least one resource on each side for player trade.");
 			return;
 		}
 
-		if (giveResource === receiveResource) {
-			addToLog("Choose different resources for player trade.");
+		const missingFromCurrentPlayer = resourceTypes.find((resource) => (playerGiveResources[resource] ?? 0) > (currentPlayer.resources[resource] ?? 0));
+		if (missingFromCurrentPlayer) {
+			addToLog(`${currentPlayer.name} lacks ${missingFromCurrentPlayer} for this trade.`);
 			return;
 		}
 
-		const targetIndex = state.players.findIndex((player) => player.id === targetPlayerId);
-		if (targetIndex < 0) {
+		const pendingResponses = state.players
+			.filter((player) => player.id !== currentPlayer.id)
+			.reduce<Record<number, TradeResponseStatus>>((accumulator, player) => {
+				accumulator[player.id] = "PENDING";
+				return accumulator;
+			}, {});
+
+		const tradeRequest: GameEventDTO = {
+			type: "PLAYER_TRADE",
+			sourcePlayerId: currentPlayer.id,
+			tradeAction: "REQUEST",
+			tradeRequestId,
+			giveResources: playerGiveResources,
+			receiveResources: playerReceiveResources,
+			message: `${currentPlayer.name} requested ${formatBundle(playerGiveResources)} for ${formatBundle(playerReceiveResources)} from all players.`,
+		};
+		const logMessage = tradeRequest.message ?? `${currentPlayer.name} requested a trade from all players.`;
+		addToLog(logMessage);
+		setActiveOutgoingTradeRequest(tradeRequest);
+		setActiveOutgoingTradeResponses(pendingResponses);
+		setShowTradePopup(false);
+		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+			type: "PLAYER_TRADE",
+			sourcePlayerId: currentPlayer.id,
+			tradeAction: "REQUEST",
+			tradeRequestId,
+			giveResources: playerGiveResources,
+			receiveResources: playerReceiveResources,
+			message: logMessage,
+		}).catch(() => {
+			setActiveOutgoingTradeRequest(null);
+			setActiveOutgoingTradeResponses({});
+			addToLog("Could not send trade request. Please try again.");
+		});
+	};
+
+	const handleFinalizePlayerTrade = async (targetPlayerId: number) => {
+		if (!myPlayer || !activeOutgoingTradeRequest || !activeGameId) {
+			return;
+		}
+
+		if (activeOutgoingTradeResponses[targetPlayerId] !== "ACCEPTED") {
+			addToLog("Select a player who accepted the trade request.");
+			return;
+		}
+
+		const targetPlayer = state.players.find((player) => player.id === targetPlayerId);
+		if (!targetPlayer) {
 			addToLog("Selected trade partner was not found.");
 			return;
 		}
 
-		const targetPlayer = state.players[targetIndex];
+		const logMessage = `${myPlayer.name} finalized the trade with ${targetPlayer.name}.`;
+		try {
+			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+				type: "PLAYER_TRADE",
+				sourcePlayerId: myPlayer.id,
+				targetPlayerId,
+				giveResources: activeOutgoingTradeRequest.giveResources,
+				receiveResources: activeOutgoingTradeRequest.receiveResources,
+				message: logMessage,
+			});
+			setActiveOutgoingTradeRequest(null);
+			setActiveOutgoingTradeResponses({});
+			addToLog(logMessage);
+		} catch {
+			addToLog("Could not complete the trade.");
+		}
+	};
 
-		if (currentPlayer.resources[giveResource] < tradeAmount) {
-			addToLog(`${currentPlayer.name} lacks ${giveResource}.`);
+	const handleAcceptTradeRequest = async () => {
+		if (!activeGameId || !myPlayer || !activeTradeRequest) {
 			return;
 		}
 
-		if (targetPlayer.resources[receiveResource] < tradeAmount) {
-			addToLog(`${targetPlayer.name} lacks ${receiveResource}.`);
+		const logMessage = `${myPlayer.name} accepted the trade request.`;
+		try {
+			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+				type: "PLAYER_TRADE",
+				sourcePlayerId: activeTradeRequest.sourcePlayerId,
+				targetPlayerId: myPlayer.id,
+				tradeAction: "ACCEPT",
+				tradeRequestId: activeTradeRequest.tradeRequestId,
+				giveResources: activeTradeRequest.giveResources,
+				receiveResources: activeTradeRequest.receiveResources,
+				message: logMessage,
+			});
+			setActiveTradeRequest(null);
+			addToLog(logMessage);
+		} catch {
+			addToLog("Could not accept the trade request.");
+		}
+	};
+
+	const handleDenyTradeRequest = async () => {
+		if (!activeTradeRequest) {
 			return;
 		}
 
-		const logMessage = `${currentPlayer.name} trades ${tradeAmount} ${giveResource} with ${targetPlayer.name} for ${receiveResource}.`;
-		addToLog(logMessage);
-		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-			type: "PLAYER_TRADE",
-			sourcePlayerId: currentPlayer.id,
-			targetPlayerId,
-			giveResource,
-			receiveResource,
-			amount: tradeAmount,
-			message: logMessage,
-		});
+		if (!myPlayer || !activeGameId) {
+			setActiveTradeRequest(null);
+			return;
+		}
+
+		const logMessage = `${myPlayer.name} denied the trade request.`;
+		try {
+			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+				type: "PLAYER_TRADE",
+				sourcePlayerId: activeTradeRequest.sourcePlayerId,
+				targetPlayerId: myPlayer.id,
+				tradeAction: "DENY",
+				tradeRequestId: activeTradeRequest.tradeRequestId,
+				giveResources: activeTradeRequest.giveResources,
+				receiveResources: activeTradeRequest.receiveResources,
+				message: logMessage,
+			});
+			setActiveTradeRequest(null);
+			addToLog(logMessage);
+		} catch {
+			addToLog("Could not deny the trade request.");
+		}
 	};
 
 	const getValidStealTargetsForHex = (hexId: number): Player[] => {
@@ -1582,7 +1734,7 @@ export default function Gameboard() {
 				type: "DEVELOPMENT_CARD_BOUGHT",
 				sourcePlayerId: myPlayer.id,
 			});
-			addToLog(`${myPlayer.name} buys a development card.`);
+			addToLog(`${myPlayer.name} buys a development card.`); // The backend will deduct resources from the player and add them to the bank. // The syncGameState will then update the player's resources and bank's resources.
 		} catch {
 			addToLog("Could not buy development card. Please try again.");
 		}
@@ -1748,15 +1900,8 @@ export default function Gameboard() {
 					playerId: myPlayer.id,
 					edgeId,
 				});
-
-				setState((prev) => ({
-					...prev,
-					players: prev.players.map((p) =>
-						p.id === myPlayer.id
-							? { ...p, roadsOnEdges: [...p.roadsOnEdges, { hexId, edge }] }
-							: p
-					),
-				}));
+				// The backend will deduct resources from the player and add them to the bank.
+				// The syncGameState will then update the player's resources and bank's resources.
 				
 				setPlacementMode(null);
 				addToLog(`${myPlayer.name} placed a setup road.`);
@@ -1938,20 +2083,63 @@ export default function Gameboard() {
 			<TradeModal
 				isVisible={showTradePopup}
 				tradeMode={tradeMode}
-				giveResource={giveResource}
-				receiveResource={receiveResource}
-				tradeAmount={tradeAmount}
-				targetPlayerId={targetPlayerId}
-				otherPlayers={otherPlayers}
+				playerGiveResources={playerGiveResources}
+				playerReceiveResources={playerReceiveResources}
+				bankGiveResources={bankGiveResources}
+				bankReceiveResources={bankReceiveResources}
+				bankResources={bankResourcesState}
 				currentPlayer={currentPlayer}
 				onClose={() => setShowTradePopup(false)}
 				onSetTradeMode={setTradeMode}
-				onSetGiveResource={setGiveResource}
-				onSetReceiveResource={setReceiveResource}
-				onSetTradeAmount={setTradeAmount}
-				onSetTargetPlayerId={setTargetPlayerId}
+				onAdjustPlayerGiveResource={(resource, delta) => {
+					setPlayerGiveResources((previous) => ({
+						...previous,
+						[resource]: Math.max(0, (previous[resource] ?? 0) + delta),
+					}));
+				}}
+				onAdjustPlayerReceiveResource={(resource, delta) => {
+					setPlayerReceiveResources((previous) => ({
+						...previous,
+						[resource]: Math.max(0, (previous[resource] ?? 0) + delta),
+					}));
+				}}
+				onAdjustBankGiveResource={(resource, delta) => {
+					setBankGiveResources((previous) => ({
+						...previous,
+						[resource]: Math.max(0, (previous[resource] ?? 0) + delta),
+					}));
+				}}
+				onAdjustBankReceiveResource={(resource, delta) => {
+					setBankReceiveResources((previous) => ({
+						...previous,
+						[resource]: Math.max(0, (previous[resource] ?? 0) + delta),
+					}));
+				}}
 				onBankTrade={handleBankTrade}
 				onPlayerTrade={handlePlayerTrade}
+			/>
+
+			<TradeRequestSummaryPopup
+				isVisible={activeOutgoingTradeRequest !== null && activeOutgoingTradeRequest.sourcePlayerId === currentPlayer?.id}
+				tradeRequest={activeOutgoingTradeRequest}
+				currentPlayer={myPlayer}
+				sourcePlayer={activeOutgoingTradeSourcePlayer}
+				responses={activeOutgoingTradeResponseEntries}
+				onFinalizeTrade={handleFinalizePlayerTrade}
+				onClose={() => {
+					setActiveOutgoingTradeRequest(null);
+					setActiveOutgoingTradeResponses({});
+				}}
+			/>
+
+			<TradeRequestPopup
+				isVisible={activeTradeRequest !== null}
+				tradeRequest={activeTradeRequest}
+				currentPlayer={myPlayer}
+				sourcePlayer={activeTradeRequestSourcePlayer}
+				onAccept={handleAcceptTradeRequest}
+				onDeny={handleDenyTradeRequest}
+				onClose={() => setActiveTradeRequest(null)}
 			/>
 
 			{showDicePopup && dicePopupValue !== null ? (
@@ -2080,7 +2268,7 @@ export default function Gameboard() {
 							{resourceTypes.map((resource) => (
 								<div key={`bank-${resource}`} className={styles.bankResourceCell} style={{ backgroundColor: bankResourceColorByType[resource] }}>
 									<span className={styles.bankResourceIcon}>{resourceEmojiByType[resource]}</span>
-									<span className={styles.bankResourceValue}>{bankResources[resource]}</span>
+									<span className={styles.bankResourceValue}>{bankResourcesState[resource]}</span>
 								</div>
 							))}
 						</div>
