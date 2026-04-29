@@ -1547,7 +1547,7 @@ export default function Gameboard() {
 	};
 
 	const handleFinalizePlayerTrade = async (targetPlayerId: number) => {
-		if (!currentPlayer || !activeOutgoingTradeRequest || !activeGameId) {
+		if (!myPlayer || !activeOutgoingTradeRequest || !activeGameId) {
 			return;
 		}
 
@@ -1562,11 +1562,11 @@ export default function Gameboard() {
 			return;
 		}
 
-		const logMessage = `${currentPlayer.name} finalized the trade with ${targetPlayer.name}.`;
+		const logMessage = `${myPlayer.name} finalized the trade with ${targetPlayer.name}.`;
 		try {
 			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
 				type: "PLAYER_TRADE",
-				sourcePlayerId: currentPlayer.id,
+				sourcePlayerId: myPlayer.id,
 				targetPlayerId,
 				giveResources: activeOutgoingTradeRequest.giveResources,
 				receiveResources: activeOutgoingTradeRequest.receiveResources,
@@ -1581,16 +1581,16 @@ export default function Gameboard() {
 	};
 
 	const handleAcceptTradeRequest = async () => {
-		if (!activeGameId || !currentPlayer || !activeTradeRequest) {
+		if (!activeGameId || !myPlayer || !activeTradeRequest) {
 			return;
 		}
 
-		const logMessage = `${currentPlayer.name} accepted the trade request.`;
+		const logMessage = `${myPlayer.name} accepted the trade request.`;
 		try {
 			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
 				type: "PLAYER_TRADE",
 				sourcePlayerId: activeTradeRequest.sourcePlayerId,
-				targetPlayerId: currentPlayer.id,
+				targetPlayerId: myPlayer.id,
 				tradeAction: "ACCEPT",
 				tradeRequestId: activeTradeRequest.tradeRequestId,
 				giveResources: activeTradeRequest.giveResources,
@@ -1609,17 +1609,17 @@ export default function Gameboard() {
 			return;
 		}
 
-		if (!currentPlayer || !activeGameId) {
+		if (!myPlayer || !activeGameId) {
 			setActiveTradeRequest(null);
 			return;
 		}
 
-		const logMessage = `${currentPlayer.name} denied the trade request.`;
+		const logMessage = `${myPlayer.name} denied the trade request.`;
 		try {
 			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
 				type: "PLAYER_TRADE",
 				sourcePlayerId: activeTradeRequest.sourcePlayerId,
-				targetPlayerId: currentPlayer.id,
+				targetPlayerId: myPlayer.id,
 				tradeAction: "DENY",
 				tradeRequestId: activeTradeRequest.tradeRequestId,
 				giveResources: activeTradeRequest.giveResources,
@@ -2122,7 +2122,7 @@ export default function Gameboard() {
 			<TradeRequestSummaryPopup
 				isVisible={activeOutgoingTradeRequest !== null && activeOutgoingTradeRequest.sourcePlayerId === currentPlayer?.id}
 				tradeRequest={activeOutgoingTradeRequest}
-				currentPlayer={currentPlayer}
+				currentPlayer={myPlayer}
 				sourcePlayer={activeOutgoingTradeSourcePlayer}
 				responses={activeOutgoingTradeResponseEntries}
 				onFinalizeTrade={handleFinalizePlayerTrade}
@@ -2135,7 +2135,7 @@ export default function Gameboard() {
 			<TradeRequestPopup
 				isVisible={activeTradeRequest !== null}
 				tradeRequest={activeTradeRequest}
-				currentPlayer={currentPlayer}
+				currentPlayer={myPlayer}
 				sourcePlayer={activeTradeRequestSourcePlayer}
 				onAccept={handleAcceptTradeRequest}
 				onDeny={handleDenyTradeRequest}
