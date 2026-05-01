@@ -1,7 +1,24 @@
-import { getCanonicalRoadEndpoints } from "./geometry";
+import { getCanonicalRoadEndpoints, createCanonicalCornerKey } from "./geometry";
 import { HexTile, Player } from "./types";
 
-export function computeLongestRoadLength(player: Player, hexById: Map<number, HexTile>): number {
+export function computeLongestRoadLength(
+	player: Player,
+	hexById: Map<number, HexTile>,
+	allPlayers: Player[]
+): number {
+	const opponentSettlements = new Set<string>();
+	allPlayers.forEach((p) => {
+		if (p.id === player.id) return;
+		p.settlementsOnCorners.forEach((s) => {
+			const hex = hexById.get(s.hexId);
+			if (hex) opponentSettlements.add(createCanonicalCornerKey(hex, s.corner));
+		});
+		p.citiesOnCorners.forEach((c) => {
+			const hex = hexById.get(c.hexId);
+			if (hex) opponentSettlements.add(createCanonicalCornerKey(hex, c.corner));
+		});
+	});
+
 	const uniqueEdges = new Map<string, [string, string]>();
 
 	player.roadsOnEdges.forEach((road) => {
@@ -47,7 +64,12 @@ export function computeLongestRoadLength(player: Player, hexById: Map<number, He
 			usedEdge[edgeIndex] = true;
 			const [from, to] = edges[edgeIndex];
 			const nextNode = node === from ? to : from;
-			best = Math.max(best, 1 + dfs(nextNode));
+
+			if (opponentSettlements.has(nextNode)) {
+				best = Math.max(best, 1);
+			} else {
+				best = Math.max(best, 1 + dfs(nextNode));
+			}
 			usedEdge[edgeIndex] = false;
 		}
 

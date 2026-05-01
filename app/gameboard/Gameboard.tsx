@@ -705,7 +705,7 @@ export default function Gameboard() {
 	const longestRoadLengthByPlayerId = useMemo(() => {
 		const lengths = new Map<number, number>();
 		state.players.forEach((player) => {
-			lengths.set(player.id, computeLongestRoadLength(player, hexById));
+			lengths.set(player.id, computeLongestRoadLength(player, hexById, state.players));
 		});
 		return lengths;
 	}, [state.players, hexById]);
