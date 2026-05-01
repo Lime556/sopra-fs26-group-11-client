@@ -15,6 +15,8 @@ import { BoardColumn } from "./components/BoardColumn";
 import { EndGameOverlay } from "./components/EndGameOverlay";
 import { TradeModal } from "./components/TradeModal";
 import { TradeRequestPopup } from "./components/TradeRequestPopup";
+import { MonopolyResourceSelectorPopup } from "./components/MonopolyResourceSelectorPopup";
+import { YearOfPlentyResourceSelectorPopup } from "./components/YearOfPlentyResourceSelectorPopup";
 import { TradeRequestSummaryPopup } from "./components/TradeRequestSummaryPopup";
 import {
 	bankResourceColorByType,
@@ -106,6 +108,8 @@ export default function Gameboard() {
 	const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
 	const [showDicePopup, setShowDicePopup] = useState<boolean>(false);
 	const [dicePopupValue, setDicePopupValue] = useState<number | null>(null);
+	const [showMonopolyResourceSelector, setShowMonopolyResourceSelector] = useState<boolean>(false);
+	const [showYearOfPlentyResourceSelector, setShowYearOfPlentyResourceSelector] = useState<boolean>(false);
 	const [activeGameId, setActiveGameId] = useState<number | null>(null);
 	const [placementMode, setPlacementMode] = useState<"road" | "settlement" | "city" | "knight" | null>(null);
 	const [isDevCardPlayMode, setIsDevCardPlayMode] = useState<boolean>(false);
@@ -252,6 +256,7 @@ export default function Gameboard() {
 										developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
 										freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
 										hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
+										hasLargestArmy: serverPlayer.hasLargestArmy ?? false,
 										settlementsOnCorners: serverPlayer.settlementsOnCorners ?? previousPlayer?.settlementsOnCorners ?? [],
 										citiesOnCorners: serverPlayer.citiesOnCorners ?? previousPlayer?.citiesOnCorners ?? [],
 										roadsOnEdges: mergedRoads,
@@ -1472,6 +1477,7 @@ export default function Gameboard() {
 
 		const logMessage = `${currentPlayer.name} trades ${formatBundle(bankGiveResources)} for ${formatBundle(bankReceiveResources)} with bank.`;
 		addToLog(logMessage);
+		setShowTradePopup(false);
 		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
 			type: "BANK_TRADE",
 			sourcePlayerId: currentPlayer.id,
@@ -1712,6 +1718,58 @@ export default function Gameboard() {
 		setPlacementMode(null);
 	};
 
+	const handleMonopolyResourceSelected = async (resource: ResourceType | null) => {
+		setShowMonopolyResourceSelector(false); // Close the popup
+
+		if (!resource) {
+			addToLog("Monopoly: Resource selection cancelled.");
+			return;
+		}
+
+		if (!isMyTurn || !activeGameId || !myPlayer) {
+			// This should ideally not happen if the popup is only shown when it's my turn and game is active
+			addToLog("Cannot play Monopoly now.");
+			return;
+		}
+
+		try {
+			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+				type: "DEVELOPMENT_CARD_PLAYED_MONOPOLY",
+				sourcePlayerId: myPlayer.id,
+				giveResource: resource, // The backend expects 'giveResource' for the resource to claim
+			});
+			addToLog(`${myPlayer.name} played Monopoly (${resource}).`);
+		} catch {
+			addToLog("Could not play Monopoly card. Please try again.");
+		}
+	};
+
+	const handleYearOfPlentySelected = async (resources: ResourceType[] | null) => {
+		setShowYearOfPlentyResourceSelector(false);
+
+		if (!resources || resources.length !== 2) {
+			if (!resources) addToLog("Year of Plenty: Selection cancelled.");
+			return;
+		}
+
+		if (!isMyTurn || !activeGameId || !myPlayer) {
+			addToLog("Cannot play Year of Plenty now.");
+			return;
+		}
+
+		try {
+			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+				type: "DEVELOPMENT_CARD_PLAYED_YEAR_OF_PLENTY",
+				sourcePlayerId: myPlayer.id,
+				giveResource: resources[0],
+				secondResource: resources[1],
+			});
+			addToLog(`${myPlayer.name} played Year of Plenty.`);
+		} catch {
+			addToLog("Could not play Year of Plenty card. Please try again.");
+		}
+	};
+
 	const handleBuyDevelopmentCard = async () => {
 		setPlacementMode(null);
 		setIsDevCardPlayMode(false);
@@ -1775,41 +1833,14 @@ export default function Gameboard() {
 			}
 
 			if (card === "year_of_plenty") {
-				const first = parseResourceInput(window.prompt("Year of Plenty: first resource (wood/brick/wool/wheat/ore)", "wood"));
-				if (!first) {
-					addToLog("Invalid first resource.");
-					return;
-				}
-
-				const second = parseResourceInput(window.prompt("Year of Plenty: second resource (wood/brick/wool/wheat/ore)", "brick"));
-				if (!second) {
-					addToLog("Invalid second resource.");
-					return;
-				}
-
-				await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-					type: "DEVELOPMENT_CARD_PLAYED_YEAR_OF_PLENTY",
-					sourcePlayerId: myPlayer.id,
-					giveResource: first,
-					secondResource: second,
-				});
-				addToLog(`${myPlayer.name} played Year of Plenty.`);
+				setShowYearOfPlentyResourceSelector(true);
+				setIsDevCardPlayMode(false);
 				return;
 			}
 
 			if (card === "monopoly") {
-				const resource = parseResourceInput(window.prompt("Monopoly: resource to claim (wood/brick/wool/wheat/ore)", "wheat"));
-				if (!resource) {
-					addToLog("Invalid resource for Monopoly.");
-					return;
-				}
-
-				await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-					type: "DEVELOPMENT_CARD_PLAYED_MONOPOLY",
-					sourcePlayerId: myPlayer.id,
-					giveResource: resource,
-				});
-				addToLog(`${myPlayer.name} played Monopoly (${resource}).`);
+				setShowMonopolyResourceSelector(true);
+				setIsDevCardPlayMode(false); // Exit dev card play mode once popup is shown
 				return;
 			}
 
@@ -2052,6 +2083,11 @@ export default function Gameboard() {
 			return;
 		}
 
+		setPlayerGiveResources(createEmptyTradeResources());
+		setPlayerReceiveResources(createEmptyTradeResources());
+		setBankGiveResources(createEmptyTradeResources());
+		setBankReceiveResources(createEmptyTradeResources());
+
 		setShowTradePopup(true);
 		addToLog(`${currentPlayer.name} opened trade requests.`);
 	};
@@ -2151,6 +2187,17 @@ export default function Gameboard() {
 				</div>
 			) : null}
 
+			<MonopolyResourceSelectorPopup
+				isVisible={showMonopolyResourceSelector}
+				onSelectResource={handleMonopolyResourceSelected}
+				onClose={() => setShowMonopolyResourceSelector(false)}
+			/>
+
+			<YearOfPlentyResourceSelectorPopup
+				isVisible={showYearOfPlentyResourceSelector}
+				onConfirm={handleYearOfPlentySelected}
+			/>
+
 			<div className={styles.layout}>
 				<BoardColumn
 					boardStatus={boardStatus}
@@ -2208,7 +2255,7 @@ export default function Gameboard() {
 										<span className={styles.playerStatIcon}>🎴</span>
 										<span className={styles.playerStatValue}>{player.developmentCards.length}</span>
 									</div>
-									<div className={`${styles.playerStatCell} ${styles.knightCell}`}>
+											<div className={`${styles.playerStatCell} ${styles.knightCell} ${player.hasLargestArmy ? styles.roadCellHolder : ""}`}>
 										<span className={styles.playerStatIcon}>⚔️</span>
 										<span className={styles.playerStatValue}>{player.knightsPlayed}</span>
 									</div>

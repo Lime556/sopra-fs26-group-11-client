@@ -27,6 +27,7 @@ export interface Player {
 	developmentCardVictoryPoints: number;
 	freeRoadBuildsRemaining: number;
 	hasLongestRoad?: boolean;
+	hasLargestArmy?: boolean;
 	settlementsOnCorners: { hexId: number; corner: number }[];
 	citiesOnCorners: { hexId: number; corner: number }[];
 	roadsOnEdges: { hexId: number; edge: number }[];

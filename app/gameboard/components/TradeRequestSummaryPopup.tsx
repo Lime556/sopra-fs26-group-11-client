@@ -30,7 +30,7 @@ const formatResources = (bundle: Partial<Resources> | undefined): string => {
 	const normalized = { ...createZeroResources(), ...(bundle ?? {}) };
 	const parts = resourceTypes
 		.filter((resource) => (normalized[resource] ?? 0) > 0)
-		.map((resource) => `${resourceEmojiByType[resource]} ${normalized[resource]} ${resource}`);
+		.map((resource) => `${resourceEmojiByType[resource]} ${normalized[resource]} ${resource === "wool" ? "sheep" : resource}`);
 	return parts.length > 0 ? parts.join(" + ") : "nothing";
 };
 

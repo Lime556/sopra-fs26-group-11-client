@@ -57,7 +57,7 @@ export function TradeModal({
 	const formatBundle = (bundle: Resources): string => {
 		const parts = resourceTypes
 			.filter((resource) => (bundle[resource] ?? 0) > 0)
-			.map((resource) => `${bundle[resource]} ${resource}`);
+			.map((resource) => `${bundle[resource]} ${resource === "wool" ? "sheep" : resource}`);
 		return parts.length > 0 ? parts.join(" + ") : "nothing";
 	};
 
@@ -98,7 +98,7 @@ export function TradeModal({
 							<div key={`${title}-${resource}`} className={styles.tradeAdjustRow}>
 								<div className={styles.tradeAdjustResource}>
 									<span className={styles.tradeResourceIcon}>{resourceIconByType[resource]}</span>
-									<span className={styles.tradeAmountResourceName}>{resource}</span>
+									<span className={styles.tradeAmountResourceName}>{resource === "wool" ? "sheep" : resource}</span>
 								</div>
 								<div className={styles.tradeAdjustStepper}>
 									<button
