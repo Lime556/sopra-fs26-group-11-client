@@ -13,10 +13,6 @@ import SettingsTab from "@/components/lobby/SettingsTab";
 import HistoryTab from "@/components/lobby/HistoryTab";
 import FriendsTab, { FriendRequest } from "@/components/lobby/FriendsTab";
 import FriendDetailTab, { Friend } from "@/components/lobby/FriendDetailTab";
-import {
-  mockFriendRequests,
-  mockFriends,
-} from "@/components/lobby/mockData";
 
 import styles from "@/styles/lobby.module.css";
 
@@ -41,6 +37,30 @@ export default function Lobby() {
   interface LobbyJoinDTO {
     lobbyId: number;
     password?: string;
+  }
+
+  interface FriendGetDTO {
+    id: number;
+    username: string;
+    userStatus?: string;
+    winRate?: number;
+  }
+  
+  interface FriendRequestGetDTO {
+    id: number;
+    senderId: number;
+    senderUsername?: string;
+    receiverId: number;
+    receiverUsername?: string;
+    status: string;
+    createdAt?: string;
+  }
+
+  interface UserGetDTO {
+    id: number;
+    username: string;
+    userStatus?: string;
+    winRate?: number;
   }
 
   const apiService = useApi();
@@ -82,10 +102,10 @@ export default function Lobby() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   
-  // Mock friend requests
-  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>(mockFriendRequests);
+  // friend requests
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [lobbies, setLobbies] = useState<LobbyItem[]>([]);
-  const [friends] = useState<Friend[]>(mockFriends);
+  const [friends, setFriends] = useState<Friend[]>([]);
 
   const mapLobbyFromApi = useCallback((lobby: LobbyGetDTO): LobbyItem => ({
     id: lobby.id,
@@ -94,6 +114,46 @@ export default function Lobby() {
     currentPlayers: lobby.currentParticipants,
     privateLobby: lobby.privateLobby,
   }), []);
+
+  const mapFriendFromApi = useCallback((friend: FriendGetDTO): Friend => ({
+    id: friend.id,
+    name: friend.username,
+    userId: `USR-${friend.id}`,
+    status: friend.userStatus ?? "UNKNOWN",
+    gamesPlayed: 0,
+    wins: 0,
+    gameHistory: [],
+  }), []);
+  
+  const mapFriendRequestFromApi = useCallback((request: FriendRequestGetDTO): FriendRequest => ({
+    id: request.id,
+    userId: `USR-${request.senderId}`,
+    username: request.senderUsername ?? `User ${request.senderId}`,
+    message: "sent you a friend request.",
+    date: request.createdAt
+      ? new Date(request.createdAt).toLocaleString()
+      : "",
+  }), []);
+
+  const parseUserIdFromSearch = (value: string): number | null => {
+    const trimmed = value.trim();
+  
+    if (!trimmed) {
+      return null;
+    }
+  
+    const normalized = trimmed.toUpperCase().startsWith("USR-")
+      ? trimmed.slice(4)
+      : trimmed;
+  
+    const parsed = Number(normalized);
+  
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return null;
+    }
+  
+    return parsed;
+  };
 
   const loadLobbies = useCallback(async () => {
     try {
@@ -108,9 +168,31 @@ export default function Lobby() {
     }
   }, [apiService, mapLobbyFromApi]);
 
+  const loadFriendsAndRequests = useCallback(async () => {
+    try {
+      const [friendsData, requestsData] = await Promise.all([
+        apiService.get<FriendGetDTO[]>("/friends"),
+        apiService.get<FriendRequestGetDTO[]>("/friend-requests"),
+      ]);
+  
+      setFriends(friendsData.map(mapFriendFromApi));
+      setFriendRequests(requestsData.map(mapFriendRequestFromApi));
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Failed to load friends:", error.message);
+      } else {
+        console.error("Failed to load friends:", error);
+      }
+    }
+  }, [apiService, mapFriendFromApi, mapFriendRequestFromApi]);
+
   useEffect(() => {
     void loadLobbies();
   }, [loadLobbies]);
+
+  useEffect(() => {
+    void loadFriendsAndRequests();
+  }, [loadFriendsAndRequests]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -269,31 +351,112 @@ export default function Lobby() {
     }
   };
 
-  const handleSearchFriend = () => {
-    // Mock search results (in real app, this would be API call)
-    if (searchQuery.trim()) {
+  const handleSearchFriend = async () => {
+    const searchedUserId = parseUserIdFromSearch(searchQuery);
+  
+    if (searchedUserId === null) {
+      setSearchResults([]);
+      setStatusMessage("Please enter a valid player ID, for example USR-2 or 2.");
+      return;
+    }
+  
+    try {
+      const users = await apiService.get<UserGetDTO[]>("/users");
+      const foundUser = users.find((user) => user.id === searchedUserId);
+  
+      if (!foundUser) {
+        setSearchResults([]);
+        setStatusMessage("No user found with that player ID.");
+        return;
+      }
+  
+      if (userId && Number(userId) === foundUser.id) {
+        setSearchResults([]);
+        setStatusMessage("You cannot add yourself as a friend.");
+        return;
+      }
+  
       setSearchResults([
-        { id: "USR-12345", username: "NewPlayer" },
-        { id: "USR-67890", username: "VeteranGamer" }
+        {
+          id: `USR-${foundUser.id}`,
+          username: foundUser.username,
+        },
       ]);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Friend search failed:", error.message);
+      }
+  
+      setSearchResults([]);
+      setStatusMessage("Could not search for users.");
     }
   };
 
-  const handleSendFriendRequest = (userId: string, username: string) => {
-    alert(`Friend request sent to ${username} (${userId})`);
-    setShowFriendSearch(false);
-    setSearchQuery("");
-    setSearchResults([]);
+  const handleSendFriendRequest = async (targetUserId: string, username: string) => {
+    const receiverId = parseUserIdFromSearch(targetUserId);
+  
+    if (receiverId === null) {
+      setStatusMessage("Invalid user ID.");
+      return;
+    }
+  
+    try {
+      await apiService.post<FriendRequestGetDTO>("/friend-requests", {
+        receiverId,
+      });
+  
+      setStatusMessage(`Friend request sent to ${username}.`);
+      setShowFriendSearch(false);
+      setSearchQuery("");
+      setSearchResults([]);
+  
+      await loadFriendsAndRequests();
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Sending friend request failed:", error.message);
+        setStatusMessage(error.message);
+      } else {
+        setStatusMessage("Could not send friend request.");
+      }
+    }
   };
 
-  const handleAcceptRequest = (requestId: number) => {
-    setFriendRequests(friendRequests.filter(req => req.id !== requestId));
-    alert("Friend request accepted!");
+  const handleAcceptRequest = async (requestId: number) => {
+    try {
+      await apiService.put<FriendRequestGetDTO>(
+        `/friend-requests/${requestId}/accept`,
+        {},
+      );
+  
+      setStatusMessage("Friend request accepted.");
+      await loadFriendsAndRequests();
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Accepting friend request failed:", error.message);
+        setStatusMessage(error.message);
+      } else {
+        setStatusMessage("Could not accept friend request.");
+      }
+    }
   };
-
-  const handleDenyRequest = (requestId: number) => {
-    setFriendRequests(friendRequests.filter(req => req.id !== requestId));
-    alert("Friend request denied!");
+  
+  const handleDenyRequest = async (requestId: number) => {
+    try {
+      await apiService.put<FriendRequestGetDTO>(
+        `/friend-requests/${requestId}/decline`,
+        {},
+      );
+  
+      setStatusMessage("Friend request declined.");
+      await loadFriendsAndRequests();
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error("Declining friend request failed:", error.message);
+        setStatusMessage(error.message);
+      } else {
+        setStatusMessage("Could not decline friend request.");
+      }
+    }
   };
 
   const handleCreateLobby = () => {
