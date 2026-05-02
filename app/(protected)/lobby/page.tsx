@@ -68,9 +68,8 @@ export default function Lobby() {
 
   const { value: token, clear: clearToken } = useLocalStorage<string>("token", "", { storage: "session" });
   const { value: userId, clear: clearUserId } = useLocalStorage<string>("userId", "", { storage: "session" });
-  const { clear: clearUsername } = useLocalStorage<string>("username", "", { storage: "session" });
+  const { value: username, clear: clearUsername } = useLocalStorage<string>("username", "Player", { storage: "session" });
 
-  const username = "Player";
   const email = "";
   const playerId = userId ? `USR-${userId}` : "";
 
@@ -459,6 +458,11 @@ export default function Lobby() {
     }
   };
 
+  const handleRefreshFriends = async () => {
+    await loadFriendsAndRequests();
+    setStatusMessage("Friends and requests refreshed.");
+  };
+
   const handleCreateLobby = () => {
     setShowCreateLobbyModal(true);
     setNewLobbyName("");
@@ -551,6 +555,7 @@ export default function Lobby() {
               onAcceptRequest={handleAcceptRequest}
               onDenyRequest={handleDenyRequest}
               onSelectFriend={setSelectedFriend}
+              onRefreshFriends={handleRefreshFriends}
             />
           );
 
@@ -570,7 +575,11 @@ export default function Lobby() {
           );
 
           case "history":
-            return <HistoryTab data={selectedFriend || friends[0]} />;
+            if (selectedFriend || friends[0]) {
+              return <HistoryTab data={selectedFriend || friends[0]} />;
+            }
+          
+            return <p className={styles.emptyState}>No friend history available yet.</p>;
 
       default:
         return null;
