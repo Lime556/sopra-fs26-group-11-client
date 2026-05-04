@@ -216,17 +216,20 @@ export function BoardColumn({
 
 					{isKnightPlacementMode && isMyTurn
 						? state.hexes.map((hex) => {
-							const { cx, cy } = toPixel(hex);
-							return (
-								<polygon
-									key={`select-knight-${hex.id}`}
-									className={styles.knightHexSelectable}
-									points={calculateHexPoints(cx, cy)}
-									onClick={() => handleKnightHexClick(hex.id)}
-								/>
-							);
-						})
-						: null}
+								if (hex.id === state.robberHexId) {
+									return null;
+								}
+								const { cx, cy } = toPixel(hex);
+								return (
+									<polygon
+										key={`select-knight-${hex.id}`}
+										className={styles.knightHexSelectable}
+										points={calculateHexPoints(cx, cy)}
+										onClick={() => handleKnightHexClick(hex.id)}
+									/>
+								);
+							})
+							: null}
 
 					{isRoadPlacementMode && isMyTurn
 						? state.hexes.flatMap((hex) =>

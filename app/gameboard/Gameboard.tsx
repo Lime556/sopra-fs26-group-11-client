@@ -90,6 +90,12 @@ export default function Gameboard() {
 	const [activeGameId, setActiveGameId] = useState<number | null>(null);
 	const [placementMode, setPlacementMode] = useState<"road" | "settlement" | "city" | "knight" | null>(null);
 	const [isDevCardPlayMode, setIsDevCardPlayMode] = useState<boolean>(false);
+	const [robberTargetModalOpen, setRobberTargetModalOpen] = useState<boolean>(false);
+	const [pendingRobberHexId, setPendingRobberHexId] = useState<number | null>(null);
+	const [robberTargets, setRobberTargets] = useState<Player[]>([]);
+	const [selectedRobberTargetId, setSelectedRobberTargetId] = useState<number | null>(null);
+	const [discardModalOpen, setDiscardModalOpen] = useState<boolean>(false);
+	const [discardChoices, setDiscardChoices] = useState<Record<string, number>>({});
 	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
 	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1276,9 +1282,38 @@ export default function Gameboard() {
 			return;
 		}
 
+		const currentPlayer = state.players.find(p => p.id === state.currentPlayerId);
+		if (!currentPlayer) return;
+
+		const totalResources = currentPlayer.resources.wood + currentPlayer.resources.brick + 
+			currentPlayer.resources.wool + currentPlayer.resources.wheat + currentPlayer.resources.ore;
+
+		if (totalResources > 7) {
+			setDiscardModalOpen(true);
+			return;
+		}
+
 		try {
 			await apiService.post(`/games/${activeGameId}/actions/roll-dice`, {});
 			addToLog("Dice rolled.");
+		} catch (error) {
+			const appError = error as Partial<ApplicationError>;
+			if (appError.status === 409) {
+				addToLog("Cannot roll dice: " + (appError.message || "Invalid turn phase"));
+			} else {
+				addToLog("Failed to roll dice.");
+			}
+		}
+	};
+
+	const handleConfirmDiscard = async () => {
+		if (!activeGameId) return;
+
+		try {
+			await apiService.post(`/games/${activeGameId}/actions/roll-dice`, { discardResources: discardChoices });
+			addToLog("Dice rolled and resources discarded.");
+			setDiscardModalOpen(false);
+			setDiscardChoices({});
 		} catch (error) {
 			const appError = error as Partial<ApplicationError>;
 			if (appError.status === 409) {
@@ -1482,18 +1517,49 @@ export default function Gameboard() {
 	};
 
 	const getValidStealTargetsForHex = (hexId: number): Player[] => {
-		// Official Catan rules: can only steal from players with settlements/cities on hex corners adjacent to robber
+		// Official Catan rules: can only steal from players with settlements/cities on hex corners adjacent to the robber's hex.
+		// A hex has 6 corners, and each corner can be shared by up to 3 hexes
+		// We need to check if a player has buildings on ANY corner of this hex
+		
+		const robberHex = state.hexes.find((hex) => hex.id === hexId);
+		if (!robberHex) {
+			return [];
+		}
+
+		// Get all canonical corner keys for the robber hex
+		const robberCornerKeys = new Set<string>();
+		for (let corner = 0; corner < 6; corner++) {
+			const key = createCanonicalCornerKey(robberHex, corner);
+			robberCornerKeys.add(key);
+		}
+
 		return state.players.filter((player) => {
-			// Check if player has settlements on this hex
-			const settlementsOnHex = player.settlementsOnCorners?.filter((settlement) => settlement.hexId === hexId);
-			if (settlementsOnHex && settlementsOnHex.length > 0) {
-				return true;
+			// Check settlements
+			if (player.settlementsOnCorners) {
+				for (const settlement of player.settlementsOnCorners) {
+					// Find the hex for this settlement to get canonical key
+					const settlementHex = state.hexes.find((hex) => hex.id === settlement.hexId);
+					if (settlementHex) {
+						const key = createCanonicalCornerKey(settlementHex, settlement.corner);
+						if (robberCornerKeys.has(key)) {
+							return true;
+						}
+					}
+				}
 			}
 
-			// Check if player has cities on this hex
-			const citiesOnHex = player.citiesOnCorners?.filter((city) => city.hexId === hexId);
-			if (citiesOnHex && citiesOnHex.length > 0) {
-				return true;
+			// Check cities
+			if (player.citiesOnCorners) {
+				for (const city of player.citiesOnCorners) {
+					// Find the hex for this city to get canonical key
+					const cityHex = state.hexes.find((hex) => hex.id === city.hexId);
+					if (cityHex) {
+						const key = createCanonicalCornerKey(cityHex, city.corner);
+						if (robberCornerKeys.has(key)) {
+							return true;
+						}
+					}
+				}
 			}
 
 			return false;
@@ -1505,59 +1571,51 @@ export default function Gameboard() {
 			return;
 		}
 
-		const validTargets = getValidStealTargetsForHex(hexId);
-		const otherValidTargets = validTargets.filter((player) => player.id !== myPlayer.id);
-
-		let parsedTarget: number | null = null;
-
-		if (otherValidTargets.length === 0) {
-			addToLog("No other players have settlements or cities on hex " + hexId + ". No steal target selected.");
-		} else if (otherValidTargets.length === 1) {
-			parsedTarget = otherValidTargets[0].id;
-			addToLog("Only one valid target: " + otherValidTargets[0].name);
-		} else {
-			const targetsList = otherValidTargets.map((player) => player.id + " (" + player.name + ")").join(", ");
-			const targetInput = window.prompt(
-				"Knight: select target player id to steal from. Valid targets: " + targetsList + " (leave empty for none)",
-				String(otherValidTargets[0]?.id ?? "")
-			);
-
-			if (targetInput === null) {
-				return;
-			}
-
-			if (targetInput.trim().length > 0) {
-				parsedTarget = Number(targetInput.trim());
-				if (!Number.isInteger(parsedTarget)) {
-					addToLog("Invalid target player id.");
-					return;
-				}
-
-				if (!otherValidTargets.some((player) => player.id === parsedTarget)) {
-					addToLog("Selected player is not a valid target (must have settlement/city on hex " + hexId + ").");
-					return;
-				}
-			}
+		if (hexId === state.robberHexId) {
+			addToLog("The robber is already on this tile. Pick a different hex.");
+			return;
 		}
 
-		if (!activeGameId) {
+		const validTargets = getValidStealTargetsForHex(hexId).filter((player) => player.id !== myPlayer.id);
+		setPendingRobberHexId(hexId);
+		setRobberTargets(validTargets);
+		setSelectedRobberTargetId(validTargets.length === 1 ? validTargets[0].id : null);
+		setRobberTargetModalOpen(true);
+	};
+
+	const handleConfirmRobberMove = async () => {
+		if (!isMyTurn || !myPlayer || !activeGameId || pendingRobberHexId === null) {
 			return;
+		}
+
+		const targetPlayer = robberTargets.find((player) => player.id === (selectedRobberTargetId ?? -1));
+		const eventPayload: GameEventDTO = {
+			type: "DEVELOPMENT_CARD_PLAYED_KNIGHT",
+			sourcePlayerId: myPlayer.id,
+			hexId: pendingRobberHexId,
+		};
+
+		if (selectedRobberTargetId !== null) {
+			eventPayload.targetPlayerId = selectedRobberTargetId;
 		}
 
 		try {
-			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-				type: "DEVELOPMENT_CARD_PLAYED_KNIGHT",
-				sourcePlayerId: myPlayer.id,
-				hexId,
-				targetPlayerId: parsedTarget ?? undefined,
-			});
-			addToLog(`${myPlayer.name} played Knight.`);
+			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, eventPayload);
+			if (targetPlayer) {
+				addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId} and stole from ${targetPlayer.name}.`);
+			} else {
+				addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId}.`);
+			}
 		} catch {
-			addToLog("Could not play development card. Please try again.");
+			addToLog("Could not move the robber. Please try again.");
 			return;
+		} finally {
+			setRobberTargetModalOpen(false);
+			setPendingRobberHexId(null);
+			setRobberTargets([]);
+			setSelectedRobberTargetId(null);
+			setPlacementMode(null);
 		}
-
-		setPlacementMode(null);
 	};
 
 	const handleBuyDevelopmentCard = async () => {
@@ -1963,6 +2021,135 @@ export default function Gameboard() {
 				</div>
 			) : null}
 
+			{robberTargetModalOpen && pendingRobberHexId !== null ? (
+				<div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-label="Robber target selection">
+					<div className={styles.robberModal}>
+						<div className={styles.modalHeader}>
+							<div>
+								<h2 className={styles.modalTitle}>Move the Robber</h2>
+								<p className={styles.modalText}>
+									Place the robber on hex {pendingRobberHexId}.
+								</p>
+							</div>
+							<button type="button" className={styles.modalCloseButton} onClick={() => {
+								setRobberTargetModalOpen(false);
+								setPendingRobberHexId(null);
+								setRobberTargets([]);
+								setSelectedRobberTargetId(null);
+								setPlacementMode(null);
+							}} aria-label="Cancel robber move">×</button>
+						</div>
+						<div className={styles.modalBody}>
+							{robberTargets.length > 0 ? (
+								<>
+									<p className={styles.modalText}>
+										Select a player to steal from:
+									</p>
+									<div className={styles.robberTargetList}>
+										{robberTargets.map((player) => (
+											<button
+												key={player.id}
+												type="button"
+												className={`${styles.robberTargetButton} ${selectedRobberTargetId === player.id ? styles.robberTargetButtonActive : ""}`}
+												onClick={() => setSelectedRobberTargetId(player.id)}
+											>
+												{player.name}
+											</button>
+										))}
+										<button
+												type="button"
+												className={`${styles.robberTargetButton} ${selectedRobberTargetId === null ? styles.robberTargetButtonActive : ""}`}
+												onClick={() => setSelectedRobberTargetId(null)}
+											>
+												Move without stealing
+											</button>
+									</div>
+								</>
+							) : (
+								<p className={styles.modalText}>
+									No opponent has a settlement or city adjacent to this hex. You may still move the robber.
+								</p>
+							)}
+						</div>
+						<div className={styles.modalActions}>
+							<button type="button" className={styles.modalActionButtonPrimary} onClick={handleConfirmRobberMove}>
+								Confirm Move
+							</button>
+						</div>
+					</div>
+				</div>
+			) : null}
+
+			{discardModalOpen ? (
+				<div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-label="Resource discard selection">
+					<div className={styles.robberModal}>
+						<div className={styles.modalHeader}>
+							<div>
+								<h2 className={styles.modalTitle}>Discard Resources</h2>
+								<p className={styles.modalText}>
+									You rolled a 7! Discard half of your resources.
+								</p>
+							</div>
+						</div>
+						<div className={styles.modalBody}>
+							{(() => {
+								const currentPlayer = state.players.find(p => p.id === state.currentPlayerId);
+								if (!currentPlayer) return null;
+								const totalResources = currentPlayer.resources.wood + currentPlayer.resources.brick + 
+									currentPlayer.resources.wool + currentPlayer.resources.wheat + currentPlayer.resources.ore;
+								const toDiscard = Math.floor(totalResources / 2);
+								const currentDiscarded = Object.values(discardChoices).reduce((sum, val) => sum + val, 0);
+								return (
+									<>
+										<p className={styles.modalText}>
+											You have {totalResources} resources. Selected: {currentDiscarded}/{toDiscard}
+										</p>
+										<div className={styles.discardResources}>
+											{resourceTypes.map((resourceType) => {
+												const count = currentPlayer.resources[resourceType];
+												const selected = discardChoices[resourceType] || 0;
+												return (
+													<div key={resourceType} className={styles.discardResourceRow}>
+														<span className={styles.resourceEmoji}>{resourceEmojiByType[resourceType]}</span>
+														<span className={styles.resourceName}>{resourceType.charAt(0).toUpperCase() + resourceType.slice(1)}</span>
+														<span>({count})</span>
+														<button type="button" onClick={() => {
+															if (selected > 0) {
+																setDiscardChoices(prev => ({ ...prev, [resourceType]: selected - 1 }));
+															}
+														}} disabled={selected <= 0}>-</button>
+														<span>{selected}</span>
+														<button type="button" onClick={() => {
+															if (currentDiscarded < toDiscard && selected < count) {
+																setDiscardChoices(prev => ({ ...prev, [resourceType]: selected + 1 }));
+															}
+														}} disabled={currentDiscarded >= toDiscard || selected >= count}>+</button>
+													</div>
+												);
+											})}
+										</div>
+									</>
+								);
+							})()}
+						</div>
+						<div className={styles.modalActions}>
+							<button type="button" className={styles.modalActionButtonPrimary} onClick={handleConfirmDiscard} disabled={
+								(() => {
+									const currentPlayer = state.players.find(p => p.id === state.currentPlayerId);
+									if (!currentPlayer) return true;
+									const totalResources = currentPlayer.resources.wood + currentPlayer.resources.brick + 
+										currentPlayer.resources.wool + currentPlayer.resources.wheat + currentPlayer.resources.ore;
+									const toDiscard = Math.floor(totalResources / 2);
+									const currentDiscarded = Object.values(discardChoices).reduce((sum, val) => sum + val, 0);
+									return currentDiscarded !== toDiscard;
+								})()
+							}>
+								Confirm Discard
+							</button>
+						</div>
+					</div>
+				</div>
+			) : null}
 			<div className={styles.layout}>
 				<BoardColumn
 					boardStatus={boardStatus}
