@@ -8,12 +8,12 @@ export const hexSpacingX = hexSize * sqrt3;
 export const hexSpacingY = hexSize * 1.5;
 
 export const tileImageByType: Record<HexTile["type"], string> = {
-	wood: "/Wood.png",
-	brick: "/Brick.png",
-	wool: "/Sheep.png",
-	wheat: "/Wheat.png",
-	ore: "/Stone.png",
-	desert: "/Desert.png",
+	wood: "/tiles/Wood.png",
+	brick: "/tiles/Brick.png",
+	wool: "/tiles/Sheep.png",
+	wheat: "/tiles/Wheat.png",
+	ore: "/tiles/Stone.png",
+	desert: "/tiles/Desert.png",
 };
 
 export const resourceTypes: ResourceType[] = ["wood", "brick", "wool", "wheat", "ore"];

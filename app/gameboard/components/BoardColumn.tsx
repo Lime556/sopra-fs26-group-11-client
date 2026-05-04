@@ -1,6 +1,7 @@
 import { Castle, Home, Minus } from "lucide-react";
 import styles from "@/styles/gameboard.module.css";
 import { findDesertHexId, getPortColor, getPortIcon, getPortLabel } from "../mappers";
+import { useState } from "react";
 import { calculateHexPoints, calculatePortPosition, getCornerPoint, toPixel } from "../geometry";
 import { hexSize, tileImageByType } from "../constants";
 import { GameState, HexTile, PortVisual } from "../types";
@@ -42,6 +43,7 @@ interface BoardColumnProps {
 	handleBuildRoadAction: () => void;
 	handleBuildSettlementAction: () => void;
 	handleBuildCityAction: () => void;
+	cardDisplayNames?: Record<string, string>;
 	handleEndTurn: () => void;
 }
 
@@ -73,6 +75,7 @@ export function BoardColumn({
 	handleBuildRoadAction,
 	handleBuildSettlementAction,
 	handleBuildCityAction,
+	cardDisplayNames,
 	handleEndTurn,
 }: BoardColumnProps) {
 	const playableDevelopmentCards = developmentCards.filter((card) => card !== "victory_point");
@@ -406,13 +409,13 @@ export function BoardColumn({
 					<div className={styles.actionGrid}>
 						<button
 							type="button"
-							className={`${styles.actionSquareButton} ${styles.knightButton}`}
+							className={`${styles.actionSquareButton} ${!canUseActionPhase ? styles.buttonDisabled : styles.knightButton}`}
 							onClick={handleBuyDevelopmentCard}
 							disabled={!canUseActionPhase}
 						>
 							<span className={styles.actionEmoji}>🎴</span>
 							<span className={styles.actionLabel}>Buy Dev Card</span>
-							<span className={styles.roadCostOverlay} aria-hidden="true">
+							<span className={styles.devCardCostOverlay} aria-hidden="true">
 								<span className={styles.roadCostChip}>🐑</span>
 								<span className={styles.roadCostPlus}>+</span>
 								<span className={styles.roadCostChip}>🌾</span>
@@ -423,7 +426,7 @@ export function BoardColumn({
 
 						<button
 							type="button"
-							className={`${styles.actionSquareButton} ${styles.roadButton}`}
+							className={`${styles.actionSquareButton} ${!canUseRoadOrSettlement ? styles.buttonDisabled : styles.roadButton}`}
 							onClick={handleBuildRoadAction}
 							disabled={!canUseRoadOrSettlement}
 						>
@@ -440,7 +443,7 @@ export function BoardColumn({
 
 						<button
 							type="button"
-							className={`${styles.actionSquareButton} ${styles.settlementButton}`}
+							className={`${styles.actionSquareButton} ${!canUseRoadOrSettlement ? styles.buttonDisabled : styles.settlementButton}`}
 							onClick={handleBuildSettlementAction}
 							disabled={!canUseRoadOrSettlement}
 						>
@@ -463,7 +466,7 @@ export function BoardColumn({
 
 						<button
 							type="button"
-							className={`${styles.actionSquareButton} ${styles.cityButton}`}
+							className={`${styles.actionSquareButton} ${!canUseActionPhase ? styles.buttonDisabled : styles.cityButton}`}
 							onClick={handleBuildCityAction}
 							disabled={!canUseActionPhase}
 						>
@@ -488,7 +491,7 @@ export function BoardColumn({
 
 						<button
 							type="button"
-							className={`${styles.actionSquareButton} ${styles.devCardButton}`}
+							className={`${styles.actionSquareButton} ${(!canUseActionPhase || playableDevelopmentCards.length === 0) ? styles.buttonDisabled : styles.devCardButton}`}
 							onClick={handleToggleDevCardPlayMode}
 							disabled={!canUseActionPhase || playableDevelopmentCards.length === 0}
 						>
@@ -507,7 +510,16 @@ export function BoardColumn({
 										<button
 											type="button"
 											key={`action-dev-card-${card}-${index}`}
-											className={`${styles.devCardActionButton} ${playable ? styles.devCardActionButtonPlayable : styles.devCardActionButtonLocked}`}
+											className={playable ? styles.devCardActionButtonPlayable : styles.devCardActionButtonLocked}
+											style={{
+												background: 'none',
+												border: 'none',
+												padding: 0,
+												boxShadow: 'none',
+												width: '8%',
+												height: 'auto',
+												cursor: playable ? 'pointer' : 'default'
+											}}
 											onClick={() => {
 												if (playable) {
 													handlePlayDevelopmentCard(card);
@@ -515,8 +527,11 @@ export function BoardColumn({
 											}}
 											disabled={!playable}
 										>
-											<span className={styles.devCardActionLabel}>{card === "victory_point" ? "Victory Point" : card.replaceAll("_", " ")}</span>
-											{card === "victory_point" ? <span className={styles.devCardActionHint}>Applied automatically</span> : null}
+											<img
+												src={`/developmentcards/${card}.png`}
+												alt={card.replaceAll("_", " ")}
+												style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'contain' }}
+											/>
 										</button>
 									);
 								})}

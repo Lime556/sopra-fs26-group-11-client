@@ -107,12 +107,19 @@ reason).
 
 ---
 
-## Contributions Week 4 - [Begin Date] to [End Date]
+## Contributions Week 4 - [22.04.] to [06.05.]
 
 | **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
-| **[@githubUser1]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **Gresay** | 27.04.   | https://github.com/Lime556/sopra-fs26-group-11-client/pull/100/changes/78d0f318f59069f8016569405accbbab47be3857 | Ressources from Bank get deducted and added it they are spent and rolled.(#266) | The ressources are limmited and need to be trackable. |
+|           | 27.04.  | https://github.com/Lime556/sopra-fs26-group-11-server/pull/267/changes/f693724a102948241012db654b4b84c0fbe48677 | (#266) Backend Bank interactions | Bank ressources need to be presistant |
+|                    | 28.04.   | https://github.com/Lime556/sopra-fs26-group-11-client/pull/100/changes/bac1e71eb4aa989fe808cddffbe0593367922775 |(#129,#164 ,#130) Trading interfaces updated | Trading is a relevant part of the strategy and an interface is needed to do the acton |
+| | 28.04.| https://github.com/Lime556/sopra-fs26-group-11-server/pull/267/changes/e612a556c6a54dd6be0fce7487a75796037d6fc1 | ( #129 , #164 , #130) Trading logic and validation | TRading needs to be verified so everithing goes fairly accordintg to the rules.|
+|             | 29.04,    | https://github.com/Lime556/sopra-fs26-group-11-client/pull/100/changes/13189368e5c55db11b75091255cf8280d6ef2ae4| (#131,#132,#133, #35) Player trading fixxed| Trading needs to be functional |
+| | 29.04 | https://github.com/Lime556/sopra-fs26-group-11-server/pull/267/changes/65c3251394de748f929b7ed36becf3cbbe4227fe | (#131, #132, #133) Player tradig backend controll and synchroisation. | HAvin synchronized TRading makes shure noone is abusing the system.| 
+|              |30.04.  | https://github.com/Lime556/sopra-fs26-group-11-client/pull/100/changes/7683400d4cbf7743a5498c7276265620bd778bb9 | #64, Bank trade interface | when players dont want to trade somtimes the bank is the only option. |
+| | 30.04. | https://github.com/Lime556/sopra-fs26-group-11-server/pull/267/changes/1951c77c3b05abbd914344908220307684acafa9 | ( #171 #172 #173 #174 #175 #177) TRading with the bank backend.| having everything backend synchronised saves from abuse.|
+|            | 31.04.  | https://github.com/Lime556/sopra-fs26-group-11-client/pull/100/changes/5f3d8f891ca00803af2e64ef8b0fd7b356c30b21 | (#38) Interfaceds for Year of plenty and Monopoly dev cards. | HAving an interface is needed to effecifly using the cards.|
 | **[@githubUser2]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
