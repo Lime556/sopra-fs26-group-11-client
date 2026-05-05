@@ -574,7 +574,7 @@
   padding: 0.45rem 0.55rem;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.1rem;
   cursor: pointer;
   background: rgba(255, 255, 255, 0.94);
@@ -601,6 +601,14 @@
   font-size: 0.74rem;
   font-weight: 800;
   text-transform: capitalize;
+  text-align: center;
+}
+
+.devCardActionImage {
+  width: 48px;
+  height: 64px;
+  object-fit: contain;
+  margin-bottom: 4px;
 }
 
 .devCardActionHint {
@@ -662,6 +670,8 @@
 
 .knightButton {
   background: #b73631;
+  position: relative;
+  overflow: hidden;
 }
 
 .roadButton {
@@ -727,60 +737,551 @@
   background: #2d60c2;
 }
 
-.tradeRow {
+.tradeBanner {
+  border: 2px solid #b08b3d;
+  border-radius: 10px;
+  background: #f8e6ae;
+  color: #6b4e1f;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.35;
+  padding: 0.5rem 0.65rem;
+  margin-bottom: 0.7rem;
+}
+
+.tradeModal {
+  width: min(440px, 92vw);
+    background: #dfd8c5;
+  border: 4px solid #705637;
+  border-radius: 14px;
+  box-shadow: 0 16px 34px rgba(10, 7, 4, 0.35);
+  padding: 0.9rem;
+}
+
+.tradeModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.tradeModalTitle {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1;
+  font-weight: 900;
+  color: #3f2e1f;
+}
+
+.tradeCloseButton {
+  border: 2px solid #7d2420;
+  border-radius: 8px;
+  background: #bb3c35;
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 800;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.tradeModeTabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.4rem;
-  margin-bottom: 0.45rem;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
 }
 
 .tradeModeButton {
   border: 2px solid rgba(85, 62, 35, 0.45);
-  border-radius: 8px;
-  background: #f6e7c2;
+  border-radius: 10px;
+  background: #d4c7ac;
   color: #4a3520;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 0.6rem;
   cursor: pointer;
+  transition: background-color 130ms ease, color 130ms ease, transform 130ms ease;
+}
+
+.tradeModeButton:hover {
+  transform: translateY(-1px);
 }
 
 .tradeModeButtonActive {
-  background: #d89a2f;
+  background: #bd7f2d;
   color: #fff;
 }
 
-.tradeGrid {
+.tradeContentStack {
   display: grid;
+  gap: 0.62rem;
+}
+
+.tradeInfoBanner {
+  border: 2px solid #b08b3d;
+  border-radius: 10px;
+  background: #f8e6ae;
+  color: #6b4e1f;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.5rem 0.65rem;
+}
+
+.tradeSection {
+  border: 2px solid rgba(88, 65, 39, 0.3);
+  border-radius: 11px;
+  background: #f4ecda;
+  padding: 0.55rem;
+}
+
+.tradeSectionTitle {
+  margin: 0 0 0.45rem 0;
+  font-size: 0.83rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 900;
+  color: #6a502e;
+}
+
+.tradeResourceGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.tradeResourceCard {
+  border: 2px solid rgba(76, 56, 32, 0.28);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f4e8cb 0%, #e3cea0 100%);
+  color: #48311b;
+  min-height: 3.2rem;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.1rem;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.tradeResourceCardWood {
+  background: linear-gradient(180deg, #8edc7d 0%, #4bbf63 100%);
+  color: #14351f;
+}
+
+.tradeResourceCardBrick {
+  background: linear-gradient(180deg, #f59d8f 0%, #cf4538 100%);
+  color: #4d1110;
+}
+
+.tradeResourceCardWool {
+  background: linear-gradient(180deg, #dbf08d 0%, #a8d426 100%);
+  color: #2d3f07;
+}
+
+.tradeResourceCardWheat {
+  background: linear-gradient(180deg, #f5e078 0%, #d9a91f 100%);
+  color: #4a3407;
+}
+
+.tradeResourceCardOre {
+  background: linear-gradient(180deg, #91a0b7 0%, #506172 100%);
+  color: #17212d;
+}
+
+.tradeResourceCard:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 12px rgba(17, 11, 6, 0.18);
+}
+
+.tradeResourceCard:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tradeResourceCardActive {
+  border-color: #8d5b16;
+  box-shadow: 0 0 0 2px rgba(198, 139, 46, 0.32) inset;
+  filter: saturate(1.08) brightness(1.02);
+}
+
+.tradeResourceIcon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.tradeResourceLabel {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.tradeControlsRow {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.tradeAmountGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.tradeAmountCard {
+  border: 2px solid rgba(76, 56, 32, 0.3);
+  border-radius: 10px;
+  background: #f6edda;
+  padding: 0.5rem;
+  display: grid;
+  gap: 0.38rem;
+}
+
+.tradeAdjustList {
+  display: grid;
+  gap: 0.34rem;
+}
+
+.tradeAdjustRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.tradeAdjustResource {
+  display: flex;
+  align-items: center;
+  gap: 0.32rem;
+  min-width: 0;
+}
+
+.tradeAmountTitle {
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #5f4423;
+}
+
+.tradeAmountResourceRow {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #49311b;
+}
+
+.tradeAmountResourceName {
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.tradeAdjustStepper {
+  border: 2px solid rgba(76, 56, 32, 0.26);
+  border-radius: 8px;
+  background: #fff6e3;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, auto);
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.14rem 0.2rem;
+}
+
+.tradeAdjustStepper button {
+  border: none;
+  border-radius: 6px;
+  background: #7b5938;
+  color: #fff;
+  width: 1.26rem;
+  height: 1.26rem;
+  line-height: 1;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tradeAdjustStepper button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tradeAdjustStepper span {
+  min-width: 1.35rem;
+  text-align: center;
+  color: #49311b;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.tradeAmountInput {
+  border: 2px solid rgba(78, 58, 32, 0.4);
+  border-radius: 10px;
+  background: #f7efdc;
+  color: #3b2a19;
+  padding: 0.48rem 0.52rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  width: 100%;
+}
+
+.tradeAmountHint {
+  font-size: 0.68rem;
+  color: #6f5738;
+  font-weight: 700;
+}
+
+.tradeStepper {
+  border: 2px solid rgba(76, 56, 32, 0.3);
+  border-radius: 10px;
+  background: #f6edda;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, auto);
+  align-items: center;
+  justify-content: center;
   gap: 0.4rem;
+  padding: 0.2rem 0.35rem;
+}
+
+.tradeStepper button {
+  border: none;
+  border-radius: 8px;
+  background: #785736;
+  color: #fff;
+  width: 1.7rem;
+  height: 1.7rem;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tradeStepper span {
+  min-width: 2rem;
+  text-align: center;
+  color: #49311b;
+  font-weight: 800;
+}
+
+.tradeSummaryText {
+  margin: 0;
+  border: 2px dashed rgba(100, 72, 36, 0.38);
+  border-radius: 9px;
+  background: #fff8e8;
+  color: #5f4423;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+  padding: 0.52rem;
 }
 
 .tradeSelect,
 .tradeInput {
   border: 2px solid rgba(78, 58, 32, 0.4);
-  border-radius: 8px;
+  border-radius: 10px;
   background: #f7efdc;
   color: #3b2a19;
-  padding: 0.35rem 0.45rem;
-  font-size: 0.75rem;
+  padding: 0.48rem 0.52rem;
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .tradeActionButton {
-  margin-top: 0.5rem;
+  margin-top: 0.1rem;
   width: 100%;
   border: none;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #d79d36, #b57a26);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #2a9950, #1f7b3f);
   color: #fff;
-  font-weight: 800;
-  font-size: 0.74rem;
-  padding: 0.5rem;
+  font-weight: 900;
+  font-size: 0.82rem;
+  padding: 0.62rem;
   cursor: pointer;
 }
 
 .tradeActionButton:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.tradeRequestModal {
+  width: min(460px, 92vw);
+  background: #dfd8c5;
+  border: 4px solid #705637;
+  border-radius: 14px;
+  box-shadow: 0 16px 34px rgba(10, 7, 4, 0.35);
+  padding: 0.9rem;
+}
+
+.tradeRequestSummaryModal {
+  width: min(520px, 92vw);
+  background: #dfd8c5;
+  border: 4px solid #705637;
+  border-radius: 14px;
+  box-shadow: 0 16px 34px rgba(10, 7, 4, 0.35);
+  padding: 0.9rem;
+}
+
+.tradeRequestHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+
+.tradeRequestMeta {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #5f4423;
+  margin-bottom: 0.55rem;
+}
+
+.tradeRequestBody {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.tradeRequestSection {
+  border: 2px solid rgba(88, 65, 39, 0.26);
+  border-radius: 11px;
+  background: #f7f0e0;
+  padding: 0.55rem;
+}
+
+.tradeRequestSectionTitle {
+  margin: 0 0 0.4rem 0;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6a502e;
+}
+
+.tradeRequestResourceList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.tradeRequestResourceChip {
+  border: 1px solid rgba(76, 56, 32, 0.22);
+  border-radius: 999px;
+  background: #fff8e8;
+  color: #4d381d;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.22rem 0.5rem;
+}
+
+.tradeRequestNote {
+  margin: 0;
+  border: 2px dashed rgba(100, 72, 36, 0.34);
+  border-radius: 10px;
+  background: #fff8ea;
+  color: #5d4424;
+  font-size: 0.77rem;
+  font-weight: 700;
+  line-height: 1.35;
+  padding: 0.55rem;
+}
+
+.tradeRequestActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.tradeResponseList {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.tradeResponseRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  border: 2px solid rgba(88, 65, 39, 0.24);
+  border-radius: 11px;
+  background: #f7f0e0;
+  padding: 0.55rem;
+}
+
+.tradeResponsePlayerName {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #4d381d;
+}
+
+.tradeResponseStatus {
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 900;
+  padding: 0.2rem 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #e8dec7;
+  color: #644923;
+}
+
+.tradeResponseStatus[data-status="ACCEPTED"] {
+  background: #d1ecd3;
+  color: #1f6b37;
+}
+
+.tradeResponseStatus[data-status="DENIED"] {
+  background: #f5d0ce;
+  color: #9f2f2b;
+}
+
+.tradeResponseActionButton {
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #2a9950, #1f7b3f);
+  color: #fff;
+  font-weight: 900;
+  font-size: 0.78rem;
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+}
+
+.tradeResponseActionButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tradeResponseEmptyState {
+  border: 2px dashed rgba(100, 72, 36, 0.34);
+  border-radius: 10px;
+  background: #fff8ea;
+  color: #5d4424;
+  font-size: 0.77rem;
+  font-weight: 700;
+  line-height: 1.35;
+  padding: 0.55rem;
+  margin-top: 0.55rem;
+  text-align: center;
+}
+
+.tradeDeclineButton {
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #9f3a35, #7f2723);
+  color: #fff;
+  font-weight: 900;
+  font-size: 0.82rem;
+  padding: 0.62rem;
+  cursor: pointer;
+}
+
+.tradeDeclineButton:hover {
+  background: #7f2723;
 }
 
 .modalOverlay {
@@ -800,12 +1301,10 @@
   justify-content: center;
   align-items: center;
   padding: 0 330px;
-
-  position: absolute;
-  width: 1108px;
-  height: 682.4px;
-  left: 23px;
-  top: 111px;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: 1100;
   pointer-events: none;
   background: rgba(0, 0, 0, 0.6);
@@ -847,160 +1346,6 @@
     opacity: 1;
     transform: translateY(0) scale(1);
   }
-}
-
-.robberModal {
-  width: min(560px, calc(100% - 3rem));
-  border-radius: 20px;
-  background: linear-gradient(180deg, #f8edda 0%, #e7d3a6 100%);
-  border: 3px solid #b37222;
-  box-shadow: 0 24px 40px rgba(15, 10, 5, 0.42);
-  padding: 1.2rem 1.3rem;
-}
-
-.modalHeader {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  align-items: flex-start;
-  margin-bottom: 1rem;
-}
-
-.modalTitle {
-  margin: 0;
-  font-size: 1.15rem;
-  letter-spacing: 0.05em;
-  color: #b37222;
-}
-
-.modalText {
-  margin: 0.45rem 0 0;
-  color: #56432a;
-  line-height: 1.5;
-  font-size: 0.95rem;
-}
-
-.modalCloseButton {
-  border: none;
-  background: transparent;
-  color: #4c341a;
-  font-size: 1.35rem;
-  font-weight: 700;
-  cursor: pointer;
-  line-height: 1;
-  padding: 0.25rem 0.45rem;
-}
-
-.modalBody {
-  display: grid;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.robberTargetList {
-  display: grid;
-  gap: 0.6rem;
-}
-
-.robberTargetButton {
-  width: 100%;
-  border: 2px solid rgba(78, 58, 32, 0.24);
-  border-radius: 12px;
-  background: #fff3d5;
-  color: #4d3823;
-  padding: 0.85rem 1rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
-}
-
-.robberTargetButton:hover,
-.robberTargetButtonActive {
-  background: #e3c58b;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 14px rgba(97, 71, 34, 0.18);
-}
-
-.modalActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-}
-
-.modalActionButton,
-.modalActionButtonPrimary {
-  min-width: 110px;
-  border: none;
-  border-radius: 12px;
-  padding: 0.85rem 1rem;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.modalActionButton {
-  background: #f0e0c1;
-  color: #5c4528;
-}
-
-.modalActionButtonPrimary {
-  background: #b37222;
-  color: #fff;
-}
-
-.modalActionButtonPrimary:hover{
-  background: #a96b20;
-}
-
-.discardResources {
-  display: grid;
-  gap: 0.6rem;
-}
-
-.discardResourceRow {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  background: #fff3d5;
-  border: 1px solid #b37222;
-  border-radius: 8px;
-}
-
-.resourceEmoji {
-  font-size: 1.2rem;
-}
-
-.resourceName {
-  flex: 1;
-  font-weight: 600;
-  color: #4d3823;
-}
-
-.tradeModal {
-  width: min(440px, 92vw);
-  background: #dfd8c5;
-  border: 4px solid #6f5a3a;
-  border-radius: 12px;
-  box-shadow: 0 14px 34px rgba(10, 7, 4, 0.35);
-  padding: 0.7rem;
-}
-
-.tradeModalHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.35rem;
-}
-
-.tradeCloseButton {
-  border: none;
-  border-radius: 8px;
-  background: #b7332d;
-  color: #fff;
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.35rem 0.6rem;
-  cursor: pointer;
 }
 
 .endGameOverlay {
@@ -1174,7 +1519,8 @@
 
 .roadCostOverlay,
 .settlementCostOverlay,
-.cityCostOverlay {
+.cityCostOverlay,
+.devCardCostOverlay {
   position: absolute;
   inset: 0;
   display: flex;
@@ -1212,6 +1558,10 @@
   opacity: 1;
 }
 
+.knightButton:hover .devCardCostOverlay {
+  opacity: 1;
+}
+
 .settlementButton:hover .settlementCostOverlay {
   opacity: 1;
 }
@@ -1222,7 +1572,8 @@
 
 .roadButton:disabled .roadCostOverlay,
 .settlementButton:disabled .settlementCostOverlay,
-.cityButton:disabled .cityCostOverlay {
+.cityButton:disabled .cityCostOverlay,
+.knightButton:disabled .devCardCostOverlay {
   display: none;
 }
 

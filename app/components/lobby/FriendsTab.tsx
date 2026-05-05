@@ -1,9 +1,10 @@
 "use client";
 
 import React from "react";
-import { Mail, Search, UserPlus, Check, X } from "lucide-react";
+import { Mail, Search, UserPlus, Check, X, RefreshCcw } from "lucide-react";
 import styles from "@/styles/lobby.module.css";
 import type { Friend } from "@/components/lobby/FriendDetailTab";
+
 
 export interface FriendRequest {
   id: number;
@@ -33,6 +34,7 @@ interface FriendsTabProps {
   onAcceptRequest: (requestId: number) => void;
   onDenyRequest: (requestId: number) => void;
   onSelectFriend: (friend: Friend) => void;
+  onRefreshFriends: () => void;
 }
 
 export default function FriendsTab({
@@ -50,12 +52,18 @@ export default function FriendsTab({
   onAcceptRequest,
   onDenyRequest,
   onSelectFriend,
+  onRefreshFriends,
 }: FriendsTabProps) {
   return (
     <div>
       <div className={styles.sectionHeader}>
         <h2 className={styles.sectionTitle}>Friends</h2>
         <div className={styles.headerActions}>
+          <button onClick={onRefreshFriends} className={styles.secondaryButton}>
+            <RefreshCcw size={18} />
+            Refresh
+          </button>
+
           <button
             onClick={onToggleFriendRequests}
             className={`${styles.secondaryButton} ${styles.badgeButton}`}

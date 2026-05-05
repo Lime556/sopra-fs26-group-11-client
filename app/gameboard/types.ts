@@ -27,6 +27,7 @@ export interface Player {
 	developmentCardVictoryPoints: number;
 	freeRoadBuildsRemaining: number;
 	hasLongestRoad?: boolean;
+	hasLargestArmy?: boolean;
 	settlementsOnCorners: { hexId: number; corner: number }[];
 	citiesOnCorners: { hexId: number; corner: number }[];
 	roadsOnEdges: { hexId: number; edge: number }[];
@@ -76,6 +77,7 @@ export interface BoatGetDTO {
 export interface GameGetDTO {
 	id: number;
 	board?: BoardGetDTO | null;
+	bankResources?: Resources | null;
 	currentTurnIndex?: number | null;
 	turnPhase?: string | null;
 	gamePhase?: string | null;
@@ -139,6 +141,12 @@ export interface GameEventDTO {
 	giveResource?: ResourceType;
 	receiveResource?: ResourceType;
 	amount?: number;
+	giveAmount?: number;
+	receiveAmount?: number;
+	giveResources?: Partial<Resources>;
+	receiveResources?: Partial<Resources>;
+	tradeAction?: "REQUEST" | "ACCEPT" | "DENY";
+	tradeRequestId?: string;
 	hexId?: number;
 	edge?: number;
 	intersectionId?: number;

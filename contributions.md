@@ -107,16 +107,25 @@ reason).
 
 ---
 
-## Contributions Week 4 - [Begin Date] to [End Date]
+## Contributions Week 4 - [22.04.] to [06.05.]
 
 | **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
-| **[@githubUser1]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **ayleenmr** | 22.04.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/55839d630130dc60ee070aa45b0698615bf0f2e1 | The road placement is now correct. | For the game to be fair and follow the rules, the roads need to be placed accordingly. |
 |                    | 28.04.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/212aef64a8ced035120d5d4be950eaf6eb761507 | Added styling for the settlement and city (#31) | The style of the buildings resembles the actual game pieces from the board game in order to make game play more fun. |
 |                    | 04.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/09d70bc4c8a299f8a444c8336ef94816f4873785 | Added robber functionality (#141 - #146) | I added the robber function in the backend. A player can now steal a resource by playing the knight card and rolling a 7 is discards resources correctly. This is essential for game play.|
 |                    | 04.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/f3c692caa173424f94b13e7a6d892800ee9bff86 | Added robber UI (#37) | I added the robber UI in the frontend. A player can now choose a player to steal a resource from by playing the knight card, and rolling a 7 leads to a overview where the user can choose resources to discard. This is important for playing the game.|
+| **Gresay** | 27.04.   | https://github.com/Lime556/sopra-fs26-group-11-client/pull/100/changes/78d0f318f59069f8016569405accbbab47be3857 | Ressources from Bank get deducted and added it they are spent and rolled.(#266) | The ressources are limmited and need to be trackable. |
+|           | 27.04.  | https://github.com/Lime556/sopra-fs26-group-11-server/pull/267/changes/f693724a102948241012db654b4b84c0fbe48677 | (#266) Backend Bank interactions | Bank ressources need to be presistant |
+|                    | 28.04.   | https://github.com/Lime556/sopra-fs26-group-11-client/pull/100/changes/bac1e71eb4aa989fe808cddffbe0593367922775 |(#129,#164 ,#130) Trading interfaces updated | Trading is a relevant part of the strategy and an interface is needed to do the acton |
+| | 28.04.| https://github.com/Lime556/sopra-fs26-group-11-server/pull/267/changes/e612a556c6a54dd6be0fce7487a75796037d6fc1 | ( #129 , #164 , #130) Trading logic and validation | TRading needs to be verified so everithing goes fairly accordintg to the rules.|
+|             | 29.04,    | https://github.com/Lime556/sopra-fs26-group-11-client/pull/100/changes/13189368e5c55db11b75091255cf8280d6ef2ae4| (#131,#132,#133, #35) Player trading fixxed| Trading needs to be functional |
+| | 29.04 | https://github.com/Lime556/sopra-fs26-group-11-server/pull/267/changes/65c3251394de748f929b7ed36becf3cbbe4227fe | (#131, #132, #133) Player tradig backend controll and synchroisation. | HAvin synchronized TRading makes shure noone is abusing the system.| 
+|              |30.04.  | https://github.com/Lime556/sopra-fs26-group-11-client/pull/100/changes/7683400d4cbf7743a5498c7276265620bd778bb9 | #64, Bank trade interface | when players dont want to trade somtimes the bank is the only option. |
+| | 30.04. | https://github.com/Lime556/sopra-fs26-group-11-server/pull/267/changes/1951c77c3b05abbd914344908220307684acafa9 | ( #171 #172 #173 #174 #175 #177) TRading with the bank backend.| having everything backend synchronised saves from abuse.|
+|            | 31.04.  | https://github.com/Lime556/sopra-fs26-group-11-client/pull/100/changes/5f3d8f891ca00803af2e64ef8b0fd7b356c30b21 | (#38) Interfaceds for Year of plenty and Monopoly dev cards. | HAving an interface is needed to effecifly using the cards.|
+| **[@githubUser2]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
+|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
