@@ -113,8 +113,10 @@ reason).
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
 | **[@githubUser1]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
-| **[@githubUser2]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **ayleenmr** | 22.04.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/55839d630130dc60ee070aa45b0698615bf0f2e1 | The road placement is now correct. | For the game to be fair and follow the rules, the roads need to be placed accordingly. |
+|                    | 28.04.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/212aef64a8ced035120d5d4be950eaf6eb761507 | Added styling for the settlement and city (#31) | The style of the buildings resembles the actual game pieces from the board game in order to make game play more fun. |
+|                    | 04.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/09d70bc4c8a299f8a444c8336ef94816f4873785 | Added robber functionality (#141 - #146) | I added the robber function in the backend. A player can now steal a resource by playing the knight card and rolling a 7 is discards resources correctly. This is essential for game play.|
+|                    | 04.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/f3c692caa173424f94b13e7a6d892800ee9bff86 | Added robber UI (#37) | I added the robber UI in the frontend. A player can now choose a player to steal a resource from by playing the knight card, and rolling a 7 leads to a overview where the user can choose resources to discard. This is important for playing the game.|
 | **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
