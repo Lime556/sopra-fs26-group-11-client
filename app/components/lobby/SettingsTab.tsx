@@ -13,6 +13,8 @@ interface SettingsTabProps {
   onCurrentPasswordChange: (value: string) => void;
   onNewPasswordChange: (value: string) => void;
   onConfirmPasswordChange: (value: string) => void;
+  onSubmitPasswordChange: (e: React.FormEvent) => void;
+  passwordMessage?: string;
 }
 
 export default function SettingsTab({
@@ -25,6 +27,8 @@ export default function SettingsTab({
   onCurrentPasswordChange,
   onNewPasswordChange,
   onConfirmPasswordChange,
+  onSubmitPasswordChange,
+  passwordMessage,
 }: SettingsTabProps) {
   return (
     <div>
@@ -70,7 +74,7 @@ export default function SettingsTab({
         <div className={styles.settingsSection}>
           <h3 className={styles.settingsSectionTitle}>Change Password</h3>
 
-          <div className={styles.formGrid}>
+          <form onSubmit={onSubmitPasswordChange} className={styles.formGrid}>
             <div>
               <label className={styles.inputLabel}>Current Password</label>
               <input
@@ -107,7 +111,10 @@ export default function SettingsTab({
             <button className={styles.fullWidthButton}>
               Update Password
             </button>
-          </div>
+            {passwordMessage && (
+              <p className={styles.modalText}>{passwordMessage}</p>
+            )}
+          </form>
         </div>
       </div>
     </div>

@@ -13,6 +13,7 @@ import SettingsTab from "@/components/lobby/SettingsTab";
 import HistoryTab from "@/components/lobby/HistoryTab";
 import FriendsTab, { FriendRequest } from "@/components/lobby/FriendsTab";
 import FriendDetailTab, { Friend } from "@/components/lobby/FriendDetailTab";
+import UserProfileModal from "@/components/lobby/UserProfileModal";
 
 import styles from "@/styles/lobby.module.css";
 
@@ -72,9 +73,12 @@ export default function Lobby() {
 
   const email = "";
   const playerId = userId ? `USR-${userId}` : "";
+  const currentUserId = userId ? Number(userId) : 0;
 
   const [activeTab, setActiveTab] = useState<TabType>("lobbies");
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
+  const [showUserProfileModal, setShowUserProfileModal] = useState(false);
+  const [selectedProfileUserId, setSelectedProfileUserId] = useState<number>(0);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [selectedLobby, setSelectedLobby] = useState<LobbyItem | null>(null);
   const [password, setPassword] = useState("");
@@ -100,6 +104,7 @@ export default function Lobby() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
   
   // friend requests
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
@@ -463,6 +468,52 @@ export default function Lobby() {
     setStatusMessage("Friends and requests refreshed.");
   };
 
+  const handleOpenProfile = (targetUserId: number) => {
+    if (!targetUserId) {
+      return;
+    }
+    setSelectedProfileUserId(targetUserId);
+    setShowUserProfileModal(true);
+  };
+
+  const handlePasswordChangeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordMessage("");
+
+    if (!currentUserId) {
+      setPasswordMessage("No authenticated user found.");
+      return;
+    }
+
+    if (!currentPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
+      setPasswordMessage("Please fill in all password fields.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage("New password and confirmation do not match.");
+      return;
+    }
+
+    try {
+      await apiService.put<void>(`/users/${currentUserId}/password`, {
+        currentPassword,
+        newPassword,
+      });
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordMessage("Password updated successfully.");
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setPasswordMessage(error.message);
+      } else {
+        setPasswordMessage("Failed to update password.");
+      }
+    }
+  };
+
   const handleCreateLobby = () => {
     setShowCreateLobbyModal(true);
     setNewLobbyName("");
@@ -538,7 +589,7 @@ export default function Lobby() {
               />
             );
           }
-        
+
           return (
             <FriendsTab
               friends={friends}
@@ -571,6 +622,8 @@ export default function Lobby() {
               onCurrentPasswordChange={setCurrentPassword}
               onNewPasswordChange={setNewPassword}
               onConfirmPasswordChange={setConfirmPassword}
+              onSubmitPasswordChange={handlePasswordChangeSubmit}
+              passwordMessage={passwordMessage}
             />
           );
 
@@ -595,7 +648,17 @@ export default function Lobby() {
       <div className={styles.header}>
         <div>
           <h1 className={styles.headerTitle}>Settlers of Catan</h1>
-          <p className={styles.headerSubtitle}>Welcome, {username}!</p>
+          <p className={styles.headerSubtitle}>
+            Welcome,
+            <button
+              type="button"
+              className={styles.headerUsernameButton}
+              onClick={() => handleOpenProfile(currentUserId)}
+            >
+              {username}
+            </button>
+            !
+          </p>
         </div>
         <button onClick={handleLogout} className={styles.logoutButton}>
           <LogOut size={20} />
@@ -645,6 +708,15 @@ export default function Lobby() {
           onPasswordChange={setNewLobbyPassword}
         />
       )}
+
+      {/* User Profile Modal */}
+      <UserProfileModal
+        open={showUserProfileModal}
+        userId={selectedProfileUserId}
+        currentUserId={currentUserId}
+        onClose={() => setShowUserProfileModal(false)}
+        onOpenSettings={() => setActiveTab("settings")}
+      />
     </div>
   );
 }
