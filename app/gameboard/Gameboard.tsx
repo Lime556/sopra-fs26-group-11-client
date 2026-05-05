@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
-import { Client } from "@stomp/stompjs";
-import SockJS from "sockjs-client";
+//import { Client } from "@stomp/stompjs";
+//import SockJS from "sockjs-client";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
 import { getApiDomain } from "@/utils/domain";
@@ -233,7 +233,7 @@ export default function Gameboard() {
 						robberHexId: gameDto?.robberTileIndex ?? findDesertHexId(mappedHexes),
 						developmentDeck: gameDto?.developmentDeck ?? previousState.developmentDeck,
 						players:
-							serverPlayers.length > 0
+							gameDto?.players
 								? serverPlayers.map((serverPlayer: Parameters<typeof mapResourcesFromServer>[0], index) => {
 									const previousPlayer = previousState.players.find((p) => p.id === (serverPlayer as { id: number }).id);
 									const cachedRoads = Array.from(roadCacheRef.current.get((serverPlayer as { id: number }).id) ?? [])
@@ -983,7 +983,7 @@ export default function Gameboard() {
 		if (hasAdjacentBuilding) {
 			// addToLog("Settlement cannot be placed next to another building."); -> rule disabled because it caused bugs
 			return false;
-		}
+		} 
 	
 		if (!isSetupPhase && !doesPlayerOwnRoadAtCorner(targetCornerKey)) {
 			// addToLog("Settlement must connect to one of your roads."); -> rule disabled because it caused bugs
@@ -1255,7 +1255,7 @@ export default function Gameboard() {
 			if (event.message) addToLog(event.message);
 			return;
 		}
-
+		
 		if (event.type === "TURN_END") {
 			if (typeof event.nextPlayerId === "number") {
 				setState((previousState) => ({
@@ -1559,7 +1559,7 @@ export default function Gameboard() {
 	 */
 	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
 	applyGameEventRef.current = applyGameEvent;
-
+/*Websocket
 	useEffect(() => {
 		if (!activeGameId) {
 			return;
@@ -1587,7 +1587,7 @@ export default function Gameboard() {
 			void client.deactivate();
 		};
 	}, [activeGameId]);
-
+*/
 	const handleBankTrade = () => {
 		if (currentPlayerIndex < 0 || !currentPlayer || !activeGameId) {
 			addToLog("No active player for trading.");
