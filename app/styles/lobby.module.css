@@ -74,6 +74,22 @@
     color: #fff6d6;
     font-family: "Segoe UI", sans-serif;
   }
+
+  .headerUsernameButton {
+    border: none;
+    background: transparent;
+    color: #ffffff;
+    font-size: 20px;
+    font-weight: 700;
+    font-family: "Segoe UI", sans-serif;
+    cursor: pointer;
+    margin-left: 6px;
+    padding: 0;
+  }
+
+  .headerUsernameButton:hover {
+    text-decoration: underline;
+  }
   
   
   /* =========================
@@ -397,6 +413,17 @@
   .modal {
     width: 100%;
     max-width: 420px;
+    background: white;
+    border-radius: 18px;
+    padding: 24px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.22);
+  }
+
+  .profileModal {
+    width: 100%;
+    max-width: 520px;
+    max-height: 85vh;
+    overflow-y: auto;
     background: white;
     border-radius: 18px;
     padding: 24px;
