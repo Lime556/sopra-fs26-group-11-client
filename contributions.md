@@ -111,6 +111,10 @@ reason).
 
 | **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
+| **ayleenmr** | 22.04.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/55839d630130dc60ee070aa45b0698615bf0f2e1 | The road placement is now correct. | For the game to be fair and follow the rules, the roads need to be placed accordingly. |
+|                    | 28.04.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/212aef64a8ced035120d5d4be950eaf6eb761507 | Added styling for the settlement and city (#31) | The style of the buildings resembles the actual game pieces from the board game in order to make game play more fun. |
+|                    | 04.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/09d70bc4c8a299f8a444c8336ef94816f4873785 | Added robber functionality (#141 - #146) | I added the robber function in the backend. A player can now steal a resource by playing the knight card and rolling a 7 is discards resources correctly. This is essential for game play.|
+|                    | 04.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/f3c692caa173424f94b13e7a6d892800ee9bff86 | Added robber UI (#37) | I added the robber UI in the frontend. A player can now choose a player to steal a resource from by playing the knight card, and rolling a 7 leads to a overview where the user can choose resources to discard. This is important for playing the game.|
 | **Gresay** | 27.04.   | https://github.com/Lime556/sopra-fs26-group-11-client/pull/100/changes/78d0f318f59069f8016569405accbbab47be3857 | Ressources from Bank get deducted and added it they are spent and rolled.(#266) | The ressources are limmited and need to be trackable. |
 |           | 27.04.  | https://github.com/Lime556/sopra-fs26-group-11-server/pull/267/changes/f693724a102948241012db654b4b84c0fbe48677 | (#266) Backend Bank interactions | Bank ressources need to be presistant |
 |                    | 28.04.   | https://github.com/Lime556/sopra-fs26-group-11-client/pull/100/changes/bac1e71eb4aa989fe808cddffbe0593367922775 |(#129,#164 ,#130) Trading interfaces updated | Trading is a relevant part of the strategy and an interface is needed to do the acton |
@@ -120,12 +124,10 @@ reason).
 |              |30.04.  | https://github.com/Lime556/sopra-fs26-group-11-client/pull/100/changes/7683400d4cbf7743a5498c7276265620bd778bb9 | #64, Bank trade interface | when players dont want to trade somtimes the bank is the only option. |
 | | 30.04. | https://github.com/Lime556/sopra-fs26-group-11-server/pull/267/changes/1951c77c3b05abbd914344908220307684acafa9 | ( #171 #172 #173 #174 #175 #177) TRading with the bank backend.| having everything backend synchronised saves from abuse.|
 |            | 31.04.  | https://github.com/Lime556/sopra-fs26-group-11-client/pull/100/changes/5f3d8f891ca00803af2e64ef8b0fd7b356c30b21 | (#38) Interfaceds for Year of plenty and Monopoly dev cards. | HAving an interface is needed to effecifly using the cards.|
-| **[@githubUser2]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
-| **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
-| **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **CaroAW** | 5.5.26   | https://github.com/Lime556/sopra-fs26-group-11-server/pull/271/changes/3280732aff95d0132e6d9ddf65a4d14a096a959d | Implement user profile retrieval and statistics logic | To be able to see the profile and stats of other players and yourself |
+|                    | 5.5.26   | https://github.com/Lime556/sopra-fs26-group-11-server/pull/271/changes/19e1ee2a2776eb4ed7bebed2aa1dc7559d42df7b | Implement game history retrieval (last 10 games) | game history can tell you a lot about players, so it can be very helpful for a player |
+|                    | 5.5.26   | https://github.com/Lime556/sopra-fs26-group-11-server/pull/271/changes/c270064fcaee747cbeaa3613c2892c388695687d | Implement password update functionality | you have to be able to change your password if you have an account somewhere, maybe if someone knows your password you're able to change it |
+|                    | 6.5.26   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/7b378ceee92c00cdce137f45d317e98001cd341e | Display profile data (winrate and history) in UI and part of the popup of player profiles | frontend for the player infos and stats |
 | **@Lime556** | 29.04. | https://github.com/Lime556/sopra-fs26-group-11-server/pull/268/changes/29f56274f20e745d9d8d46a5abf9daada66db922 | Add friend request and friendship data model (#45) | This introduces the backend persistence model for friend requests and friendships, which is required before users can send requests, accept them, and maintain a friend list. |
 |                    | 02.05. | https://github.com/Lime556/sopra-fs26-group-11-server/pull/268/changes/3420f7d92b38c8623b3a0cb7f6455c2e5461a8d7 | Implement send friend request endpoint (#46) | This allows authenticated users to send friend requests to other users through the backend API, making the friend system usable beyond the database model. |
 |                    | 02.05. | https://github.com/Lime556/sopra-fs26-group-11-server/pull/268/changes/8d627feeec0974fda468da333ee17ffbcd3c08ab | Implement accept and decline friend request logic (#47) | This completes the core friend request flow by letting receivers accept or decline pending requests and by creating friendships when requests are accepted. |
@@ -152,7 +154,7 @@ reason).
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
-| **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
+| **[@githubUser5]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 
 
@@ -170,6 +172,6 @@ reason).
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
-| **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
+| **[@githubUser5]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 
