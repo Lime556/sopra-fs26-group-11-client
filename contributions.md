@@ -138,7 +138,7 @@ reason).
 |                    | 02.05. | https://github.com/Lime556/sopra-fs26-group-11-client/pull/102/changes/87234286de4ec72da3e00f847a3fe08239207ddf | Mark friend UI task as already completed (#11) | This documents that the friend request and friend list UI had already been completed in earlier frontend work and links the completed work to the correct task for traceability. |
 |                    | 02.05. | https://github.com/Lime556/sopra-fs26-group-11-client/pull/102/changes/ac8dc421866baf79adec364830cb5d11d83ee5c4 | Connect friend features to backend API (#12) | This replaces mock friend data with real backend calls for loading friends, retrieving pending requests, searching users, sending requests, and accepting or declining them. |
 |                    | 02.05. | https://github.com/Lime556/sopra-fs26-group-11-client/pull/102/changes/f570666220f6b1d9f53fd8ad9077955e47e26d53 | Add manual friend refresh button (#13) | This gives users a lightweight way to refresh friends and pending requests without constantly polling the backend, which keeps the feature usable while avoiding unnecessary network traffic. |
-
+| **[@Ziske11]** | [3.5.]   | JOKER | JOKER | JOKER |
 
 ---
 
