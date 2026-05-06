@@ -42,6 +42,7 @@ export default function LobbyRoom() {
   const [starting, setStarting] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [addingBot, setAddingBot] = useState(false);
   const [kickingParticipantId, setKickingParticipantId] = useState<number | null>(null);
   const [transferringParticipantId, setTransferringParticipantId] = useState<number | null>(null);
   const [hostTransferMessage, setHostTransferMessage] = useState("");
@@ -126,7 +127,6 @@ export default function LobbyRoom() {
 
   const currentParticipants = lobby?.currentParticipants ?? 0;
   const maxPlayers = lobby?.capacity ?? 4;
-  const canAddBot = (lobby?.currentParticipants ?? 0) < maxPlayers;
   const sortedParticipants = lobby
     ? [...lobby.participants].sort((a, b) => {
         const aIsHost = a.id === lobby.hostParticipantId;
@@ -148,6 +148,7 @@ export default function LobbyRoom() {
     lobby !== null &&
     currentParticipant !== undefined &&
     currentParticipant.id === lobby.hostParticipantId;
+  const canAddBot = isHost && currentParticipants < maxPlayers;
 
   const startGame = async () => {
     if (!lobby) return;
@@ -265,6 +266,38 @@ export default function LobbyRoom() {
     }
   };
 
+  const addBot = async () => {
+    if (!lobby || !isHost || !canAddBot) return;
+
+    try {
+      setAddingBot(true);
+      setStartInfo("");
+      const refreshedLobby = await apiService.post<LobbyGetDTO>(`/lobbies/${lobby.id}/bots`, {});
+      setLobby(refreshedLobby);
+    } catch (err) {
+      console.error(err);
+      setStartInfo("Failed to add bot.");
+    } finally {
+      setAddingBot(false);
+    }
+  };
+
+  const removeBot = async (participantId: number) => {
+    if (!lobby || !isHost) return;
+
+    try {
+      setKickingParticipantId(participantId);
+      setStartInfo("");
+      const refreshedLobby = await apiService.post<LobbyGetDTO>(`/lobbies/${lobby.id}/bots/${participantId}/remove`, {});
+      setLobby(refreshedLobby);
+    } catch (err) {
+      console.error(err);
+      setStartInfo("Failed to remove bot.");
+    } finally {
+      setKickingParticipantId(null);
+    }
+  };
+
   if (error) {
     return <div className={styles.stateMessage}>{error}</div>;
   }
@@ -314,14 +347,14 @@ export default function LobbyRoom() {
                 </button>
               )}
               <button
-                onClick={() => alert("Add Bot functionality not implemented yet.")}
-                disabled={!canAddBot}
+                onClick={() => void addBot()}
+                disabled={!canAddBot || addingBot}
                 className={`${styles.addBotButton} ${
-                  canAddBot ? styles.addBotButtonEnabled : styles.addBotButtonDisabled
+                  canAddBot && !addingBot ? styles.addBotButtonEnabled : styles.addBotButtonDisabled
                 }`}
               >
                 <Bot className="w-5 h-5" />
-                Add Bot
+                {addingBot ? "Adding..." : "Add Bot"}
               </button>
             </div>
           </div>
@@ -343,6 +376,7 @@ export default function LobbyRoom() {
                 participant.userId !== null &&
                 !participantIsHost &&
                 participant.id !== currentParticipant?.id;
+              const canRemoveBot = isHost && participant.bot;
 
               return (
                 <div key={participant.id} className={styles.participantCard}>
@@ -364,12 +398,12 @@ export default function LobbyRoom() {
                       </div>
 
                       <p className={styles.participantRole}>
-                        {participant.bot ? "AI Player" : "Human Player"}
+                        {participant.bot ? "Bot Player" : "Human Player"}
                       </p>
                     </div>
                   </div>
 
-                  {(canKick || canTransferHost) && (
+                  {(canKick || canTransferHost || canRemoveBot) && (
                     <div className={styles.participantActions}>
                       {canTransferHost && (
                         <button
@@ -389,6 +423,16 @@ export default function LobbyRoom() {
                         >
                           <UserMinus className="w-4 h-4" />
                           {kickingParticipantId === participant.id ? "Removing..." : "Kick"}
+                        </button>
+                      )}
+                      {canRemoveBot && (
+                        <button
+                          className={styles.kickButton}
+                          onClick={() => void removeBot(participant.id)}
+                          disabled={kickingParticipantId === participant.id}
+                        >
+                          <UserMinus className="w-4 h-4" />
+                          {kickingParticipantId === participant.id ? "Removing..." : "Remove"}
                         </button>
                       )}
                     </div>

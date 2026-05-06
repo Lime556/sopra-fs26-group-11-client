@@ -121,6 +121,7 @@ export default function Gameboard() {
 	const [discardChoices, setDiscardChoices] = useState<Record<string, number>>({});
 	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
 	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
+	const botActionInFlightRef = useRef(false);
 	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const ports = Array.isArray(state.ports) ? state.ports : [];
@@ -254,6 +255,7 @@ export default function Gameboard() {
 									return {
 										id: (serverPlayer as { id: number }).id,
 										name: (serverPlayer as { name: string }).name,
+										bot: Boolean((serverPlayer as { bot?: boolean }).bot),
 										color: previousPlayer?.color ?? fallbackColorForPlayer(index),
 										resources: mapResourcesFromServer(serverPlayer as Parameters<typeof mapResourcesFromServer>[0]),
 										victoryPoints: serverPlayer.victoryPoints ?? 0,
@@ -568,6 +570,44 @@ export default function Gameboard() {
 	const activeOutgoingTradeSourcePlayer = activeOutgoingTradeRequest
 		? state.players.find((player) => player.id === activeOutgoingTradeRequest.sourcePlayerId) ?? null
 		: null;
+	const currentBotActionKey = currentPlayer?.bot
+		? JSON.stringify({
+			id: currentPlayer.id,
+			turnPhase: state.turnPhase,
+			gamePhase: state.gamePhase,
+			diceResult: state.diceResult,
+			robberHexId: state.robberHexId,
+			resources: currentPlayer.resources,
+			settlements: currentPlayer.settlementsOnCorners.length,
+			cities: currentPlayer.citiesOnCorners.length,
+			roads: currentPlayer.roadsOnEdges.length,
+			developmentCards: currentPlayer.developmentCards.length,
+			freeRoads: currentPlayer.freeRoadBuildsRemaining,
+		})
+		: "";
+
+	useEffect(() => {
+		if (!activeGameId || isGameFinished || !currentPlayer?.bot || botActionInFlightRef.current) {
+			return;
+		}
+
+		const timeout = window.setTimeout(() => {
+			if (botActionInFlightRef.current) {
+				return;
+			}
+			botActionInFlightRef.current = true;
+			void apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/bot/fallback`, {})
+				.catch((error) => {
+					console.error("Failed to execute bot fallback action", error);
+				})
+				.finally(() => {
+					botActionInFlightRef.current = false;
+				});
+		}, 500);
+
+		return () => window.clearTimeout(timeout);
+	}, [activeGameId, apiService, currentBotActionKey, currentPlayer?.bot, isGameFinished]);
+
 	const activeOutgoingTradeResponseEntries = useMemo(
 		() => activeOutgoingTradeRequest
 			? state.players
@@ -2547,6 +2587,7 @@ export default function Gameboard() {
 									<div className={styles.playerName}>
 										<span className={styles.colorDot} style={{ backgroundColor: player.color }} />
 										<span>{player.name}</span>
+										{player.bot && <span className={styles.botBadge}>Bot</span>}
 									</div>
 									<span className={styles.playerVpBadge}>{player.victoryPoints}</span>
 								</div>

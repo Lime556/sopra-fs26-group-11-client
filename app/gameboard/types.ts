@@ -19,6 +19,7 @@ export interface HexTile {
 export interface Player {
 	id: number;
 	name: string;
+	bot?: boolean;
 	color: string;
 	resources: Resources;
 	victoryPoints: number;
@@ -103,6 +104,7 @@ export interface GameStateDTO {
 export interface PlayerGetDTO {
 	id: number;
 	name: string;
+	bot?: boolean | null;
 	victoryPoints?: number | null;
 	settlementPoints?: number | null;
 	cityPoints?: number | null;
