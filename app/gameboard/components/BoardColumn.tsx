@@ -291,14 +291,6 @@ export function BoardColumn({
 
 								return (
 									<g key={`settlement-${player.id}-${settlement.hexId}-${settlement.corner}-${index}`}>
-										{/* Building shadow */}
-										<ellipse
-											cx={point.x}
-											cy={point.y + size / 2 + 1}
-											rx={size / 1.5}
-											ry={size / 3}
-											fill="rgba(0, 0, 0, 0.2)"
-										/>
 										{/* Main building body */}
 										<path
 											d={`M ${point.x - size / 2} ${point.y + size / 3}
@@ -340,15 +332,6 @@ export function BoardColumn({
 
 								return (
 									<g key={`city-${player.id}-${city.hexId}-${city.corner}-${index}`}>
-									{/* Shadow (slightly wider) */}
-									<ellipse
-										cx={point.x}
-										cy={point.y + size / 2 + 1}
-										rx={size / 1.2}
-										ry={size / 3}
-										fill="rgba(0, 0, 0, 0.2)"
-									/>
-
 									{/* Main building body*/}
 									<path
 										d={`M ${point.x - size / 2} ${point.y + size / 3}

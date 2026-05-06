@@ -1392,6 +1392,15 @@ export default function Gameboard() {
 		}
 	};
 
+	useEffect(() => {
+		if (state.turnPhase === "DISCARD" && isMyTurn && getPlayerTotalResources(myPlayer) > 7) {
+			setDiscardModalOpen(true);
+		} else {
+			setDiscardModalOpen(false);
+			setDiscardChoices({});
+		}
+	}, [state.turnPhase, isMyTurn]);
+
 	const handleRollDice = async () => {
 		if (!isMyTurn || !activeGameId || state.turnPhase !== "ROLL_DICE") {
 			return;
@@ -1402,11 +1411,6 @@ export default function Gameboard() {
 
 		const totalResources = currentPlayer.resources.wood + currentPlayer.resources.brick + 
 			currentPlayer.resources.wool + currentPlayer.resources.wheat + currentPlayer.resources.ore;
-
-		if (totalResources > 7) {
-			setDiscardModalOpen(true);
-			return;
-		}
 
 		try {
 			await apiService.post(`/games/${activeGameId}/actions/roll-dice`, {});
@@ -1422,19 +1426,21 @@ export default function Gameboard() {
 	};
 
 	const handleConfirmDiscard = async () => {
-		if (!activeGameId) return;
+		if (!activeGameId || state.turnPhase !== "DISCARD") {
+			return;
+		}
 
 		try {
 			await apiService.post(`/games/${activeGameId}/actions/roll-dice`, { discardResources: discardChoices });
-			addToLog("Dice rolled and resources discarded.");
+			addToLog("Resources discarded.");
 			setDiscardModalOpen(false);
 			setDiscardChoices({});
 		} catch (error) {
 			const appError = error as Partial<ApplicationError>;
 			if (appError.status === 409) {
-				addToLog("Cannot roll dice: " + (appError.message || "Invalid turn phase"));
+				addToLog("Cannot discard resources: " + (appError.message || "Invalid turn phase"));
 			} else {
-				addToLog("Failed to roll dice.");
+				addToLog("Failed to discard resources.");
 			}
 		}
 	};
