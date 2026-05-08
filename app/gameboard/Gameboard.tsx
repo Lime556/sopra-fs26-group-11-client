@@ -49,7 +49,7 @@ import {
 	rememberRoadsInCache,
 } from "./roads";
 import {
-	GameStateDTO,
+	type GameStateDTO,
 	type BoardGetDTO,
 	type GameChatMessageDTO,
 	type GameEventDTO,
