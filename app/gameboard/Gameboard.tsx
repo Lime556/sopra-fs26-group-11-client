@@ -49,6 +49,7 @@ import {
 	rememberRoadsInCache,
 } from "./roads";
 import {
+	type GameStateDTO,
 	type BoardGetDTO,
 	type GameChatMessageDTO,
 	type GameEventDTO,
@@ -125,6 +126,7 @@ export default function Gameboard() {
 	const botActionInFlightRef = useRef(false);
 	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const lastDiceRolledAtRef = useRef<string | null>(null);
 	const ports = Array.isArray(state.ports) ? state.ports : [];
 
 	const showDiceResultPopup = (diceValue: number) => {
@@ -197,21 +199,24 @@ export default function Gameboard() {
 
 		const syncGameState = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
 			try {
-				const [boardDto, gameDto] = await Promise.all([
-					apiService.get<BoardGetDTO>(`/games/${gameId}/board`),
-					apiService.get<GameGetDTO>(`/games/${gameId}`),
-				]);
+				const gameDto = await apiService.get<GameGetDTO>(`/games/${gameId}`);
 
-				const resolvedBoard = boardDto ?? gameDto?.board ?? null;
-				const hasBoardData = Boolean(
-					resolvedBoard
-					&& Array.isArray(resolvedBoard.hexTiles)
-					&& resolvedBoard.hexTiles.length >= 19
-					&& Array.isArray(resolvedBoard.hexTile_DiceNumbers)
-					&& resolvedBoard.hexTile_DiceNumbers.length >= 19
-				);
+				let resolvedBoard: BoardGetDTO | null = gameDto?.board ?? null;
 
-				if (!hasBoardData) {
+				const hasUsableBoard = (board: BoardGetDTO | null | undefined): board is BoardGetDTO =>
+					Boolean(
+						board
+						&& Array.isArray(board.hexTiles)
+						&& board.hexTiles.length >= 19
+						&& Array.isArray(board.hexTile_DiceNumbers)
+						&& board.hexTile_DiceNumbers.length >= 19
+					);
+
+				if (!hasUsableBoard(resolvedBoard)) {
+					resolvedBoard = await apiService.get<BoardGetDTO>(`/games/${gameId}/board`);
+				}
+
+				if (!hasUsableBoard(resolvedBoard)) {
 					if (!cancelled) {
 						setBoardStatus("Board is initializing. Please wait...");
 					}
@@ -255,9 +260,10 @@ export default function Gameboard() {
 									rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
 									return {
 										id: (serverPlayer as { id: number }).id,
+										userId: (serverPlayer as { userId?: number | null }).userId ?? null,
 										name: (serverPlayer as { name: string }).name,
 										bot: Boolean((serverPlayer as { bot?: boolean }).bot),
-										color: previousPlayer?.color ?? fallbackColorForPlayer(index),
+										color: (serverPlayer as { color?: string | null }).color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
 										resources: mapResourcesFromServer(serverPlayer as Parameters<typeof mapResourcesFromServer>[0]),
 										victoryPoints: serverPlayer.victoryPoints ?? 0,
 										developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
@@ -331,39 +337,62 @@ export default function Gameboard() {
 			}
 		};
 
-		let lastDiceSyncKey: string | null = null;
-		const syncDiceValue = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+		let lastSeenGameVersion: number | null = null;
+		let syncInFlight = false;
+
+		const pollGameSync = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
 			try {
-				const diceDto = await apiService.get<{ diceValue?: number | null; diceRolledAt?: string | null }>(`/games/${gameId}/dice`);
+				if (syncInFlight) {
+					return "ok";
+				}
+		
+				syncInFlight = true;
+		
+				const syncDto = await apiService.get<{
+					gameVersion?: number | null;
+					currentTurnIndex?: number | null;
+					turnPhase?: string | null;
+					gamePhase?: string | null;
+					diceValue?: number | null;
+					diceRolledAt?: string | null;
+					currentPlayerId?: number | null;
+					gameFinished?: boolean | null;
+				}>(`/games/${gameId}/sync`);
+		
 				if (cancelled) {
 					return "ok";
 				}
+		
+				const nextVersion = typeof syncDto.gameVersion === "number" ? syncDto.gameVersion : 0;
 
-				const nextDiceValue = typeof diceDto?.diceValue === "number" ? diceDto.diceValue : null;
-				const nextSyncKey = `${diceDto?.diceRolledAt ?? "none"}:${nextDiceValue ?? "none"}`;
-				if (lastDiceSyncKey === null) {
-					lastDiceSyncKey = nextSyncKey;
-					if (nextDiceValue !== null) {
-						setState((previousState) => ({
-							...previousState,
-							diceResult: nextDiceValue,
-						}));
-					}
-					return "ok";
-				}
-				if (nextSyncKey === lastDiceSyncKey) {
-					return "ok";
-				}
+				const nextDiceRolledAt = syncDto.diceRolledAt ?? null;
+				const nextDiceValue = typeof syncDto.diceValue === "number" ? syncDto.diceValue : null;
 
-				lastDiceSyncKey = nextSyncKey;
-				if (nextDiceValue !== null) {
+				if (
+					nextDiceRolledAt !== null
+					&& nextDiceRolledAt !== lastDiceRolledAtRef.current
+					&& nextDiceValue !== null
+				) {
+					lastDiceRolledAtRef.current = nextDiceRolledAt;
+
 					setState((previousState) => ({
 						...previousState,
 						diceResult: nextDiceValue,
 					}));
+
 					showDiceResultPopup(nextDiceValue);
 				}
-
+		
+				if (lastSeenGameVersion === null) {
+					lastSeenGameVersion = nextVersion;
+					return "ok";
+				}
+		
+				if (nextVersion !== lastSeenGameVersion) {
+					lastSeenGameVersion = nextVersion;
+					return await syncGameState(gameId);
+				}
+		
 				return "ok";
 			} catch (error) {
 				const status = (error as Partial<ApplicationError>)?.status;
@@ -374,6 +403,8 @@ export default function Gameboard() {
 					return "notfound";
 				}
 				return "error";
+			} finally {
+				syncInFlight = false;
 			}
 		};
 
@@ -471,19 +502,21 @@ export default function Gameboard() {
 				}
 			}
 
+			void pollGameSync(gameId as number);
+
 			const poll = window.setInterval(() => {
-				void syncGameState(gameId as number).then((status) => {
+				void pollGameSync(gameId as number).then((status) => {
 					if (cancelled || status === "ok") {
 						return;
 					}
-
+			
 					if (status === "unauthorized") {
 						setBoardStatus("Session expired. Please log in again.");
 						router.replace("/login");
 						window.clearInterval(poll);
 						return;
 					}
-
+			
 					if (status === "notfound") {
 						setBoardStatus("Game no longer exists. Recreating board...");
 						sessionStorage.removeItem("gameId");
@@ -497,49 +530,23 @@ export default function Gameboard() {
 				});
 			}, 1000);
 
-			void syncDiceValue(gameId as number);
-			const dicePoll = window.setInterval(() => {
-				void syncDiceValue(gameId as number).then((status) => {
-					if (cancelled || status === "ok") {
-						return;
-					}
-
-					if (status === "unauthorized") {
-						setBoardStatus("Session expired. Please log in again.");
-						router.replace("/login");
-						window.clearInterval(dicePoll);
-						return;
-					}
-
-					if (status === "notfound") {
-						window.clearInterval(dicePoll);
-					}
-				});
-			}, 1000);
-
 			if (cancelled) {
 				window.clearInterval(poll);
-				window.clearInterval(dicePoll);
 				return;
 			}
 
-			return { poll, dicePoll };
+			return { poll };
 		};
 
 		let pollHandle: number | undefined;
-		let dicePollHandle: number | undefined;
 		void bootstrapBoard().then((handles) => {
 			pollHandle = handles?.poll;
-			dicePollHandle = handles?.dicePoll;
 		});
 
 		return () => {
 			cancelled = true;
 			if (pollHandle !== undefined) {
 				window.clearInterval(pollHandle);
-			}
-			if (dicePollHandle !== undefined) {
-				window.clearInterval(dicePollHandle);
 			}
 			if (dicePopupTimeoutRef.current !== null) {
 				globalThis.clearTimeout(dicePopupTimeoutRef.current);
@@ -559,7 +566,7 @@ export default function Gameboard() {
 	const parsedSessionUserId = Number.parseInt(sessionUserId ?? "", 10);
 	const hasSessionUserId = Number.isFinite(parsedSessionUserId);
 	const myPlayer =
-		(hasSessionUserId ? state.players.find((player) => player.id === parsedSessionUserId) : null) ??
+		(hasSessionUserId ? state.players.find((player) => player.userId === parsedSessionUserId) : null) ??
 		state.players.find((player) => player.name === sessionUsername) ??
 		null;
 	const myPlayerIdRef = useRef<number | null>(null);
@@ -1433,28 +1440,38 @@ export default function Gameboard() {
 		}
 	};
 
+	const myPlayerResourceTotal = myPlayer ? getPlayerTotalResources(myPlayer) : 0;
+
 	useEffect(() => {
-		if (state.turnPhase === "DISCARD" && isMyTurn && getPlayerTotalResources(myPlayer) > 7) {
-			setDiscardModalOpen(true);
-		} else {
-			setDiscardModalOpen(false);
+		const mustDiscard =
+			state.turnPhase === "DISCARD"
+			&& myPlayer !== null
+			&& isMyTurn
+			&& myPlayerResourceTotal > 7;
+	
+		setDiscardModalOpen(mustDiscard);
+	
+		if (!mustDiscard) {
 			setDiscardChoices({});
 		}
-	}, [state.turnPhase, isMyTurn]);
+	}, [state.turnPhase, isMyTurn, myPlayer?.id, myPlayerResourceTotal]);
 
 	const handleRollDice = async () => {
 		if (!isMyTurn || !activeGameId || state.turnPhase !== "ROLL_DICE") {
 			return;
 		}
 
-		const currentPlayer = state.players.find(p => p.id === state.currentPlayerId);
-		if (!currentPlayer) return;
-
-		const totalResources = currentPlayer.resources.wood + currentPlayer.resources.brick + 
-			currentPlayer.resources.wool + currentPlayer.resources.wheat + currentPlayer.resources.ore;
-
 		try {
-			await apiService.post(`/games/${activeGameId}/actions/roll-dice`, {});
+			const gameDto = await apiService.post<GameStateDTO>(`/games/${activeGameId}/actions/roll-dice`, {});
+		
+			if (typeof gameDto.diceValue === "number") {
+				setState((previousState) => ({
+					...previousState,
+					diceResult: gameDto.diceValue as number,
+				}));
+				showDiceResultPopup(gameDto.diceValue);
+			}
+		
 			addToLog("Dice rolled.");
 		} catch (error) { // The resource distribution and bank updates will be handled by the backend and reflected in the next syncGameState call.
 			const appError = error as Partial<ApplicationError>;
@@ -1491,131 +1508,11 @@ export default function Gameboard() {
 	applyGameEventRef.current = applyGameEvent;
 
 	useEffect(() => {
-		if (!activeGameId) {
-			websocketService.disconnect();
-			return;
-		}
+		websocketService.disconnect();
+	}, []);
 
-		websocketService.connect({
-			onConnect: () => {
-				websocketService.subscribeGameState(activeGameId, (gameDto) => {
-					if (!gameDto) {
-						return;
-					}
-
-					const mappedHexes = gameDto.board ? mapBoardDtoToHexes(gameDto.board as BoardGetDTO) : [];
-					const mappedPorts = gameDto.board ? mapBoardDtoToPorts(gameDto.board as BoardGetDTO) : [];
-					const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
-
-					setState((previousState) => ({
-						...previousState,
-						hexes: mappedHexes.length > 0 ? mappedHexes : previousState.hexes,
-						ports: mappedPorts.length > 0 ? mappedPorts : previousState.ports,
-						robberHexId: gameDto.robberTileIndex ?? previousState.robberHexId,
-						developmentDeck: gameDto.developmentDeck ?? previousState.developmentDeck,
-						players: serverPlayers.length > 0
-							? serverPlayers.map((serverPlayer: Parameters<typeof mapResourcesFromServer>[0], index) => {
-								const previousPlayer = previousState.players.find((player) => player.id === (serverPlayer as { id: number }).id);
-								const cachedRoads = Array.from(roadCacheRef.current.get((serverPlayer as { id: number }).id) ?? [])
-									.map((entry: unknown) => (typeof entry === "string" ? parseRoadEntry(entry as string) : entry))
-									.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null);
-
-								const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
-									? serverPlayer.roadsOnEdges
-										.map((entry: unknown) => (
-											typeof entry === "string"
-												? parseRoadEntry(entry)
-												: entry && typeof (entry as { hexId?: number }).hexId === "number"
-													? { hexId: (entry as { hexId: number }).hexId, edge: (entry as { edge?: number; edgeIndex?: number }).edge ?? (entry as { edge?: number; edgeIndex?: number }).edgeIndex }
-													: null
-										))
-										.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null)
-									: [];
-								const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
-								rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
-								return {
-									id: (serverPlayer as { id: number }).id,
-									name: (serverPlayer as { name: string }).name,
-									color: previousPlayer?.color ?? fallbackColorForPlayer(index),
-									resources: mapResourcesFromServer(serverPlayer as Parameters<typeof mapResourcesFromServer>[0]),
-									victoryPoints: serverPlayer.victoryPoints ?? 0,
-									developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
-									knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
-									developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
-									freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
-									hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
-									hasLargestArmy: serverPlayer.hasLargestArmy ?? false,
-									settlementsOnCorners: serverPlayer.settlementsOnCorners ?? previousPlayer?.settlementsOnCorners ?? [],
-									citiesOnCorners: serverPlayer.citiesOnCorners ?? previousPlayer?.citiesOnCorners ?? [],
-									roadsOnEdges: mergedRoads,
-								};
-							})
-							: previousState.players,
-						currentPlayerId: (() => {
-							if (serverPlayers.length === 0) {
-								return previousState.currentPlayerId;
-							}
-
-							if (typeof gameDto.currentTurnIndex === "number") {
-								const normalizedIndex = ((gameDto.currentTurnIndex % serverPlayers.length) + serverPlayers.length) % serverPlayers.length;
-								return serverPlayers[normalizedIndex].id;
-							}
-
-							return serverPlayers[0].id;
-						})(),
-						turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
-						gamePhase: gameDto.gamePhase ?? previousState.gamePhase,
-						diceResult: gameDto.diceValue ?? previousState.diceResult,
-					}));
-
-					setWinnerPlayerName(gameDto.winner?.name ?? null);
-					setIsGameFinished(Boolean(gameDto.gameFinished) || Boolean(gameDto.finishedAt));
-					if (Array.isArray(gameDto.chatMessages)) {
-						setGameLog((previous) => {
-							const known = syncedChatMessagesRef.current;
-							const chatMessages = gameDto.chatMessages ?? [];
-							const filteredMessages = chatMessages
-								.filter((message: unknown): message is string => typeof message === "string" && message.trim().length > 0)
-							const unseen = filteredMessages
-								.filter((message) => !known.has(message));
-							if (unseen.length === 0) {
-								return previous;
-							}
-							unseen.forEach((message) => known.add(message));
-							return [...unseen.reverse(), ...previous].slice(0, 40);
-						});
-					}
-					setBoardStatus("");
-				});
-
-				websocketService.subscribeGameEvents(activeGameId, (event) => {
-					applyGameEventRef.current(event);
-				});
-
-				websocketService.subscribeGameChat(activeGameId, (payload) => {
-					if (payload?.text) {
-						const logEntry = `${payload.playerName ?? "Player"}: ${payload.text}`;
-						syncedChatMessagesRef.current.add(logEntry);
-						addToLog(logEntry);
-					}
-				});
-
-				websocketService.subscribeErrors((error) => {
-					console.error("WebSocket server error:", error.message);
-				});
-			},
-			onError: (error) => {
-				console.error("WebSocket connection failed:", error.message);
-				addToLog("WebSocket connection failed. Falling back to REST updates.");
-			},
-		});
-
-		return () => {
-			websocketService.disconnect();
-		};
-	}, [activeGameId]);
 	const handleBankTrade = () => {
-		if (currentPlayerIndex < 0 || !currentPlayer || !activeGameId) {
+		if (!isMyTurn || !myPlayer || !activeGameId) {
 			addToLog("No active player for trading.");
 			return;
 		}
@@ -1642,9 +1539,9 @@ export default function Gameboard() {
 			return;
 		}
 
-		const lacksGiveResource = resourceTypes.find((resource) => (bankGiveResources[resource] ?? 0) > (currentPlayer.resources[resource] ?? 0));
+		const lacksGiveResource = resourceTypes.find((resource) => (bankGiveResources[resource] ?? 0) > (myPlayer.resources[resource] ?? 0));
 		if (lacksGiveResource) {
-			addToLog(`${currentPlayer.name} lacks ${lacksGiveResource} for this bank trade.`);
+			addToLog(`${myPlayer.name} lacks ${lacksGiveResource} for this bank trade.`);
 			return;
 		}
 
@@ -1654,12 +1551,12 @@ export default function Gameboard() {
 			return;
 		}
 
-		const logMessage = `${currentPlayer.name} trades ${formatBundle(bankGiveResources)} for ${formatBundle(bankReceiveResources)} with bank.`;
+		const logMessage = `${myPlayer.name} trades ${formatBundle(bankGiveResources)} for ${formatBundle(bankReceiveResources)} with bank.`;
 		addToLog(logMessage);
 		setShowTradePopup(false);
 		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
 			type: "BANK_TRADE",
-			sourcePlayerId: currentPlayer.id,
+			sourcePlayerId: myPlayer.id,
 			giveResources: bankGiveResources,
 			receiveResources: bankReceiveResources,
 			amount: receiveTotal,
@@ -1668,7 +1565,7 @@ export default function Gameboard() {
 	};
 
 	const handlePlayerTrade = () => {
-		if (currentPlayerIndex < 0 || !currentPlayer || !activeGameId) {
+		if (!isMyTurn || !myPlayer || !activeGameId) {
 			addToLog("No active player for trading.");
 			return;
 		}
@@ -1689,14 +1586,14 @@ export default function Gameboard() {
 			return;
 		}
 
-		const missingFromCurrentPlayer = resourceTypes.find((resource) => (playerGiveResources[resource] ?? 0) > (currentPlayer.resources[resource] ?? 0));
+		const missingFromCurrentPlayer = resourceTypes.find((resource) => (playerGiveResources[resource] ?? 0) > (myPlayer.resources[resource] ?? 0));
 		if (missingFromCurrentPlayer) {
-			addToLog(`${currentPlayer.name} lacks ${missingFromCurrentPlayer} for this trade.`);
+			addToLog(`${myPlayer.name} lacks ${missingFromCurrentPlayer} for this trade.`);
 			return;
 		}
 
 		const pendingResponses = state.players
-			.filter((player) => player.id !== currentPlayer.id)
+			.filter((player) => player.id !== myPlayer.id)
 			.reduce<Record<number, TradeResponseStatus>>((accumulator, player) => {
 				accumulator[player.id] = "PENDING";
 				return accumulator;
@@ -1704,21 +1601,21 @@ export default function Gameboard() {
 
 		const tradeRequest: GameEventDTO = {
 			type: "PLAYER_TRADE",
-			sourcePlayerId: currentPlayer.id,
+			sourcePlayerId: myPlayer.id,
 			tradeAction: "REQUEST",
 			tradeRequestId,
 			giveResources: playerGiveResources,
 			receiveResources: playerReceiveResources,
-			message: `${currentPlayer.name} requested ${formatBundle(playerGiveResources)} for ${formatBundle(playerReceiveResources)} from all players.`,
+			message: `${myPlayer.name} requested ${formatBundle(playerGiveResources)} for ${formatBundle(playerReceiveResources)} from all players.`,
 		};
-		const logMessage = tradeRequest.message ?? `${currentPlayer.name} requested a trade from all players.`;
+		const logMessage = tradeRequest.message ?? `${myPlayer.name} requested a trade from all players.`;
 		addToLog(logMessage);
 		setActiveOutgoingTradeRequest(tradeRequest);
 		setActiveOutgoingTradeResponses(pendingResponses);
 		setShowTradePopup(false);
 		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
 			type: "PLAYER_TRADE",
-			sourcePlayerId: currentPlayer.id,
+			sourcePlayerId: myPlayer.id,
 			tradeAction: "REQUEST",
 			tradeRequestId,
 			giveResources: playerGiveResources,
@@ -2228,8 +2125,10 @@ export default function Gameboard() {
 
 					return {
 						id: (serverPlayer as { id: number }).id,
+						userId: (serverPlayer as { userId?: number | null }).userId ?? null,
 						name: (serverPlayer as { name: string }).name,
-						color: previousPlayer?.color ?? fallbackColorForPlayer(index),
+						bot: Boolean((serverPlayer as { bot?: boolean | null }).bot),
+						color: (serverPlayer as { color?: string | null }).color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
 						resources: mapResourcesFromServer(serverPlayer as Parameters<typeof mapResourcesFromServer>[0]),
 						victoryPoints: serverPlayer.victoryPoints ?? 0,
 						developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
@@ -2280,7 +2179,7 @@ export default function Gameboard() {
 	};
 
 	const handleSendTradeRequest = () => {
-		if (!currentPlayer) {
+		if (!isMyTurn || !myPlayer) {
 			addToLog("No active player for trade requests.");
 			return;
 		}
@@ -2291,7 +2190,7 @@ export default function Gameboard() {
 		setBankReceiveResources(createEmptyTradeResources());
 
 		setShowTradePopup(true);
-		addToLog(`${currentPlayer.name} opened trade requests.`);
+		addToLog(`${myPlayer.name} opened trade requests.`);
 	};
 
 	const handleSendChatMessage = () => {
@@ -2326,7 +2225,7 @@ export default function Gameboard() {
 				bankGiveResources={bankGiveResources}
 				bankReceiveResources={bankReceiveResources}
 				bankResources={bankResourcesState}
-				currentPlayer={currentPlayer}
+				currentPlayer={myPlayer}
 				onClose={() => setShowTradePopup(false)}
 				onSetTradeMode={setTradeMode}
 				onAdjustPlayerGiveResource={(resource, delta) => {
@@ -2358,7 +2257,7 @@ export default function Gameboard() {
 			/>
 
 			<TradeRequestSummaryPopup
-				isVisible={activeOutgoingTradeRequest !== null && activeOutgoingTradeRequest.sourcePlayerId === currentPlayer?.id}
+				isVisible={activeOutgoingTradeRequest !== null && activeOutgoingTradeRequest.sourcePlayerId === myPlayer?.id}
 				tradeRequest={activeOutgoingTradeRequest}
 				currentPlayer={myPlayer}
 				sourcePlayer={activeOutgoingTradeSourcePlayer}

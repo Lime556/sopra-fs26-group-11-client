@@ -18,6 +18,7 @@ export interface HexTile {
 
 export interface Player {
 	id: number;
+	userId: number | null;
 	name: string;
 	bot?: boolean;
 	color: string;
@@ -83,6 +84,7 @@ export interface GameGetDTO {
 	turnPhase?: string | null;
 	gamePhase?: string | null;
 	diceValue?: number | null;
+	diceRolledAt?: string | null;
 	robberTileIndex?: number | null;
 	developmentDeck?: DevelopmentDeckDTO | null;
 	players?: PlayerGetDTO[];
@@ -95,14 +97,20 @@ export interface GameGetDTO {
 }
 
 export interface GameStateDTO {
-	currentPlayerId: number;
-	turnPhase: string;
-	diceValue: number | null;
-	gameFinished: boolean;
+    currentPlayerId: number;
+    currentTurnIndex?: number | null;
+    turnPhase: string;
+    gamePhase?: string | null;
+    diceValue: number | null;
+    diceRolledAt?: string | null;
+    gameVersion?: number | null;
+    gameFinished: boolean;
 }
 
 export interface PlayerGetDTO {
 	id: number;
+	userId?: number | null;
+	color?: string | null;
 	name: string;
 	bot?: boolean | null;
 	victoryPoints?: number | null;
