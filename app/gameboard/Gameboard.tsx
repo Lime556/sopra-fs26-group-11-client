@@ -7,7 +7,6 @@ import { useSearchParams } from "next/navigation";
 //import SockJS from "sockjs-client";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
-import { getApiDomain } from "@/utils/domain";
 import { LogOut, Send } from "lucide-react";
 import styles from "@/styles/gameboard.module.css";
 import { ApplicationError } from "@/types/error";
@@ -49,14 +48,11 @@ import {
 	rememberRoadsInCache,
 } from "./roads";
 import {
-	type GameStateDTO,
 	type BoardGetDTO,
 	type GameChatMessageDTO,
 	type GameEventDTO,
 	type GameGetDTO,
-	//type DevelopmentDeckDTO,
 	type GameState,
-	//type GameStateDTO,
 	type HexTile,
 	type Player,
 	type ResourceType,
@@ -119,7 +115,7 @@ export default function Gameboard() {
 	const [pendingRobberHexId, setPendingRobberHexId] = useState<number | null>(null);
 	const [robberTargets, setRobberTargets] = useState<Player[]>([]);
 	const [selectedRobberTargetId, setSelectedRobberTargetId] = useState<number | null>(null);
-	const [mustMoveRobber, setMustMoveRobber] = useState<boolean>(false);
+	const [robberMoveInFlight, setRobberMoveInFlight] = useState<boolean>(false);
 	const [discardModalOpen, setDiscardModalOpen] = useState<boolean>(false);
 	const [discardChoices, setDiscardChoices] = useState<Record<string, number>>({});
 	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
@@ -129,6 +125,8 @@ export default function Gameboard() {
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const lastDiceRolledAtRef = useRef<string | null>(null);
 	const ports = Array.isArray(state.ports) ? state.ports : [];
+
+	
 
 	const showDiceResultPopup = (diceValue: number) => {
 		setDicePopupValue(diceValue);
@@ -239,6 +237,7 @@ export default function Gameboard() {
 						hexes: mappedHexes,
 						ports: mappedPorts,
 						robberHexId: gameDto?.robberTileIndex ?? findDesertHexId(mappedHexes),
+						robberMovedAfterSevenRoll: gameDto?.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
 						developmentDeck: gameDto?.developmentDeck ?? previousState.developmentDeck,
 						players:
 							gameDto?.players
@@ -358,6 +357,7 @@ export default function Gameboard() {
 					diceRolledAt?: string | null;
 					currentPlayerId?: number | null;
 					gameFinished?: boolean | null;
+					robberMovedAfterSevenRoll?: boolean | null;
 				}>(`/games/${gameId}/sync`);
 		
 				if (cancelled) {
@@ -379,8 +379,12 @@ export default function Gameboard() {
 					setState((previousState) => ({
 						...previousState,
 						diceResult: nextDiceValue,
+						turnPhase: syncDto.turnPhase ?? previousState.turnPhase,
+						gamePhase: syncDto.gamePhase ?? previousState.gamePhase,
+						currentPlayerId: syncDto.currentPlayerId ?? previousState.currentPlayerId,
+						robberMovedAfterSevenRoll:
+							syncDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
 					}));
-
 					showDiceResultPopup(nextDiceValue);
 				}
 		
@@ -437,6 +441,8 @@ export default function Gameboard() {
 					hexes: mappedHexes,
 					ports: mappedPorts,
 					robberHexId: createdGame.robberTileIndex ?? findDesertHexId(mappedHexes),
+					robberMovedAfterSevenRoll:
+						createdGame.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
 				}));
 				setBoardStatus("");
 			}
@@ -562,7 +568,6 @@ export default function Gameboard() {
 		return map;
 	}, [state.hexes]);
 
-	const currentPlayerIndex = state.players.findIndex((player) => player.id === state.currentPlayerId);
 	const currentPlayer = state.players.find((player) => player.id === state.currentPlayerId) ?? null;
 	const parsedSessionUserId = Number.parseInt(sessionUserId ?? "", 10);
 	const hasSessionUserId = Number.isFinite(parsedSessionUserId);
@@ -573,6 +578,11 @@ export default function Gameboard() {
 	const myPlayerIdRef = useRef<number | null>(null);
 	myPlayerIdRef.current = myPlayer?.id ?? null;
 	const isMyTurn = myPlayer !== null && myPlayer.id === state.currentPlayerId;
+	const mustMoveRobberFromServer =
+		isMyTurn
+		&& state.turnPhase === "ACTION"
+		&& state.diceResult === 7
+		&& state.robberMovedAfterSevenRoll === false;
 	const activeTradeRequestSourcePlayer = activeTradeRequest
 		? state.players.find((player) => player.id === activeTradeRequest.sourcePlayerId) ?? null
 		: null;
@@ -729,15 +739,6 @@ export default function Gameboard() {
 		}
 
 		return { sender, message };
-	};
-
-	const parseResourceInput = (value: string | null): ResourceType | null => {
-		if (!value) {
-			return null;
-		}
-
-		const normalized = value.trim().toLowerCase();
-		return resourceTypes.includes(normalized as ResourceType) ? (normalized as ResourceType) : null;
 	};
 
 	const getPlayerTotalResources = (player: Player): number =>
@@ -1447,25 +1448,22 @@ export default function Gameboard() {
 		const mustDiscard =
 			state.turnPhase === "DISCARD"
 			&& myPlayer !== null
-			&& isMyTurn
 			&& myPlayerResourceTotal > 7;
-
+	
 		const moveRobber =
-			state.turnPhase === "ACTION"
-			&& myPlayer !== null
-			&& isMyTurn
-			&& mustMoveRobber
+			mustMoveRobberFromServer
 			&& !mustDiscard;
 	
 		setDiscardModalOpen(mustDiscard);
+	
 		if (moveRobber) {
-			setPlacementMode('knight');
+			setPlacementMode("knight");
 		}
-
+	
 		if (!mustDiscard) {
 			setDiscardChoices({});
 		}
-	}, [state.turnPhase, isMyTurn, myPlayer?.id, myPlayerResourceTotal]);
+	}, [state.turnPhase, isMyTurn, myPlayer?.id, myPlayerResourceTotal, mustMoveRobberFromServer]);
 
 	const handleRollDice = async () => {
 		if (!isMyTurn || !activeGameId || state.turnPhase !== "ROLL_DICE") {
@@ -1473,21 +1471,23 @@ export default function Gameboard() {
 		}
 
 		try {
-			const gameDto = await apiService.post<GameStateDTO>(`/games/${activeGameId}/actions/roll-dice`, {});
+			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/roll-dice`, {});
 		
 			if (typeof gameDto.diceValue === "number") {
 				setState((previousState) => ({
 					...previousState,
-					diceResult: gameDto.diceValue as number,
+					diceResult: gameDto.diceValue ?? previousState.diceResult,
+					turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
+					gamePhase: gameDto.gamePhase ?? previousState.gamePhase,
+					robberHexId: gameDto.robberTileIndex ?? previousState.robberHexId,
+					robberMovedAfterSevenRoll:
+						gameDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
 				}));
 				showDiceResultPopup(gameDto.diceValue);
 			}
 		
 			addToLog("Dice rolled.");
 
-			if (gameDto.diceValue === 7) {
-				setMustMoveRobber(true);
-			}
 		} catch (error) { // The resource distribution and bank updates will be handled by the backend and reflected in the next syncGameState call.
 			const appError = error as Partial<ApplicationError>;
 			if (appError.status === 409) {
@@ -1499,21 +1499,100 @@ export default function Gameboard() {
 	};
 
 	const handleConfirmDiscard = async () => {
-		if (!activeGameId || state.turnPhase !== "DISCARD") {
+		if (!activeGameId || state.turnPhase !== "DISCARD" || !myPlayer) {
 			return;
 		}
-
+	
 		try {
-			await apiService.post(`/games/${activeGameId}/actions/roll-dice`, { discardResources: discardChoices });
+			const gameDto = await apiService.post<GameGetDTO>(
+				`/games/${activeGameId}/actions/discard-resources`,
+				discardChoices
+			);
+	
 			addToLog("Resources discarded.");
 			setDiscardModalOpen(false);
-			setDiscardChoices({})
-			setPlacementMode('knight');
-			//setMustMoveRobber(true);
+			setDiscardChoices({});
+	
+			if (gameDto.bankResources) {
+				setBankResourcesState(gameDto.bankResources as Resources);
+			}
+	
+			setState((previousState) => {
+				const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
+	
+				const updatedPlayers =
+					serverPlayers.length > 0
+						? serverPlayers.map((serverPlayer, index) => {
+								const previousPlayer = previousState.players.find((p) => p.id === serverPlayer.id);
+	
+								const cachedRoads = Array.from(roadCacheRef.current.get(serverPlayer.id) ?? [])
+									.map((entry: unknown) => (typeof entry === "string" ? parseRoadEntry(entry) : entry))
+									.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null);
+	
+								const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
+									? serverPlayer.roadsOnEdges
+											.map((entry: unknown) =>
+												typeof entry === "string"
+													? parseRoadEntry(entry)
+													: entry && typeof (entry as { hexId?: number }).hexId === "number"
+														? {
+																hexId: (entry as { hexId: number }).hexId,
+																edge:
+																	(entry as { edge?: number; edgeIndex?: number }).edge ??
+																	(entry as { edge?: number; edgeIndex?: number }).edgeIndex,
+															}
+														: null
+											)
+											.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null)
+									: [];
+	
+								const mergedRoads = mergeRoadLists(
+									serverRoads,
+									mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? [])
+								);
+	
+								rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
+	
+								return {
+									id: serverPlayer.id,
+									userId: serverPlayer.userId ?? null,
+									name: serverPlayer.name,
+									bot: Boolean(serverPlayer.bot),
+									color: serverPlayer.color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
+									resources: mapResourcesFromServer(serverPlayer),
+									victoryPoints: serverPlayer.victoryPoints ?? 0,
+									developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
+									knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
+									developmentCardVictoryPoints:
+										serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
+									freeRoadBuildsRemaining:
+										serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
+									hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
+									hasLargestArmy: serverPlayer.hasLargestArmy ?? false,
+									settlementsOnCorners:
+										serverPlayer.settlementsOnCorners ?? previousPlayer?.settlementsOnCorners ?? [],
+									citiesOnCorners:
+										serverPlayer.citiesOnCorners ?? previousPlayer?.citiesOnCorners ?? [],
+									roadsOnEdges: mergedRoads,
+								};
+							})
+						: previousState.players;
+	
+				return {
+					...previousState,
+					players: updatedPlayers,
+					diceResult: gameDto.diceValue ?? previousState.diceResult,
+					turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
+					gamePhase: gameDto.gamePhase ?? previousState.gamePhase,
+					robberHexId: gameDto.robberTileIndex ?? previousState.robberHexId,
+					robberMovedAfterSevenRoll:
+						gameDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
+				};
+			});
 		} catch (error) {
 			const appError = error as Partial<ApplicationError>;
 			if (appError.status === 409) {
-				addToLog("Cannot discard resources: " + (appError.message || "Invalid turn phase"));
+				addToLog("Cannot discard resources: " + (appError.message || "Invalid discard."));
 			} else {
 				addToLog("Failed to discard resources.");
 			}
@@ -1800,38 +1879,127 @@ export default function Gameboard() {
 	};
 
 	const handleConfirmRobberMove = async () => {
-		if (!isMyTurn || !myPlayer || !activeGameId || pendingRobberHexId === null) {
+		if (!isMyTurn || !myPlayer || !activeGameId || pendingRobberHexId === null || robberMoveInFlight) {
 			return;
 		}
 
 		const targetPlayer = robberTargets.find((player) => player.id === (selectedRobberTargetId ?? -1));
-		const eventPayload: GameEventDTO = {
-			type: mustMoveRobber ? "ROBBER_MOVE" : "DEVELOPMENT_CARD_PLAYED_KNIGHT",
+		const robberPayload = {
 			sourcePlayerId: myPlayer.id,
 			hexId: pendingRobberHexId,
 		};
 
 		if (selectedRobberTargetId !== null) {
-			eventPayload.targetPlayerId = selectedRobberTargetId;
+			(robberPayload as { targetPlayerId?: number }).targetPlayerId = selectedRobberTargetId;
 		}
 
+		let movedSuccessfully = false;
 		try {
-			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, eventPayload);
+			setRobberMoveInFlight(true);
+			if (mustMoveRobberFromServer) {
+				const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/move-robber`, robberPayload);
+
+				if (gameDto.bankResources) {
+					setBankResourcesState(gameDto.bankResources as Resources);
+				}
+
+				setState((previousState) => {
+					const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
+					const updatedPlayers =
+						serverPlayers.length > 0
+							? serverPlayers.map((serverPlayer, index) => {
+								const previousPlayer = previousState.players.find((p) => p.id === serverPlayer.id);
+								const cachedRoads = Array.from(roadCacheRef.current.get(serverPlayer.id) ?? [])
+									.map((entry: unknown) => (typeof entry === "string" ? parseRoadEntry(entry) : entry))
+									.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null);
+								const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
+									? serverPlayer.roadsOnEdges
+										.map((entry: unknown) =>
+											typeof entry === "string"
+												? parseRoadEntry(entry)
+												: entry && typeof (entry as { hexId?: number }).hexId === "number"
+													? {
+														hexId: (entry as { hexId: number }).hexId,
+														edge:
+															(entry as { edge?: number; edgeIndex?: number }).edge ??
+															(entry as { edge?: number; edgeIndex?: number }).edgeIndex,
+													}
+													: null
+										)
+										.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null)
+									: [];
+								const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
+								rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
+								return {
+									id: serverPlayer.id,
+									userId: serverPlayer.userId ?? null,
+									name: serverPlayer.name,
+									bot: Boolean(serverPlayer.bot),
+									color: serverPlayer.color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
+									resources: mapResourcesFromServer(serverPlayer),
+									victoryPoints: serverPlayer.victoryPoints ?? 0,
+									developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
+									knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
+									developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
+									freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
+									hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
+									hasLargestArmy: serverPlayer.hasLargestArmy ?? false,
+									settlementsOnCorners: serverPlayer.settlementsOnCorners ?? previousPlayer?.settlementsOnCorners ?? [],
+									citiesOnCorners: serverPlayer.citiesOnCorners ?? previousPlayer?.citiesOnCorners ?? [],
+									roadsOnEdges: mergedRoads,
+								};
+							})
+							: previousState.players;
+
+					const nextCurrentPlayerId =
+						typeof gameDto.currentTurnIndex === "number" && serverPlayers.length > 0
+							? serverPlayers[((gameDto.currentTurnIndex % serverPlayers.length) + serverPlayers.length) % serverPlayers.length].id
+							: previousState.currentPlayerId;
+
+					return {
+						...previousState,
+						players: updatedPlayers,
+						currentPlayerId: nextCurrentPlayerId,
+						diceResult: gameDto.diceValue ?? previousState.diceResult,
+						turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
+						gamePhase: gameDto.gamePhase ?? previousState.gamePhase,
+						robberHexId: gameDto.robberTileIndex ?? previousState.robberHexId,
+						robberMovedAfterSevenRoll:
+							gameDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
+					};
+				});
+			} else {
+				const eventPayload: GameEventDTO = {
+					type: "DEVELOPMENT_CARD_PLAYED_KNIGHT",
+					...robberPayload,
+				};
+				await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, eventPayload);
+		
+				setState((previousState) => ({
+					...previousState,
+					robberHexId: pendingRobberHexId,
+				}));
+			}
+		
 			if (targetPlayer) {
 				addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId} and stole from ${targetPlayer.name}.`);
 			} else {
 				addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId}.`);
 			}
-		} catch {
-			addToLog("Could not move the robber. Please try again.");
+			movedSuccessfully = true;
+		} catch (error) {
+			const appError = error as Partial<ApplicationError>;
+			addToLog(appError.message || "Could not move the robber. Please try again.");
 			return;
 		} finally {
-			setRobberTargetModalOpen(false);
-			setPendingRobberHexId(null);
-			setRobberTargets([]);
-			setSelectedRobberTargetId(null);
-			setPlacementMode(null);
-			setMustMoveRobber(false);
+			setRobberMoveInFlight(false);
+			if (movedSuccessfully) {
+				setRobberTargetModalOpen(false);
+				setPendingRobberHexId(null);
+				setRobberTargets([]);
+				setSelectedRobberTargetId(null);
+				setPlacementMode(null);
+			}
 		}
 	};
 
@@ -2166,7 +2334,10 @@ export default function Gameboard() {
 					turnPhase: gameDto.turnPhase ?? (newIsSetupPhase ? previousState.turnPhase : "ROLL_DICE"),
 					gamePhase: newGamePhase,
 					players: updatedPlayers,
-					diceResult: null,
+					diceResult: gameDto.diceValue ?? null,
+					robberMovedAfterSevenRoll:
+						gameDto.robberMovedAfterSevenRoll ?? false,
+					robberHexId: gameDto.robberTileIndex ?? previousState.robberHexId,
 				};
 			});
 
@@ -2357,8 +2528,13 @@ export default function Gameboard() {
 							)}
 						</div>
 						<div className={styles.modalActions}>
-							<button type="button" className={styles.modalActionButtonPrimary} onClick={handleConfirmRobberMove}>
-								Confirm Move
+							<button
+								type="button"
+								className={`${styles.modalActionButtonPrimary} ${robberMoveInFlight ? styles.buttonDisabled : ""}`}
+								onClick={handleConfirmRobberMove}
+								disabled={robberMoveInFlight}
+							>
+								{robberMoveInFlight ? "Moving..." : "Confirm Move"}
 							</button>
 						</div>
 					</div>
@@ -2378,7 +2554,7 @@ export default function Gameboard() {
 						</div>
 						<div className={styles.modalBody}>
 							{(() => {
-								const currentPlayer = state.players.find(p => p.id === state.currentPlayerId);
+								const currentPlayer = myPlayer;
 								if (!currentPlayer) return null;
 								const totalResources = currentPlayer.resources.wood + currentPlayer.resources.brick + 
 									currentPlayer.resources.wool + currentPlayer.resources.wheat + currentPlayer.resources.ore;
@@ -2420,7 +2596,7 @@ export default function Gameboard() {
 						<div className={styles.modalActions}>
 							<button type="button" className={styles.modalActionButtonPrimary} onClick={handleConfirmDiscard} disabled={
 								(() => {
-									const currentPlayer = state.players.find(p => p.id === state.currentPlayerId);
+									const currentPlayer = myPlayer;
 									if (!currentPlayer) return true;
 									const totalResources = currentPlayer.resources.wood + currentPlayer.resources.brick + 
 										currentPlayer.resources.wool + currentPlayer.resources.wheat + currentPlayer.resources.ore;
@@ -2476,6 +2652,7 @@ export default function Gameboard() {
 					handleBuildSettlementAction={handleBuildSettlementAction}
 					handleBuildCityAction={handleBuildCityAction}
 					handleEndTurn={handleEndTurn}
+					mustMoveRobberBeforeEndTurn={mustMoveRobberFromServer}
 				/>
 			<aside className={styles.rightPanel}>
 				<section className={styles.sidebarCard}>
