@@ -145,7 +145,8 @@ export interface GameEventDTO {
 		| "DEVELOPMENT_CARD_PLAYED_KNIGHT"
 		| "DEVELOPMENT_CARD_PLAYED_ROAD_BUILDING"
 		| "DEVELOPMENT_CARD_PLAYED_YEAR_OF_PLENTY"
-		| "DEVELOPMENT_CARD_PLAYED_MONOPOLY";
+		| "DEVELOPMENT_CARD_PLAYED_MONOPOLY"
+		| "ROBBER_MOVE";
 	sourcePlayerId?: number;
 	targetPlayerId?: number;
 	giveResource?: ResourceType;

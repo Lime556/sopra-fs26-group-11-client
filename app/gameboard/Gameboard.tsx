@@ -119,6 +119,7 @@ export default function Gameboard() {
 	const [pendingRobberHexId, setPendingRobberHexId] = useState<number | null>(null);
 	const [robberTargets, setRobberTargets] = useState<Player[]>([]);
 	const [selectedRobberTargetId, setSelectedRobberTargetId] = useState<number | null>(null);
+	const [isRobberMoveAfterSeven, setIsRobberMoveAfterSeven] = useState<boolean>(false);
 	const [discardModalOpen, setDiscardModalOpen] = useState<boolean>(false);
 	const [discardChoices, setDiscardChoices] = useState<Record<string, number>>({});
 	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
@@ -1492,7 +1493,9 @@ export default function Gameboard() {
 			await apiService.post(`/games/${activeGameId}/actions/roll-dice`, { discardResources: discardChoices });
 			addToLog("Resources discarded.");
 			setDiscardModalOpen(false);
-			setDiscardChoices({});
+			setDiscardChoices({})
+			setPlacementMode('knight');
+			setIsRobberMoveAfterSeven(true);
 		} catch (error) {
 			const appError = error as Partial<ApplicationError>;
 			if (appError.status === 409) {
@@ -1789,7 +1792,7 @@ export default function Gameboard() {
 
 		const targetPlayer = robberTargets.find((player) => player.id === (selectedRobberTargetId ?? -1));
 		const eventPayload: GameEventDTO = {
-			type: "DEVELOPMENT_CARD_PLAYED_KNIGHT",
+			type: isRobberMoveAfterSeven ? "ROBBER_MOVE" : "DEVELOPMENT_CARD_PLAYED_KNIGHT",
 			sourcePlayerId: myPlayer.id,
 			hexId: pendingRobberHexId,
 		};
@@ -1814,6 +1817,7 @@ export default function Gameboard() {
 			setRobberTargets([]);
 			setSelectedRobberTargetId(null);
 			setPlacementMode(null);
+			setIsRobberMoveAfterSeven(false);
 		}
 	};
 
