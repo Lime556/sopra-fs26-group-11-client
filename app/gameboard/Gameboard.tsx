@@ -119,6 +119,7 @@ export default function Gameboard() {
 	const [pendingRobberHexId, setPendingRobberHexId] = useState<number | null>(null);
 	const [robberTargets, setRobberTargets] = useState<Player[]>([]);
 	const [selectedRobberTargetId, setSelectedRobberTargetId] = useState<number | null>(null);
+	const [mustMoveRobber, setMustMoveRobber] = useState<boolean>(false);
 	const [discardModalOpen, setDiscardModalOpen] = useState<boolean>(false);
 	const [discardChoices, setDiscardChoices] = useState<Record<string, number>>({});
 	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
@@ -1448,9 +1449,19 @@ export default function Gameboard() {
 			&& myPlayer !== null
 			&& isMyTurn
 			&& myPlayerResourceTotal > 7;
+
+		const moveRobber =
+			state.turnPhase === "ACTION"
+			&& myPlayer !== null
+			&& isMyTurn
+			&& mustMoveRobber
+			&& !mustDiscard;
 	
 		setDiscardModalOpen(mustDiscard);
-	
+		if (moveRobber) {
+			setPlacementMode('knight');
+		}
+
 		if (!mustDiscard) {
 			setDiscardChoices({});
 		}
@@ -1473,6 +1484,10 @@ export default function Gameboard() {
 			}
 		
 			addToLog("Dice rolled.");
+
+			if (gameDto.diceValue === 7) {
+				setMustMoveRobber(true);
+			}
 		} catch (error) { // The resource distribution and bank updates will be handled by the backend and reflected in the next syncGameState call.
 			const appError = error as Partial<ApplicationError>;
 			if (appError.status === 409) {
@@ -1492,7 +1507,9 @@ export default function Gameboard() {
 			await apiService.post(`/games/${activeGameId}/actions/roll-dice`, { discardResources: discardChoices });
 			addToLog("Resources discarded.");
 			setDiscardModalOpen(false);
-			setDiscardChoices({});
+			setDiscardChoices({})
+			setPlacementMode('knight');
+			//setMustMoveRobber(true);
 		} catch (error) {
 			const appError = error as Partial<ApplicationError>;
 			if (appError.status === 409) {
@@ -1789,7 +1806,7 @@ export default function Gameboard() {
 
 		const targetPlayer = robberTargets.find((player) => player.id === (selectedRobberTargetId ?? -1));
 		const eventPayload: GameEventDTO = {
-			type: "DEVELOPMENT_CARD_PLAYED_KNIGHT",
+			type: mustMoveRobber ? "ROBBER_MOVE" : "DEVELOPMENT_CARD_PLAYED_KNIGHT",
 			sourcePlayerId: myPlayer.id,
 			hexId: pendingRobberHexId,
 		};
@@ -1814,6 +1831,7 @@ export default function Gameboard() {
 			setRobberTargets([]);
 			setSelectedRobberTargetId(null);
 			setPlacementMode(null);
+			setMustMoveRobber(false);
 		}
 	};
 
