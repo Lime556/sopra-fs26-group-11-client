@@ -65,6 +65,9 @@
   }
   
   .headerSpacer {
+    width: 0.5rem
+  }
+  .headerSpacer2 {
     width: 8rem;
   }
   

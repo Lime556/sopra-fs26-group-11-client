@@ -19,12 +19,20 @@ import styles from "@/styles/lobby.module.css";
 
 
 export default function Lobby() {
+  interface LobbyParticipantGetDTO {
+    id: number;
+    userId: number | null;
+    username: string;
+    bot: boolean;
+  }
+  
   interface LobbyGetDTO {
     id: number;
     name?: string;
     capacity: number;
     currentParticipants: number;
     privateLobby: boolean;
+    participants?: LobbyParticipantGetDTO[];
     hostParticipantId: number | null;
     gameId?: number | null;
   }
@@ -116,6 +124,8 @@ export default function Lobby() {
     name: lobby.name?.trim() ? lobby.name : `Lobby ${lobby.id}`,
     capacity: lobby.capacity,
     currentPlayers: lobby.currentParticipants,
+    participants: lobby.participants,
+    hostParticipantId: lobby.hostParticipantId,
     privateLobby: lobby.privateLobby,
   }), []);
 
@@ -192,6 +202,16 @@ export default function Lobby() {
 
   useEffect(() => {
     void loadLobbies();
+  }, [loadLobbies]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void loadLobbies();
+    }, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
   }, [loadLobbies]);
 
   useEffect(() => {
