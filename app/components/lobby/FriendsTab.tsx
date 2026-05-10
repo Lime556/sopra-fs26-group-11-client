@@ -35,6 +35,7 @@ interface FriendsTabProps {
   onDenyRequest: (requestId: number) => void;
   onSelectFriend: (friend: Friend) => void;
   onRefreshFriends: () => void;
+  onOpenProfile: (userId: number) => void;
 }
 
 export default function FriendsTab({
@@ -53,7 +54,22 @@ export default function FriendsTab({
   onDenyRequest,
   onSelectFriend,
   onRefreshFriends,
+  onOpenProfile,
 }: FriendsTabProps) {
+  const parseUserId = (value: string): number | null => {
+    const trimmed = value.trim();
+    const normalized = trimmed.toUpperCase().startsWith("USR-")
+      ? trimmed.slice(4)
+      : trimmed;
+    const parsed = Number(normalized);
+
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return null;
+    }
+
+    return parsed;
+  };
+
   return (
     <div>
       <div className={styles.sectionHeader}>
@@ -103,7 +119,18 @@ export default function FriendsTab({
                   <div className={styles.resultInfo}>
                     <div className={styles.avatarSmall}>{result.username[0]}</div>
                     <div>
-                      <p className={styles.resultName}>{result.username}</p>
+                      <button
+                        type="button"
+                        className={styles.usernameLinkButton}
+                        onClick={() => {
+                          const parsedId = parseUserId(result.id);
+                          if (parsedId !== null) {
+                            onOpenProfile(parsedId);
+                          }
+                        }}
+                      >
+                        {result.username}
+                      </button>
                       <p className={styles.resultMeta}>{result.id}</p>
                     </div>
                   </div>
@@ -135,7 +162,18 @@ export default function FriendsTab({
                   <div className={styles.requestItemTop}>
                     <div className={styles.avatarSmall}>{request.username[0]}</div>
                     <div>
-                      <p className={styles.resultName}>{request.username}</p>
+                      <button
+                        type="button"
+                        className={styles.usernameLinkButton}
+                        onClick={() => {
+                          const parsedId = parseUserId(request.userId);
+                          if (parsedId !== null) {
+                            onOpenProfile(parsedId);
+                          }
+                        }}
+                      >
+                        {request.username}
+                      </button>
                       <p className={styles.resultMeta}>{request.userId}</p>
                       <p className={styles.requestMessage}>{request.message}</p>
                       <p className={styles.requestDate}>{request.date}</p>
@@ -178,7 +216,16 @@ export default function FriendsTab({
             <div className={styles.friendInfo}>
               <div className={styles.avatarSmall}>{friend.name[0]}</div>
               <div>
-                <p className={styles.friendName}>{friend.name}</p>
+                <button
+                  type="button"
+                  className={styles.usernameLinkButton}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenProfile(friend.id);
+                  }}
+                >
+                  {friend.name}
+                </button>
                 <p className={styles.friendMeta}>{friend.status}</p>
               </div>
             </div>

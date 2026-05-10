@@ -4,11 +4,20 @@ import React from "react";
 import { Plus, Play, Lock, Unlock, Users, Search } from "lucide-react";
 import styles from "@/styles/lobby.module.css";
 
+interface LobbyParticipantGetDTO {
+  id: number;
+  userId: number | null;
+  username: string;
+  bot: boolean;
+}
+
 export interface LobbyItem {
   id: number;
   name: string;
   capacity: number;
   currentPlayers: number;
+  participants?: LobbyParticipantGetDTO[];
+  hostParticipantId: number | null;
   privateLobby: boolean;
 }
 
@@ -91,10 +100,11 @@ export default function LobbiesTab({
                 </div>
                 <button
                   onClick={() => onJoinLobby(searchLobbyResult)}
+                  disabled={searchLobbyResult.currentPlayers >= searchLobbyResult.capacity}
                   className={styles.successButton}
                 >
                   <Play size={14} />
-                  Join
+                  {searchLobbyResult.currentPlayers >= searchLobbyResult.capacity ? "Full" : "Join"}
                 </button>
               </div>
             </div>
@@ -115,7 +125,12 @@ export default function LobbiesTab({
             </div>
 
             <p className={styles.hostText}>ID: {lobby.id}</p>
-
+            <span className={styles.hostText}>
+              Host: {lobby.participants?.find(
+                        (participant) => participant.id === lobby.hostParticipantId
+                      )?.username ?? "—"
+                    }
+            </span>
             <div className={styles.lobbyFooter}>
               <div className={styles.playersText}>
                 <Users size={18} />
@@ -126,10 +141,11 @@ export default function LobbiesTab({
 
               <button
                 onClick={() => onJoinLobby(lobby)}
+                disabled={lobby.currentPlayers >= lobby.capacity}
                 className={styles.joinButton}
               >
                 <Play size={18} />
-                Join
+                {lobby.currentPlayers >= lobby.capacity ? "Full" : "Join"}
               </button>
             </div>
           </div>

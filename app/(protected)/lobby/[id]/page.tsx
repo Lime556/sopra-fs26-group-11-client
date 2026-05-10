@@ -4,6 +4,7 @@ import { useRouter, useParams } from "next/navigation";
 import { LogOut, Users, Bot, Crown, Play, UserMinus } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
+import UserProfileModal from "@/components/lobby/UserProfileModal";
 
 import styles from "@/styles/lobbyRoom.module.css";
 
@@ -12,6 +13,8 @@ interface LobbyParticipantGetDTO {
   userId: number | null;
   username: string;
   bot: boolean;
+  online?: boolean;
+  lastSeenAt?: string | null;
 }
 
 interface LobbyGetDTO {
@@ -46,9 +49,20 @@ export default function LobbyRoom() {
   const [kickingParticipantId, setKickingParticipantId] = useState<number | null>(null);
   const [transferringParticipantId, setTransferringParticipantId] = useState<number | null>(null);
   const [hostTransferMessage, setHostTransferMessage] = useState("");
+  const [showUserProfileModal, setShowUserProfileModal] = useState(false);
+  const [selectedProfileUserId, setSelectedProfileUserId] = useState<number>(0);
   const currentUserId = userId ? Number(userId) : null;
 
-  const redirectWithFlash = useCallback((reason: "kicked" | "closed") => {
+  const handleOpenProfile = (targetUserId: number | null) => {
+    if (!targetUserId) {
+      return;
+    }
+
+    setSelectedProfileUserId(targetUserId);
+    setShowUserProfileModal(true);
+  };
+
+  const redirectWithFlash = (reason: "kicked" | "closed") => {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("lobbyFlashMessage", reason);
     }
@@ -59,7 +73,7 @@ export default function LobbyRoom() {
   useEffect(() => {
     const loadLobby = async () => {
       try {
-        const data = await apiService.get<LobbyGetDTO>(`/lobbies/${lobbyId}`);
+        const data = await apiService.post<LobbyGetDTO>(`/lobbies/${lobbyId}/heartbeat`, {});
         setLobby(data);
       } catch (err) {
         setError("Failed to load lobby.");
@@ -78,7 +92,7 @@ export default function LobbyRoom() {
 
     const interval = setInterval(async () => {
       try {
-        const updatedLobby = await apiService.get<LobbyGetDTO>(`/lobbies/${lobbyId}`);
+        const updatedLobby = await apiService.post<LobbyGetDTO>(`/lobbies/${lobbyId}/heartbeat`, {});
         if (currentUserId !== null) {
           const stillInLobby = updatedLobby.participants.some((p) => p.userId === currentUserId);
           if (!stillInLobby) {
@@ -320,8 +334,10 @@ export default function LobbyRoom() {
             <LogOut className={`${styles.leaveIcon} w-5 h-5`} />
             {leaving ? "Leaving..." : "Leave Lobby"}
           </button>
-          <h1 className={styles.headerTitle}>{lobby.name}</h1>
           <div className={styles.headerSpacer} />
+          <h1 className={styles.headerTitle}>{lobby.name}</h1>
+          <div className={styles.headerSpacer2}/>
+          <h1 className={styles.title}>ID: {lobby.id}</h1>
         </div>
       </div>
 
@@ -387,7 +403,17 @@ export default function LobbyRoom() {
 
                     <div className={styles.participantText}>
                       <div className={styles.nameRow}>
-                        <p className={styles.participantName}>{participant.username}</p>
+                        {participant.bot || participant.userId === null ? (
+                          <p className={styles.participantName}>{participant.username}</p>
+                        ) : (
+                          <button
+                            type="button"
+                            className={styles.participantNameButton}
+                            onClick={() => handleOpenProfile(participant.userId)}
+                          >
+                            {participant.username}
+                          </button>
+                        )}
                         {participantIsHost && (
                           <span className={styles.hostBadge}>
                             <Crown className="w-4 h-4 text-yellow-600" />
@@ -395,6 +421,9 @@ export default function LobbyRoom() {
                           </span>
                         )}
                         {participantIsMe && <span className={styles.meBadge}>Me</span>}
+                        <span className={`${styles.statusBadge} ${participant.online === false ? styles.offlineBadge : styles.onlineBadge}`}>
+                          {participant.online === false ? "Offline" : "Online"}
+                        </span>
                       </div>
 
                       <p className={styles.participantRole}>
@@ -475,6 +504,14 @@ export default function LobbyRoom() {
           {startInfo && <p className={styles.waitingText}>{startInfo}</p>}
         </div>
       </div>
+
+      <UserProfileModal
+        open={showUserProfileModal}
+        userId={selectedProfileUserId}
+        currentUserId={currentUserId ?? 0}
+        onClose={() => setShowUserProfileModal(false)}
+        onOpenSettings={() => router.push("/lobby")}
+      />
     </div>
   );
 }

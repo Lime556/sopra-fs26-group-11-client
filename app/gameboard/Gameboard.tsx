@@ -255,6 +255,9 @@ export default function Gameboard() {
 										userId: (serverPlayer as { userId?: number | null }).userId ?? null,
 										name: (serverPlayer as { name: string }).name,
 										bot: Boolean((serverPlayer as { bot?: boolean }).bot),
+										online: (serverPlayer as { online?: boolean | null }).online ?? true,
+										lastSeenAt: (serverPlayer as { lastSeenAt?: string | null }).lastSeenAt ?? null,
+										disconnectedAt: (serverPlayer as { disconnectedAt?: string | null }).disconnectedAt ?? null,
 										color: (serverPlayer as { color?: string | null }).color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
 										resources: mapResourcesFromServer(serverPlayer as Parameters<typeof mapResourcesFromServer>[0]),
 										victoryPoints: serverPlayer.victoryPoints ?? 0,
@@ -577,6 +580,60 @@ export default function Gameboard() {
 			}
 		};
 	}, [apiService, router, searchParams]);
+
+	useEffect(() => {
+		if (!activeGameId) {
+			return;
+		}
+
+		let cancelled = false;
+		const sendHeartbeat = async () => {
+			try {
+				const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/heartbeat`, {});
+				if (cancelled || !Array.isArray(gameDto.players)) {
+					return;
+				}
+
+				setState((previousState) => ({
+					...previousState,
+					players: previousState.players.map((player) => {
+						const serverPlayer = gameDto.players?.find((candidate) => candidate.id === player.id);
+						if (!serverPlayer) {
+							return player;
+						}
+
+						return {
+							...player,
+							name: serverPlayer.name ?? player.name,
+							bot: Boolean(serverPlayer.bot),
+							online: serverPlayer.online ?? true,
+							lastSeenAt: serverPlayer.lastSeenAt ?? null,
+							disconnectedAt: serverPlayer.disconnectedAt ?? null,
+						};
+					}),
+				}));
+			} catch (error) {
+				if (cancelled) {
+					return;
+				}
+				const status = (error as Partial<ApplicationError>)?.status;
+				if (status === 401) {
+					setBoardStatus("Session expired. Please log in again.");
+					router.replace("/login");
+				}
+			}
+		};
+
+		void sendHeartbeat();
+		const heartbeat = window.setInterval(() => {
+			void sendHeartbeat();
+		}, 1000);
+
+		return () => {
+			cancelled = true;
+			window.clearInterval(heartbeat);
+		};
+	}, [activeGameId, apiService, router]);
 
 	const hexById = useMemo(() => {
 		const map = new Map<number, HexTile>();
@@ -1574,6 +1631,9 @@ export default function Gameboard() {
 									userId: serverPlayer.userId ?? null,
 									name: serverPlayer.name,
 									bot: Boolean(serverPlayer.bot),
+									online: serverPlayer.online ?? true,
+									lastSeenAt: serverPlayer.lastSeenAt ?? null,
+									disconnectedAt: serverPlayer.disconnectedAt ?? null,
 									color: serverPlayer.color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
 									resources: mapResourcesFromServer(serverPlayer),
 									victoryPoints: serverPlayer.victoryPoints ?? 0,
@@ -1965,6 +2025,9 @@ export default function Gameboard() {
 									userId: serverPlayer.userId ?? null,
 									name: serverPlayer.name,
 									bot: Boolean(serverPlayer.bot),
+									online: serverPlayer.online ?? true,
+									lastSeenAt: serverPlayer.lastSeenAt ?? null,
+									disconnectedAt: serverPlayer.disconnectedAt ?? null,
 									color: serverPlayer.color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
 									resources: mapResourcesFromServer(serverPlayer),
 									victoryPoints: serverPlayer.victoryPoints ?? 0,
@@ -2344,6 +2407,9 @@ export default function Gameboard() {
 						userId: (serverPlayer as { userId?: number | null }).userId ?? null,
 						name: (serverPlayer as { name: string }).name,
 						bot: Boolean((serverPlayer as { bot?: boolean | null }).bot),
+						online: (serverPlayer as { online?: boolean | null }).online ?? true,
+						lastSeenAt: (serverPlayer as { lastSeenAt?: string | null }).lastSeenAt ?? null,
+						disconnectedAt: (serverPlayer as { disconnectedAt?: string | null }).disconnectedAt ?? null,
 						color: (serverPlayer as { color?: string | null }).color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
 						resources: mapResourcesFromServer(serverPlayer as Parameters<typeof mapResourcesFromServer>[0]),
 						victoryPoints: serverPlayer.victoryPoints ?? 0,
@@ -2697,6 +2763,10 @@ export default function Gameboard() {
 										<span className={styles.colorDot} style={{ backgroundColor: player.color }} />
 										<span>{player.name}</span>
 										{player.bot && <span className={styles.botBadge}>Bot</span>}
+										{myPlayer?.id === player.id && <span className={styles.meBadge}>Me</span>}
+										<span className={`${styles.statusBadge} ${player.online === false ? styles.offlineBadge : styles.onlineBadge}`}>
+											{player.online === false ? "Offline" : "Online"}
+										</span>
 									</div>
 									<span className={styles.playerVpBadge}>{player.victoryPoints}</span>
 								</div>

@@ -83,6 +83,40 @@
   text-transform: uppercase;
 }
 
+.meBadge {
+  border: 1px solid rgba(37, 99, 235, 0.28);
+  border-radius: 999px;
+  color: #1d4ed8;
+  background: rgba(219, 234, 254, 0.95);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 3px 7px;
+  text-transform: uppercase;
+}
+
+.statusBadge {
+  border-radius: 999px;
+  font-size: 0.64rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 3px 7px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.onlineBadge {
+  border: 1px solid rgba(22, 101, 52, 0.3);
+  color: #14532d;
+  background: rgba(220, 252, 231, 0.92);
+}
+
+.offlineBadge {
+  border: 1px solid rgba(185, 28, 28, 0.28);
+  color: #7f1d1d;
+  background: rgba(254, 226, 226, 0.95);
+}
+
 .vpTag {
   font-weight: 700;
   font-size: 0.8rem;
