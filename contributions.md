@@ -147,7 +147,7 @@ reason).
 | **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
 | **[@Ziske11]** | 10.5.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/f67d8dd0edbd5b070859cd1c78f39fdca07d0ff3 | added Password hashing encryption to make passwords more secure in database | When passwords are not hashed, people with database access can see the password you set earlier. |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+|                    | 8.5.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/d9384d510167fa47d5b85ba9a5e30b08991467f0 | Added Hardcoded Bot that chooses randomly from a selection of allowed steps, following all game rules.  | We want the game to be playable alone. |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser2]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
