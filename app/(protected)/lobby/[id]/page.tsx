@@ -12,6 +12,8 @@ interface LobbyParticipantGetDTO {
   userId: number | null;
   username: string;
   bot: boolean;
+  online?: boolean;
+  lastSeenAt?: string | null;
 }
 
 interface LobbyGetDTO {
@@ -59,7 +61,7 @@ export default function LobbyRoom() {
   useEffect(() => {
     const loadLobby = async () => {
       try {
-        const data = await apiService.get<LobbyGetDTO>(`/lobbies/${lobbyId}`);
+        const data = await apiService.post<LobbyGetDTO>(`/lobbies/${lobbyId}/heartbeat`, {});
         setLobby(data);
       } catch (err) {
         setError("Failed to load lobby.");
@@ -78,7 +80,7 @@ export default function LobbyRoom() {
 
     const interval = setInterval(async () => {
       try {
-        const updatedLobby = await apiService.get<LobbyGetDTO>(`/lobbies/${lobbyId}`);
+        const updatedLobby = await apiService.post<LobbyGetDTO>(`/lobbies/${lobbyId}/heartbeat`, {});
         if (currentUserId !== null) {
           const stillInLobby = updatedLobby.participants.some((p) => p.userId === currentUserId);
           if (!stillInLobby) {
@@ -397,6 +399,9 @@ export default function LobbyRoom() {
                           </span>
                         )}
                         {participantIsMe && <span className={styles.meBadge}>Me</span>}
+                        <span className={`${styles.statusBadge} ${participant.online === false ? styles.offlineBadge : styles.onlineBadge}`}>
+                          {participant.online === false ? "Offline" : "Online"}
+                        </span>
                       </div>
 
                       <p className={styles.participantRole}>
