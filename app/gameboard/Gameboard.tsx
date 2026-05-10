@@ -171,7 +171,7 @@ export default function Gameboard() {
 		let cancelled = false;
 
 		syncedChatMessagesRef.current = new Set();
-v		syncedEventLogsRef.current = new Set();
+		syncedEventLogsRef.current = new Set();
 		roadCacheRef.current = new Map();
 
 		const readStoredGameId = (): number | null => {
