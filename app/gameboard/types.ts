@@ -21,6 +21,9 @@ export interface Player {
 	userId: number | null;
 	name: string;
 	bot?: boolean;
+	online?: boolean;
+	lastSeenAt?: string | null;
+	disconnectedAt?: string | null;
 	color: string;
 	resources: Resources;
 	victoryPoints: number;
@@ -115,6 +118,9 @@ export interface PlayerGetDTO {
 	color?: string | null;
 	name: string;
 	bot?: boolean | null;
+	online?: boolean | null;
+	lastSeenAt?: string | null;
+	disconnectedAt?: string | null;
 	victoryPoints?: number | null;
 	settlementPoints?: number | null;
 	cityPoints?: number | null;

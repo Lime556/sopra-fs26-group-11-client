@@ -262,6 +262,26 @@
   font-weight: 700;
   letter-spacing: 0.01em;
 }
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.onlineBadge {
+  background: rgb(220, 252, 231);
+  color: rgb(22, 101, 52);
+}
+
+.offlineBadge {
+  background: rgb(254, 226, 226);
+  color: rgb(153, 27, 27);
+}
   
   .participantRole {
     font-size: 0.875rem;
