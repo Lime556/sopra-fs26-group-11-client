@@ -171,6 +171,7 @@ export default function Gameboard() {
 		let cancelled = false;
 
 		syncedChatMessagesRef.current = new Set();
+		syncedEventLogsRef.current = new Set();
 		roadCacheRef.current = new Map();
 
 		const readStoredGameId = (): number | null => {
@@ -311,21 +312,21 @@ export default function Gameboard() {
 						});
 					}
 
-					if (Array.isArray(gameDto?.eventLog) && gameDto.eventLog.length > 0) {
-						const knownEventLogs = syncedEventLogsRef.current;
-						for (const rawEvent of gameDto.eventLog) {
-							if (typeof rawEvent !== "string" || rawEvent.trim().length === 0 || knownEventLogs.has(rawEvent)) {
-								continue;
+					const serverEventLogs = Array.isArray(gameDto?.eventLog)
+						? gameDto.eventLog.filter((entry: unknown): entry is string => typeof entry === "string" && entry.trim().length > 0)
+						: [];
+
+					if (serverEventLogs.length > 0) {
+						setGameLog((previous) => {
+							const known = syncedEventLogsRef.current;
+							const unseen = serverEventLogs.filter((entry: string) => !known.has(entry));
+							if (unseen.length === 0) {
+								return previous;
 							}
 
-							knownEventLogs.add(rawEvent);
-							try {
-								const parsedEvent = JSON.parse(rawEvent) as GameEventDTO;
-								applyGameEventRef.current?.(parsedEvent);
-							} catch {
-								// ignore malformed event payloads
-							}
-						}
+							unseen.forEach((entry: string) => known.add(entry));
+							return [...unseen.reverse(), ...previous].slice(0, 40);
+						});
 					}
 
 					setBoardStatus("");
