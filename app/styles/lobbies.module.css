@@ -285,11 +285,11 @@
   cursor: pointer;
 }
 
-.joinButton:hover:not(:disabled) {
+.joinButton:hover {
   background: #008c33;
 }
 
-.joinButtonFull {
+.joinButton:disabled {
   background: #9ca3af;
   cursor: not-allowed;
 }

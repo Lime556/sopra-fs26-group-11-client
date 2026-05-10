@@ -23,12 +23,20 @@ import { Input, Modal } from "antd";
 import { ApplicationError } from "@/types/error";
 import styles from "@/styles/lobbies.module.css";
 
+interface LobbyParticipantGetDTO {
+  id: number;
+  userId: number | null;
+  username: string;
+  bot: boolean;
+}
+
 interface LobbyGetDTO {
   id: number;
   name: string;
   capacity: number;
-  currentPlayers: number;
-  playerIds: number[];
+  currentParticipants: number;
+  participants: LobbyParticipantGetDTO[];
+  hostParticipantId: number | null;
   privateLobby: boolean;
 }
 
@@ -271,7 +279,7 @@ export default function Lobbies() {
           {!loading && !error && lobbies.length > 0 && (
             <div className={styles.lobbyGrid}>
               {lobbies.map((lobby) => {
-                const isFull = lobby.currentPlayers >= lobby.capacity;
+                const isFull = lobby.currentParticipants >= lobby.capacity;
                 return (
                   <div
                     key={lobby.id}
@@ -288,7 +296,10 @@ export default function Lobbies() {
                         )}
                       </div>
                       <span className={styles.lobbyHost}>
-                        Host: Player #{lobby.playerIds?.[0] ?? "—"}
+                        Host: {lobby.participants?.find(
+                                  (participant) => participant.id === lobby.hostParticipantId
+                                )?.username ?? "—"
+                              }
                       </span>
                     </div>
 
@@ -297,11 +308,11 @@ export default function Lobbies() {
                       <div className={styles.playerCount}>
                         <TeamOutlined className={styles.playerCountIcon} />
                         <span>
-                          {lobby.currentPlayers}/{lobby.capacity} Players
+                          {lobby.currentParticipants}/{lobby.capacity} Players
                         </span>
                       </div>
                       <button
-                        className={`${styles.joinButton} ${isFull ? styles.joinButtonFull : ""}`}
+                        className={styles.joinButton}
                         disabled={isFull || joiningLobbyId === lobby.id}
                         onClick={() => handleJoinClick(lobby)}
                       >

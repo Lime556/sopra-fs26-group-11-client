@@ -142,7 +142,7 @@ reason).
 
 ---
 
-## Contributions Week 5 - [Begin Date] to [End Date]
+## Contributions Week 5 - [06.05.] to [10.05.]
 
 | **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
@@ -150,8 +150,12 @@ reason).
 |                    | 8.5.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/d9384d510167fa47d5b85ba9a5e30b08991467f0 | Added Hardcoded Bot that chooses randomly from a selection of allowed steps, following all game rules.  | We want the game to be playable alone. |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
-| **[@githubUser2]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **ayleenmr** | 09.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/5bf925d082e61be721c48baa33ce52e1ba0d59f7 | The robber must be moved after discarding resources. | In order to follow the game rules, the robber has the be moved in addition to discarding resources when a 7 is rolled. |
+|                    | 09.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/d5db6b93ac00bf5203ae998984f71d1f0d815b84 | Robber fix: It must be moved even if the player doesn't have to discard resources. | According to the official rules, the robber must be moved when a 7 is rolled, regardless of the amoun of resources the active player has. |
+|                    | 06.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/22f71943272bfca9951dc5326966094f1fdaef9b | Fix for discarding resources after rolling 7. | The official game rules state that all players have to discard half of their resources when a 7 is rolled. |
+|                    | 09.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/23c3316e5438c1cd1cf53c3eb5d37713ed62a53b | Backend logic: Robber must be moved by the active player when a 7 is rolled. | It is written in the official game rules that the robber must be moved even if no resources have to be discarded.|
+|                    | 09.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/9fd0c00a53cab21e2a8ea35863320ac709f15a56 | Added tests for robber | To ensure correct backend implementation, it is essential to the newly written code.|
+|                    | 10.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/9e593b3588b24a7aec5b31e11203ea703d92009a | Display the lobby ID inside lobby, disable the join button when the lobby is full and show the host in the lobby overview. | These fixes implement feedback from the M3 beta testing. Displaying the lobby ID inside the lobby is necessary because otherwise the host wouldn't be able to tell it to other players. |
 | **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
