@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { LogOut, Users, Bot, Crown, Play, UserMinus } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
@@ -48,12 +48,12 @@ export default function LobbyRoom() {
   const [hostTransferMessage, setHostTransferMessage] = useState("");
   const currentUserId = userId ? Number(userId) : null;
 
-  const redirectWithFlash = (reason: "kicked" | "closed") => {
+  const redirectWithFlash = useCallback((reason: "kicked" | "closed") => {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("lobbyFlashMessage", reason);
     }
     router.push("/lobby");
-  };
+  }, [router]);
 
   // Load lobby details on component mount
   useEffect(() => {
@@ -117,7 +117,7 @@ export default function LobbyRoom() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [apiService, currentUserId, lobby, lobbyId, router]);
+  }, [apiService, currentUserId, lobby, lobbyId, router, redirectWithFlash]);
 
   useEffect(() => {
     if (!hostTransferMessage) return;
