@@ -815,6 +815,45 @@ export default function Gameboard() {
 		return { sender, message };
 	};
 
+	const formatEventLogEntry = (entry: string): string => {
+		const segments = entry.split("|").map((part) => part.trim());
+		if (segments.length < 3) {
+			return entry;
+		}
+
+		const keyValues = new Map<string, string>();
+		segments.forEach((segment) => {
+			const separatorIndex = segment.indexOf("=");
+			if (separatorIndex <= 0) {
+				return;
+			}
+
+			const key = segment.slice(0, separatorIndex).trim().toLowerCase();
+			const value = segment.slice(separatorIndex + 1).trim();
+			if (key && value) {
+				keyValues.set(key, value);
+			}
+		});
+
+		const player = keyValues.get("player");
+		const result = keyValues.get("result");
+		if (!player || !result) {
+			return entry;
+		}
+
+		const normalizedResult = result.replace(/\s+/g, " ").trim();
+		if (!normalizedResult) {
+			return `${player} made a move.`;
+		}
+
+		const sentenceBody = normalizedResult.endsWith(".") ? normalizedResult : `${normalizedResult}.`;
+		const capitalizedBody = sentenceBody.charAt(0).toLowerCase() === sentenceBody.charAt(0)
+			? sentenceBody
+			: `${sentenceBody.charAt(0).toLowerCase()}${sentenceBody.slice(1)}`;
+
+		return `${player} ${capitalizedBody}`;
+	};
+
 	const getPlayerTotalResources = (player: Player): number =>
 		resourceTypes.reduce((sum: number, resource: ResourceType) => sum + player.resources[resource], 0);
 	const occupiedEdgeKeys = useMemo(() => {
@@ -2855,17 +2894,25 @@ export default function Gameboard() {
 					<div className={styles.logBox}>
 						{gameLog.map((entry: string, index: number) => (
 							(() => {
+								const formattedEventEntry = formatEventLogEntry(entry);
 								const parsedChat = parseChatEntry(entry);
+								const isKnownPlayerChat = Boolean(
+									parsedChat && state.players.some((player) => player.name === parsedChat.sender)
+								);
+								const isChatEntry = entry.startsWith("[CHAT] ") || isKnownPlayerChat;
 								if (!parsedChat) {
-									return <p key={`log-${index}`}>{entry}</p>;
+									return <p key={`log-${index}`} className={styles.logEventEntry}>{formattedEventEntry}</p>;
 								}
 
 								const senderPlayer = state.players.find((player) => player.name === parsedChat.sender);
 								const senderColor = senderPlayer?.color ?? "#f8e7bf";
+								if (!isChatEntry) {
+									return <p key={`log-${index}`} className={styles.logEventEntry}>{formattedEventEntry}</p>;
+								}
 
 								return (
-									<p key={`log-${index}`}>
-										<span style={{ color: senderColor, fontWeight: 700 }}>{parsedChat.sender}</span>
+									<p key={`log-${index}`} className={styles.logChatEntry}>
+										<span className={styles.logChatSender} style={{ color: senderColor }}>{parsedChat.sender}</span>
 										{`: ${parsedChat.message}`}
 									</p>
 								);
