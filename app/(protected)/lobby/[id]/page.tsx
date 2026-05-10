@@ -62,7 +62,7 @@ export default function LobbyRoom() {
     setShowUserProfileModal(true);
   };
 
-  const redirectWithFlash = (reason: "kicked" | "closed") => {
+  const redirectWithFlash = useCallback((reason: "kicked" | "closed") => {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("lobbyFlashMessage", reason);
     }
