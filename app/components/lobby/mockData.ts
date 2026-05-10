@@ -25,6 +25,7 @@ export const mockLobbies: LobbyItem[] = [
     name: "Epic Game",
     capacity: 4,
     currentPlayers: 2,
+    hostParticipantId: 1,
     privateLobby: false,
   },
   {
@@ -32,6 +33,7 @@ export const mockLobbies: LobbyItem[] = [
     name: "Beginners Welcome",
     capacity: 3,
     currentPlayers: 1,
+    hostParticipantId: 2,
     privateLobby: false,
   },
   {
@@ -39,6 +41,7 @@ export const mockLobbies: LobbyItem[] = [
     name: "Pro Players Only",
     capacity: 4,
     currentPlayers: 3,
+    hostParticipantId: 3,
     privateLobby: true,
   },
   {
@@ -46,6 +49,7 @@ export const mockLobbies: LobbyItem[] = [
     name: "Casual Fun",
     capacity: 4,
     currentPlayers: 2,
+    hostParticipantId: 4,
     privateLobby: false,
   },
 ];
