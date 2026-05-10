@@ -222,6 +222,11 @@
   .successButton:hover {
     background: #069632;
   }
+
+  .successButton:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+  }
   
   .dangerButton {
     display: inline-flex;
@@ -518,6 +523,11 @@
   
   .joinButton:hover {
     background: #069632;
+  }
+
+  .joinButton:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
   }
   
   

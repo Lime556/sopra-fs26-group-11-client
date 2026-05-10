@@ -320,8 +320,10 @@ export default function LobbyRoom() {
             <LogOut className={`${styles.leaveIcon} w-5 h-5`} />
             {leaving ? "Leaving..." : "Leave Lobby"}
           </button>
-          <h1 className={styles.headerTitle}>{lobby.name}</h1>
           <div className={styles.headerSpacer} />
+          <h1 className={styles.headerTitle}>{lobby.name}</h1>
+          <div className={styles.headerSpacer2}/>
+          <h1 className={styles.title}>ID: {lobby.id}</h1>
         </div>
       </div>
 
