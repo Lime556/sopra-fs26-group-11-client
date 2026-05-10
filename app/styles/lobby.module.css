@@ -664,6 +664,22 @@
     font-size: 14px;
     color: #667085;
   }
+
+  .usernameLinkButton {
+    border: none;
+    background: transparent;
+    color: #1f2b3d;
+    font-weight: 700;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+    font-size: inherit;
+    line-height: inherit;
+  }
+
+  .usernameLinkButton:hover {
+    text-decoration: underline;
+  }
   
   
   /* =========================

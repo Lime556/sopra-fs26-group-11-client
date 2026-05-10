@@ -627,6 +627,7 @@ export default function Lobby() {
               onDenyRequest={handleDenyRequest}
               onSelectFriend={setSelectedFriend}
               onRefreshFriends={handleRefreshFriends}
+              onOpenProfile={handleOpenProfile}
             />
           );
 

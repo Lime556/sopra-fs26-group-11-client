@@ -4,6 +4,7 @@ import { useRouter, useParams } from "next/navigation";
 import { LogOut, Users, Bot, Crown, Play, UserMinus } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
+import UserProfileModal from "@/components/lobby/UserProfileModal";
 
 import styles from "@/styles/lobbyRoom.module.css";
 
@@ -46,7 +47,18 @@ export default function LobbyRoom() {
   const [kickingParticipantId, setKickingParticipantId] = useState<number | null>(null);
   const [transferringParticipantId, setTransferringParticipantId] = useState<number | null>(null);
   const [hostTransferMessage, setHostTransferMessage] = useState("");
+  const [showUserProfileModal, setShowUserProfileModal] = useState(false);
+  const [selectedProfileUserId, setSelectedProfileUserId] = useState<number>(0);
   const currentUserId = userId ? Number(userId) : null;
+
+  const handleOpenProfile = (targetUserId: number | null) => {
+    if (!targetUserId) {
+      return;
+    }
+
+    setSelectedProfileUserId(targetUserId);
+    setShowUserProfileModal(true);
+  };
 
   const redirectWithFlash = (reason: "kicked" | "closed") => {
     if (typeof window !== "undefined") {
@@ -389,7 +401,17 @@ export default function LobbyRoom() {
 
                     <div className={styles.participantText}>
                       <div className={styles.nameRow}>
-                        <p className={styles.participantName}>{participant.username}</p>
+                        {participant.bot || participant.userId === null ? (
+                          <p className={styles.participantName}>{participant.username}</p>
+                        ) : (
+                          <button
+                            type="button"
+                            className={styles.participantNameButton}
+                            onClick={() => handleOpenProfile(participant.userId)}
+                          >
+                            {participant.username}
+                          </button>
+                        )}
                         {participantIsHost && (
                           <span className={styles.hostBadge}>
                             <Crown className="w-4 h-4 text-yellow-600" />
@@ -477,6 +499,14 @@ export default function LobbyRoom() {
           {startInfo && <p className={styles.waitingText}>{startInfo}</p>}
         </div>
       </div>
+
+      <UserProfileModal
+        open={showUserProfileModal}
+        userId={selectedProfileUserId}
+        currentUserId={currentUserId ?? 0}
+        onClose={() => setShowUserProfileModal(false)}
+        onOpenSettings={() => router.push("/lobby")}
+      />
     </div>
   );
 }
