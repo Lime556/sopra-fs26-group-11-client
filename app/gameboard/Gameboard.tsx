@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
-//import { Client } from "@stomp/stompjs";
-//import SockJS from "sockjs-client";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
 import { LogOut, Send } from "lucide-react";
@@ -26,48 +24,40 @@ import {
 	resourceTypes,
 	} from "./constants";
 import {
-	createCanonicalCornerKey,
-	createCanonicalEdgeKey,
-	getCanonicalRoadEndpoints,
-	getCornerPoint,
-	toPixel,
-} from "./geometry";
+	Resources,
+	GameState,
+	TradeMode,
+	Player,
+	HexTile,
+	GameGetDTO,
+	BoardGetDTO,
+	GameEventDTO,
+	GameChatMessageDTO,
+	PlayerGetDTO,
+	ResourceType,
+} from "./types";
 import {
 	createInitialGameState,
-	fallbackColorForPlayer,
-	findDesertHexId,
+	parseGameId,
 	mapBoardDtoToHexes,
 	mapBoardDtoToPorts,
+	findDesertHexId,
 	mapResourcesFromServer,
-	parseGameId,
+	fallbackColorForPlayer,
 } from "./mappers";
 import {
-	computeLongestRoadLength,
-	mergeRoadLists,
-	parseRoadEntry,
-	rememberRoadsInCache,
-} from "./roads";
+	toPixel,
+	getCornerPoint,
+	createCanonicalEdgeKey,
+	createCanonicalCornerKey,
+	getCanonicalRoadEndpoints,
+} from "./geometry";
 import {
-	type BoardGetDTO,
-	type GameChatMessageDTO,
-	type GameEventDTO,
-	type GameGetDTO,
-	type GameState,
-	type HexTile,
-	type Player,
-	type ResourceType,
-	type Resources,
-	type TradeMode,
-} from "./types";
-import { websocketService } from "@/api/websocketService";
-
-const developmentCardDisplayName: Record<string, string> = {
-	knight: "Knight",
-	victory_point: "Victory Point",
-	road_building: "Road Building",
-	year_of_plenty: "Year of Plenty",
-	monopoly: "Monopoly",
-};
+	parseRoadEntry,
+	mergeRoadLists,
+	rememberRoadsInCache,
+	computeLongestRoadLength,
+} from "./roads";
 
 const createEmptyTradeResources = (): Resources => ({
 	wood: 0,
@@ -119,11 +109,13 @@ export default function Gameboard() {
 	const [discardModalOpen, setDiscardModalOpen] = useState<boolean>(false);
 	const [discardChoices, setDiscardChoices] = useState<Record<string, number>>({});
 	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
+	const syncedEventLogsRef = useRef<Set<string>>(new Set());
 	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
 	const botActionInFlightRef = useRef(false);
 	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const lastDiceRolledAtRef = useRef<string | null>(null);
+	const syncGameStateRef = useRef<((gameId: number) => Promise<"ok" | "unauthorized" | "notfound" | "error">) | null>(null);
 	const ports = Array.isArray(state.ports) ? state.ports : [];
 
 	
@@ -232,7 +224,7 @@ export default function Gameboard() {
 					if (gameDto?.bankResources) {
 						setBankResourcesState(gameDto.bankResources as Resources);
 					}
-					setState((previousState) => ({
+					setState((previousState: GameState) => ({
 						...previousState,
 						hexes: mappedHexes,
 						ports: mappedPorts,
@@ -241,8 +233,8 @@ export default function Gameboard() {
 						developmentDeck: gameDto?.developmentDeck ?? previousState.developmentDeck,
 						players:
 							gameDto?.players
-								? serverPlayers.map((serverPlayer: Parameters<typeof mapResourcesFromServer>[0], index) => {
-									const previousPlayer = previousState.players.find((p) => p.id === (serverPlayer as { id: number }).id);
+								? serverPlayers.map((serverPlayer: PlayerGetDTO, index: number): Player => {
+									const previousPlayer = previousState.players.find((p: Player) => p.id === (serverPlayer as { id: number }).id);
 									const cachedRoads = Array.from(roadCacheRef.current.get((serverPlayer as { id: number }).id) ?? [])
 										.map((entry: unknown) => (typeof entry === "string" ? parseRoadEntry(entry as string) : entry))
 										.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null);
@@ -319,6 +311,23 @@ export default function Gameboard() {
 						});
 					}
 
+					if (Array.isArray(gameDto?.eventLog) && gameDto.eventLog.length > 0) {
+						const knownEventLogs = syncedEventLogsRef.current;
+						for (const rawEvent of gameDto.eventLog) {
+							if (typeof rawEvent !== "string" || rawEvent.trim().length === 0 || knownEventLogs.has(rawEvent)) {
+								continue;
+							}
+
+							knownEventLogs.add(rawEvent);
+							try {
+								const parsedEvent = JSON.parse(rawEvent) as GameEventDTO;
+								applyGameEventRef.current?.(parsedEvent);
+							} catch {
+								// ignore malformed event payloads
+							}
+						}
+					}
+
 					setBoardStatus("");
 				}
 
@@ -340,8 +349,12 @@ export default function Gameboard() {
 			}
 		};
 
+		// expose sync function to outer scope so other handlers (e.g. trades) can trigger immediate sync
+		syncGameStateRef.current = syncGameState;
+
 		let lastSeenGameVersion: number | null = null;
 		let syncInFlight = false;
+
 
 		const pollGameSync = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
 			try {
@@ -379,7 +392,7 @@ export default function Gameboard() {
 				) {
 					lastDiceRolledAtRef.current = nextDiceRolledAt;
 
-					setState((previousState) => ({
+					setState((previousState: GameState) => ({
 						...previousState,
 						diceResult: nextDiceValue,
 						turnPhase: syncDto.turnPhase ?? previousState.turnPhase,
@@ -555,6 +568,9 @@ export default function Gameboard() {
 
 		return () => {
 			cancelled = true;
+			// clear exposed sync reference
+			syncGameStateRef.current = null;
+			syncedEventLogsRef.current = new Set();
 			if (pollHandle !== undefined) {
 				window.clearInterval(pollHandle);
 			}
@@ -759,9 +775,9 @@ export default function Gameboard() {
 	const gameSummaryStats = useMemo(() => {
 		const cardsPlayedCount = gameLog.filter((entry) => /development card|dev card/i.test(entry)).length;
 		const knightsPlayedCount = gameLog.filter((entry) => /knight/i.test(entry)).length;
-		const roadsBuiltCount = state.players.reduce((sum, player) => sum + player.roadsOnEdges.length, 0);
-		const settlementsBuiltCount = state.players.reduce((sum, player) => sum + player.settlementsOnCorners.length, 0);
-		const citiesBuiltCount = state.players.reduce((sum, player) => sum + player.citiesOnCorners.length, 0);
+		const roadsBuiltCount = state.players.reduce((sum: number, player: Player) => sum + player.roadsOnEdges.length, 0);
+		const settlementsBuiltCount = state.players.reduce((sum: number, player: Player) => sum + player.settlementsOnCorners.length, 0);
+		const citiesBuiltCount = state.players.reduce((sum: number, player: Player) => sum + player.citiesOnCorners.length, 0);
 
 		return {
 			cardsPlayedCount,
@@ -799,11 +815,11 @@ export default function Gameboard() {
 	};
 
 	const getPlayerTotalResources = (player: Player): number =>
-		resourceTypes.reduce((sum, resource) => sum + player.resources[resource], 0);
+		resourceTypes.reduce((sum: number, resource: ResourceType) => sum + player.resources[resource], 0);
 	const occupiedEdgeKeys = useMemo(() => {
 		const occupied = new Set<string>();
-		state.players.forEach((player) => {
-			player.roadsOnEdges.forEach((road) => {
+		state.players.forEach((player: Player) => {
+			player.roadsOnEdges.forEach((road: { hexId: number; edge: number }) => {
 				const hex = hexById.get(road.hexId);
 				if (!hex) {
 					return;
@@ -1245,7 +1261,7 @@ export default function Gameboard() {
 			});
 			// The backend will deduct resources from the player and add them to the bank.
 			// The syncGameState will then update the player's resources and bank's resources.
-		} catch { // eslint-disable-line no-empty
+		} catch {
 			addToLog("Could not build settlement. Please try again.");
 			return;
 		}
@@ -1520,7 +1536,7 @@ export default function Gameboard() {
 		if (!mustDiscard) {
 			setDiscardChoices({});
 		}
-	}, [state.turnPhase, isMyTurn, myPlayer?.id, myPlayerResourceTotal, mustMoveRobberFromServer]);
+	}, [state.turnPhase, isMyTurn, myPlayer, myPlayerResourceTotal, mustMoveRobberFromServer]);
 
 	const handleRollDice = async () => {
 		if (!isMyTurn || !activeGameId || state.turnPhase !== "ROLL_DICE") {
@@ -1663,11 +1679,7 @@ export default function Gameboard() {
 	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
 	applyGameEventRef.current = applyGameEvent;
 
-	useEffect(() => {
-		websocketService.disconnect();
-	}, []);
-
-	const handleBankTrade = () => {
+	const handleBankTrade = async () => {
 		if (!isMyTurn || !myPlayer || !activeGameId) {
 			addToLog("No active player for trading.");
 			return;
@@ -1710,17 +1722,24 @@ export default function Gameboard() {
 		const logMessage = `${myPlayer.name} trades ${formatBundle(bankGiveResources)} for ${formatBundle(bankReceiveResources)} with bank.`;
 		addToLog(logMessage);
 		setShowTradePopup(false);
-		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-			type: "BANK_TRADE",
-			sourcePlayerId: myPlayer.id,
-			giveResources: bankGiveResources,
-			receiveResources: bankReceiveResources,
-			amount: receiveTotal,
-			message: logMessage,
-		});
+		
+		try {
+			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+				type: "BANK_TRADE",
+				sourcePlayerId: myPlayer.id,
+				giveResources: bankGiveResources,
+				receiveResources: bankReceiveResources,
+				amount: receiveTotal,
+				message: logMessage,
+			});
+			// Trigger immediate sync to reflect the trade results
+			await syncGameStateRef.current?.(activeGameId);
+		} catch {
+			addToLog("Could not complete the bank trade. Please try again.");
+		}
 	};
 
-	const handlePlayerTrade = () => {
+	const handlePlayerTrade = async () => {
 		if (!isMyTurn || !myPlayer || !activeGameId) {
 			addToLog("No active player for trading.");
 			return;
@@ -1769,19 +1788,24 @@ export default function Gameboard() {
 		setActiveOutgoingTradeRequest(tradeRequest);
 		setActiveOutgoingTradeResponses(pendingResponses);
 		setShowTradePopup(false);
-		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-			type: "PLAYER_TRADE",
-			sourcePlayerId: myPlayer.id,
-			tradeAction: "REQUEST",
-			tradeRequestId,
-			giveResources: playerGiveResources,
-			receiveResources: playerReceiveResources,
-			message: logMessage,
-		}).catch(() => {
+		
+		try {
+			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+				type: "PLAYER_TRADE",
+				sourcePlayerId: myPlayer.id,
+				tradeAction: "REQUEST",
+				tradeRequestId,
+				giveResources: playerGiveResources,
+				receiveResources: playerReceiveResources,
+				message: logMessage,
+			});
+			// Trigger immediate sync to ensure all players see the trade request
+			await syncGameStateRef.current?.(activeGameId);
+		} catch {
 			setActiveOutgoingTradeRequest(null);
 			setActiveOutgoingTradeResponses({});
 			addToLog("Could not send trade request. Please try again.");
-		});
+		}
 	};
 
 	const handleFinalizePlayerTrade = async (targetPlayerId: number) => {
@@ -1813,6 +1837,8 @@ export default function Gameboard() {
 			setActiveOutgoingTradeRequest(null);
 			setActiveOutgoingTradeResponses({});
 			addToLog(logMessage);
+			// Trigger immediate sync to reflect the completed trade
+			await syncGameStateRef.current?.(activeGameId);
 		} catch {
 			addToLog("Could not complete the trade.");
 		}
@@ -1837,6 +1863,8 @@ export default function Gameboard() {
 			});
 			setActiveTradeRequest(null);
 			addToLog(logMessage);
+			// Trigger immediate sync to reflect the trade acceptance
+			await syncGameStateRef.current?.(activeGameId);
 		} catch {
 			addToLog("Could not accept the trade request.");
 		}
@@ -1866,6 +1894,8 @@ export default function Gameboard() {
 			});
 			setActiveTradeRequest(null);
 			addToLog(logMessage);
+			// Trigger immediate sync to reflect the trade denial
+			await syncGameStateRef.current?.(activeGameId);
 		} catch {
 			addToLog("Could not deny the trade request.");
 		}
@@ -2680,7 +2710,6 @@ export default function Gameboard() {
 			<MonopolyResourceSelectorPopup
 				isVisible={showMonopolyResourceSelector}
 				onSelectResource={handleMonopolyResourceSelected}
-				onClose={() => setShowMonopolyResourceSelector(false)}
 			/>
 
 			<YearOfPlentyResourceSelectorPopup

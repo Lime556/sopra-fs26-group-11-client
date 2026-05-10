@@ -7,13 +7,11 @@ import { ResourceType } from "../types";
 interface MonopolyResourceSelectorPopupProps {
   isVisible: boolean;
   onSelectResource: (resource: ResourceType | null) => void;
-  onClose: () => void;
 }
 
 export function MonopolyResourceSelectorPopup({
   isVisible,
   onSelectResource,
-  onClose,
 }: MonopolyResourceSelectorPopupProps) {
   if (!isVisible) {
     return null;

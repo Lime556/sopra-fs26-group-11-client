@@ -59,8 +59,25 @@ export default function useLocalStorage<T>(
 
   // Re-sync if the key changes
   useEffect(() => {
-    setValue(readStoredValue());
-  }, [key, storageType]);
+    const readStoredValueSync = (): T => {
+      if (typeof window === "undefined") {
+        return defaultValue;
+      }
+      const storage = storageType === "session" ? globalThis.sessionStorage : globalThis.localStorage;
+      if (!storage) {
+        return defaultValue;
+      }
+
+      try {
+        const stored = storage.getItem(key);
+        return stored ? (JSON.parse(stored) as T) : defaultValue;
+      } catch (error) {
+        console.error(`Error reading ${storageType}Storage key "${key}":`, error);
+        return defaultValue;
+      }
+    };
+    setValue(readStoredValueSync());
+  }, [key, storageType, defaultValue]);
 
   // Simple setter that updates both state and localStorage
   const set = (newVal: T) => {

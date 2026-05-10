@@ -1,4 +1,5 @@
 import { Castle, Home, Minus } from "lucide-react";
+import Image from "next/image";
 import styles from "@/styles/gameboard.module.css";
 import { findDesertHexId, getPortColor, getPortIcon, getPortLabel } from "../mappers";
 import { calculateHexPoints, calculatePortPosition, getCornerPoint, toPixel } from "../geometry";
@@ -573,9 +574,11 @@ export function BoardColumn({
 											}}
 											disabled={!playable}
 										>
-											<img
+											<Image
 												src={`/developmentcards/${card}.png`}
 												alt={card.replaceAll("_", " ")}
+												width={100}
+												height={140}
 												style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'contain' }}
 											/>
 										</button>

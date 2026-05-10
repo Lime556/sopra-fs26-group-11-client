@@ -98,6 +98,7 @@ export interface GameGetDTO {
 	finishedAt?: string | null;
 	gameFinished?: boolean | null;
 	chatMessages?: string[];
+	eventLog?: string[];
 	robberMovedAfterSevenRoll?: boolean;
 }
 

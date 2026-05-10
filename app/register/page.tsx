@@ -5,8 +5,6 @@ import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
 import { User } from "@/types/user";
 import { Button, Form, Input } from "antd";
-import { mapApiErrorToFields } from "@/utils/mapApiErrorToFields";
-import { useState } from "react";
 import { UserOutlined, MailOutlined, LockOutlined } from "@ant-design/icons";
 import styles from "@/styles/login-register.module.css";
 // Optionally, you can import a CSS module or file for additional styling:
