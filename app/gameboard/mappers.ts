@@ -9,6 +9,7 @@ export function createInitialGameState(): GameState {
 		diceResult: null,
 		players: [],
 		robberHexId: null,
+		robberMovedAfterSevenRoll: false,
 		turnPhase: "ROLL_DICE",
 		gamePhase: "ACTIVE",
 		developmentDeck: null,

@@ -1,7 +1,6 @@
 import { Castle, Home, Minus } from "lucide-react";
 import styles from "@/styles/gameboard.module.css";
 import { findDesertHexId, getPortColor, getPortIcon, getPortLabel } from "../mappers";
-import { useState } from "react";
 import { calculateHexPoints, calculatePortPosition, getCornerPoint, toPixel } from "../geometry";
 import { hexSize, tileImageByType } from "../constants";
 import { GameState, HexTile, PortVisual } from "../types";
@@ -43,8 +42,8 @@ interface BoardColumnProps {
 	handleBuildRoadAction: () => void;
 	handleBuildSettlementAction: () => void;
 	handleBuildCityAction: () => void;
-	cardDisplayNames?: Record<string, string>;
 	handleEndTurn: () => void;
+	mustMoveRobberBeforeEndTurn: boolean;
 }
 
 export function BoardColumn({
@@ -75,8 +74,8 @@ export function BoardColumn({
 	handleBuildRoadAction,
 	handleBuildSettlementAction,
 	handleBuildCityAction,
-	cardDisplayNames,
 	handleEndTurn,
+	mustMoveRobberBeforeEndTurn,
 }: BoardColumnProps) {
 	const playableDevelopmentCards = developmentCards.filter((card) => card !== "victory_point");
 	const canUseActionPhase = isMyTurn && state.turnPhase === "ACTION" && !isSetupPhase;
@@ -88,7 +87,9 @@ export function BoardColumn({
 		((state.gamePhase === "SETUP" && mySetupSettlementCount >= 1 && mySetupRoadCount >= 1) ||
 		 (state.gamePhase === "SETUP_SECOND_ROUND" && mySetupSettlementCount >= 2 && mySetupRoadCount >= 2));
 
-	const canEndTurn = canUseActionPhase || (isMyTurn && setupRoundFinished);
+		 const canEndTurn =
+		 (canUseActionPhase && !mustMoveRobberBeforeEndTurn)
+		 || (isMyTurn && setupRoundFinished);
 	const canUseRoadOrSettlement = canUseActionPhase || (canUseSetupPlacement && !setupRoundFinished);
 
 	return (

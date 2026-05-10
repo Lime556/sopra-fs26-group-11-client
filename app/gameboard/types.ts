@@ -42,6 +42,7 @@ export interface GameState {
 	currentPlayerId: number;
 	diceResult: number | null;
 	robberHexId: number | null;
+	robberMovedAfterSevenRoll: boolean;
 	turnPhase: string;
 	gamePhase: string;
 	developmentDeck: DevelopmentDeckDTO | null;
@@ -94,6 +95,7 @@ export interface GameGetDTO {
 	finishedAt?: string | null;
 	gameFinished?: boolean | null;
 	chatMessages?: string[];
+	robberMovedAfterSevenRoll?: boolean;
 }
 
 export interface GameStateDTO {
