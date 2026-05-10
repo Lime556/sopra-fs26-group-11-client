@@ -163,6 +163,8 @@ reason).
 |                    | 10.05.2026   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/e2010e893192c8466e01241509415ac9cacf63fc | update event log management | for a good event log |
 |                    | 10.05.2026   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/dcccd8215fd572768c1d6cddef95cbbc9c3c3ea2 | adde backend logging for important game actions so gameplay events are recorded automatically | this ensures the log reflects real game actions and not just normal state changes |
 |                    | 10.05.2026   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/46514d5c61a1dd517fbc48bb815d50ab0603c59d | strucured and formatted backend log entries so they include clear player action and result information | This makes the log consistend and usable for frontend display |
+|                    | 10.05.2026   | https://github.com/Lime556/sopra-fs26-group-11-server/pull/309/changes/e49e8ef229fab684e3211a78e0a91deff31e4bfb | Tests for user story S4 (Stats and information about players) | We need tests for code, so we can detect bugs faster and easier |
+|                    | 10.05.2026   | https://github.com/Lime556/sopra-fs26-group-11-client/pull/120/changes/2a282b3f753f5518f03b3565549716605c02d6ce | make user profile popup for everyone and connect profile UI to backend API | To see the stats of every person if you want, not just yourself. This can give you insight of your friends and other players you might play with |
 | **[@githubUser5]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 
