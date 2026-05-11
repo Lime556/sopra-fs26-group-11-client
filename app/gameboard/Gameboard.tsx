@@ -1786,6 +1786,48 @@ export default function Gameboard() {
 			return parts.length > 0 ? parts.join(" + ") : "nothing";
 		};
 
+		const myCornerKeys = new Set<string>();
+		for (const settlement of myPlayer.settlementsOnCorners ?? []) {
+			const hex = hexById.get(settlement.hexId);
+			if (hex) {
+				myCornerKeys.add(createCanonicalCornerKey(hex, settlement.corner));
+			}
+		}
+		for (const city of myPlayer.citiesOnCorners ?? []) {
+			const hex = hexById.get(city.hexId);
+			if (hex) {
+				myCornerKeys.add(createCanonicalCornerKey(hex, city.corner));
+			}
+		}
+
+		const getBestRatioForResource = (resource: ResourceType): number => {
+			let bestRatio = 4;
+
+			for (const port of ports) {
+				const portHex = hexById.get(port.hexId);
+				if (!portHex) {
+					continue;
+				}
+
+				const firstCornerKey = createCanonicalCornerKey(portHex, port.corners[0]);
+				const secondCornerKey = createCanonicalCornerKey(portHex, port.corners[1]);
+				const hasPortAccess = myCornerKeys.has(firstCornerKey) || myCornerKeys.has(secondCornerKey);
+				if (!hasPortAccess) {
+					continue;
+				}
+
+				if (port.type === resource) {
+					return 2;
+				}
+
+				if (port.type === "3:1") {
+					bestRatio = Math.min(bestRatio, 3);
+				}
+			}
+
+			return bestRatio;
+		};
+
 		const giveTotal = sumBundle(bankGiveResources);
 		const receiveTotal = sumBundle(bankReceiveResources);
 		if (giveTotal <= 0 || receiveTotal <= 0) {
@@ -1793,8 +1835,29 @@ export default function Gameboard() {
 			return;
 		}
 
-		if (giveTotal !== receiveTotal * 4) {
-			addToLog("Bank trade ratio is 4:1. Total give must equal 4x total receive.");
+		const givesMatchPortRatios = resourceTypes.every((resource) => {
+			const giveAmount = Math.max(0, bankGiveResources[resource] ?? 0);
+			if (giveAmount === 0) {
+				return true;
+			}
+
+			const ratio = getBestRatioForResource(resource);
+			return giveAmount % ratio === 0;
+		});
+		if (!givesMatchPortRatios) {
+			addToLog("Bank trade ratios mismatch. Give amounts must follow your available 2:1, 3:1, or 4:1 ratios.");
+			return;
+		}
+
+		const tradeUnitsFromGive = resourceTypes.reduce((sum, resource) => {
+			const giveAmount = Math.max(0, bankGiveResources[resource] ?? 0);
+			const ratio = getBestRatioForResource(resource);
+			return sum + Math.floor(giveAmount / ratio);
+		}, 0);
+		if (tradeUnitsFromGive !== receiveTotal) {
+			addToLog(
+				`Bank trade ratios mismatch. You can receive ${tradeUnitsFromGive} total resource unit(s) with the selected give bundle.`
+			);
 			return;
 		}
 
@@ -2607,6 +2670,8 @@ export default function Gameboard() {
 				bankReceiveResources={bankReceiveResources}
 				bankResources={bankResourcesState}
 				currentPlayer={myPlayer}
+				ports={ports}
+				hexes={state.hexes}
 				onClose={() => setShowTradePopup(false)}
 				onSetTradeMode={setTradeMode}
 				onAdjustPlayerGiveResource={(resource, delta) => {
