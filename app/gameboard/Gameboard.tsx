@@ -1780,29 +1780,16 @@ export default function Gameboard() {
 			return;
 		}
 
-		const givesMatchPortRatios = resourceTypes.every((resource) => {
-			const giveAmount = Math.max(0, bankGiveResources[resource] ?? 0);
-			if (giveAmount === 0) {
-				return true;
-			}
-
-			const ratio = getBestRatioForResource(resource);
-			return giveAmount % ratio === 0;
-		});
-		if (!givesMatchPortRatios) {
-			addToLog("Bank trade ratios mismatch. Give amounts must follow your available 2:1, 3:1, or 4:1 ratios.");
+		const selectedGiveResources = resourceTypes.filter((resource) => (bankGiveResources[resource] ?? 0) > 0);
+		if (selectedGiveResources.length !== 1) {
+			addToLog("Bank trade requires exactly one resource type to give.");
 			return;
 		}
 
-		const tradeUnitsFromGive = resourceTypes.reduce((sum, resource) => {
-			const giveAmount = Math.max(0, bankGiveResources[resource] ?? 0);
-			const ratio = getBestRatioForResource(resource);
-			return sum + Math.floor(giveAmount / ratio);
-		}, 0);
-		if (tradeUnitsFromGive !== receiveTotal) {
-			addToLog(
-				`Bank trade ratios mismatch. You can receive ${tradeUnitsFromGive} total resource unit(s) with the selected give bundle.`
-			);
+		const selectedGiveResource = selectedGiveResources[0];
+		const ratio = getBestRatioForResource(selectedGiveResource);
+		if (giveTotal !== receiveTotal * ratio) {
+			addToLog(`Bank trade ratio is 1:${ratio}. Total give must equal ${ratio}x total receive.`);
 			return;
 		}
 

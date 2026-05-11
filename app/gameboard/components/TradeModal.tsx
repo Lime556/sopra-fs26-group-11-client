@@ -129,27 +129,16 @@ export function TradeModal({
 		&& playerReceiveTotal > 0
 		&& hasEnoughForBundle(currentPlayer?.resources ?? bankResources, playerGiveResources);
 
-	const bankGiveMatchesPortRatios = resourceTypes.every((resource) => {
-		const giveAmount = Math.max(0, bankGiveResources[resource] ?? 0);
-		if (giveAmount === 0) {
-			return true;
-		}
-
-		const ratio = getBestRatioForResource(resource);
-		return giveAmount % ratio === 0;
-	});
-
-	const bankTradeUnits = resourceTypes.reduce((sum, resource) => {
-		const giveAmount = Math.max(0, bankGiveResources[resource] ?? 0);
-		const ratio = getBestRatioForResource(resource);
-		return sum + Math.floor(giveAmount / ratio);
-	}, 0);
+	const selectedBankGiveResources = resourceTypes.filter((resource) => (bankGiveResources[resource] ?? 0) > 0);
+	const selectedBankGiveResource = selectedBankGiveResources.length === 1 ? selectedBankGiveResources[0] : null;
+	const bankTradeRatio = selectedBankGiveResource ? getBestRatioForResource(selectedBankGiveResource) : null;
 
 	const canExecuteSelectedBankTrade = Boolean(currentPlayer)
 		&& bankGiveTotal > 0
 		&& bankReceiveTotal > 0
-		&& bankGiveMatchesPortRatios
-		&& bankTradeUnits === bankReceiveTotal
+		&& selectedBankGiveResource !== null
+		&& bankTradeRatio !== null
+		&& bankGiveTotal === bankReceiveTotal * bankTradeRatio
 		&& hasEnoughForBundle(currentPlayer?.resources ?? bankResources, bankGiveResources)
 		&& hasEnoughForBundle(bankResources, bankReceiveResources);
 
@@ -171,7 +160,7 @@ export function TradeModal({
 								<span className={styles.tradeResourceIcon}>{resourceIconByType[resource]}</span>
 								<span className={styles.tradeAmountResourceName}>{resource === "wool" ? "sheep" : resource}</span>
 								{tradeMode === "bank" && title === "You Give" ? (
-									<span style={{ marginLeft: 4, color: "#4ade80", fontSize: "0.8rem" }}>
+									<span style={{ marginLeft: 0, color: "#4ade80", fontSize: "0.7rem" }}>
 										{getPortRatioLabel(resource)}
 									</span>
 								) : null}
