@@ -124,6 +124,8 @@ export default function Gameboard() {
 	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const lastDiceRolledAtRef = useRef<string | null>(null);
+	const syncGameStateRef = useRef<((gameId: number) => Promise<"ok" | "unauthorized" | "notfound" | "error">) | null>(null);
+	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
 	const ports = Array.isArray(state.ports) ? state.ports : [];
 
 	
@@ -179,6 +181,7 @@ export default function Gameboard() {
 		let cancelled = false;
 
 		syncedChatMessagesRef.current = new Set();
+		syncedEventLogsRef.current = new Set();
 		roadCacheRef.current = new Map();
 
 		const readStoredGameId = (): number | null => {
@@ -313,6 +316,43 @@ export default function Gameboard() {
 
 							unseen.forEach((message: string) => known.add(message));
 							return [...unseen.reverse(), ...previous].slice(0, 40);
+						});
+					}
+
+					const serverEventLogs = Array.isArray(gameDto?.eventLog)
+						? gameDto.eventLog.filter((entry: unknown): entry is string => typeof entry === "string" && entry.trim().length > 0)
+						: [];
+
+					if (serverEventLogs.length > 0) {
+						const parsedTradeEvents: GameEventDTO[] = [];
+						setGameLog((previous) => {
+							const known = syncedEventLogsRef.current;
+							const unseen = serverEventLogs.filter((entry: string) => !known.has(entry));
+							if (unseen.length === 0) {
+								return previous;
+							}
+
+							const plainEntries: string[] = [];
+							unseen.forEach((entry: string) => {
+								known.add(entry);
+								const structuredEntry = parseStructuredEventLogEntry(entry);
+								if (structuredEntry?.payload?.type === "PLAYER_TRADE") {
+									parsedTradeEvents.push(structuredEntry.payload);
+									return;
+								}
+
+								plainEntries.push(entry);
+							});
+
+							if (plainEntries.length === 0) {
+								return previous;
+							}
+
+							return [...plainEntries.reverse(), ...previous].slice(0, 40);
+						});
+
+						parsedTradeEvents.forEach((event) => {
+							applyGameEventRef.current(event);
 						});
 					}
 
@@ -739,6 +779,74 @@ export default function Gameboard() {
 		}
 
 		return { sender, message };
+	};
+
+	const parseStructuredEventLogEntry = (entry: string): { player: string; action: string; result: string; payload: GameEventDTO | null } | null => {
+		const segments = entry.split("|").map((part) => part.trim());
+		if (segments.length < 3) {
+			return null;
+		}
+
+		const keyValues = new Map<string, string>();
+		segments.forEach((segment) => {
+			const separatorIndex = segment.indexOf("=");
+			if (separatorIndex <= 0) {
+				return;
+			}
+
+			const key = segment.slice(0, separatorIndex).trim().toLowerCase();
+			const value = segment.slice(separatorIndex + 1).trim();
+			if (key && value) {
+				keyValues.set(key, value);
+			}
+		});
+
+		const player = keyValues.get("player") ?? "";
+		const action = keyValues.get("action") ?? "";
+		const result = keyValues.get("result") ?? "";
+
+		if (!player || !action || !result) {
+			return null;
+		}
+
+		let payload: GameEventDTO | null = null;
+		if (result.startsWith("{") && result.endsWith("}")) {
+			try {
+				payload = JSON.parse(result) as GameEventDTO;
+			} catch {
+				payload = null;
+			}
+		}
+
+		return { player, action, result, payload };
+	};
+
+	const formatEventLogEntry = (entry: string): string => {
+		const structuredEntry = parseStructuredEventLogEntry(entry);
+		if (!structuredEntry) {
+			return entry;
+		}
+
+		const { player, action, result, payload } = structuredEntry;
+		if (payload?.message) {
+			return payload.message;
+		}
+
+		const normalizedResult = result.replace(/\s+/g, " ").trim();
+		if (!normalizedResult) {
+			return `${player} made a move.`;
+		}
+
+		if (action === "PLAYER_TRADE" && normalizedResult.startsWith("{")) {
+			return `${player} requested a trade.`;
+		}
+
+		const sentenceBody = normalizedResult.endsWith(".") ? normalizedResult : `${normalizedResult}.`;
+		const capitalizedBody = sentenceBody.charAt(0).toLowerCase() === sentenceBody.charAt(0)
+			? sentenceBody
+			: `${sentenceBody.charAt(0).toLowerCase()}${sentenceBody.slice(1)}`;
+
+		return `${player} ${capitalizedBody}`;
 	};
 
 	const getPlayerTotalResources = (player: Player): number =>
@@ -1442,6 +1550,8 @@ export default function Gameboard() {
 		}
 	};
 
+	applyGameEventRef.current = applyGameEvent;
+
 	const myPlayerResourceTotal = myPlayer ? getPlayerTotalResources(myPlayer) : 0;
 
 	useEffect(() => {
@@ -1603,7 +1713,7 @@ export default function Gameboard() {
 	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
 	applyGameEventRef.current = applyGameEvent;
 
-	const handleBankTrade = () => {
+	const handleBankTrade = async () => {
 		if (!isMyTurn || !myPlayer || !activeGameId) {
 			addToLog("No active player for trading.");
 			return;
@@ -2752,17 +2862,25 @@ export default function Gameboard() {
 					<div className={styles.logBox}>
 						{gameLog.map((entry: string, index: number) => (
 							(() => {
+								const formattedEventEntry = formatEventLogEntry(entry);
 								const parsedChat = parseChatEntry(entry);
+								const isKnownPlayerChat = Boolean(
+									parsedChat && state.players.some((player) => player.name === parsedChat.sender)
+								);
+								const isChatEntry = entry.startsWith("[CHAT] ") || isKnownPlayerChat;
 								if (!parsedChat) {
-									return <p key={`log-${index}`}>{entry}</p>;
+									return <p key={`log-${index}`} className={styles.logEventEntry}>{formattedEventEntry}</p>;
 								}
 
 								const senderPlayer = state.players.find((player) => player.name === parsedChat.sender);
 								const senderColor = senderPlayer?.color ?? "#f8e7bf";
+								if (!isChatEntry) {
+									return <p key={`log-${index}`} className={styles.logEventEntry}>{formattedEventEntry}</p>;
+								}
 
 								return (
-									<p key={`log-${index}`}>
-										<span style={{ color: senderColor, fontWeight: 700 }}>{parsedChat.sender}</span>
+									<p key={`log-${index}`} className={styles.logChatEntry}>
+										<span className={styles.logChatSender} style={{ color: senderColor }}>{parsedChat.sender}</span>
 										{`: ${parsedChat.message}`}
 									</p>
 								);
