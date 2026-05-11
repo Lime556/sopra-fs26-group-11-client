@@ -116,6 +116,13 @@ export function TradeModal({
 		&& hasEnoughForBundle(currentPlayer?.resources ?? bankResources, bankGiveResources)
 		&& hasEnoughForBundle(bankResources, bankReceiveResources);
 
+	const getPortBonusForResource = (resource: ResourceType): string => {
+		const ratio = getBestRatioForResource(resource);
+		if (ratio === 2) return "2:1 port";
+		if (ratio === 3) return "3:1 port";
+		return "no bonus";
+	};
+
 	const renderAdjustCard = (
 		title: string,
 		bundle: Resources,
@@ -129,11 +136,14 @@ export function TradeModal({
 					{resourceTypes.map((resource) => {
 						const amount = bundle[resource] ?? 0;
 						const maxAmount = availability?.[resource] ?? null;
+						const portBonus = getPortBonusForResource(resource);
+						const showBonus = portBonus !== "no bonus" && title === "You Give";
 						return (
 							<div key={`${title}-${resource}`} className={styles.tradeAdjustRow}>
 								<div className={styles.tradeAdjustResource}>
 									<span className={styles.tradeResourceIcon}>{resourceIconByType[resource]}</span>
 									<span className={styles.tradeAmountResourceName}>{resource === "wool" ? "sheep" : resource}</span>
+									{showBonus && <span style={{ fontSize: "0.75rem", color: "#4ade80", marginLeft: "4px" }}>({portBonus})</span>}
 								</div>
 								<div className={styles.tradeAdjustStepper}>
 									<button

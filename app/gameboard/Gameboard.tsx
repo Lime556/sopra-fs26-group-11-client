@@ -2612,7 +2612,6 @@ export default function Gameboard() {
 			<MonopolyResourceSelectorPopup
 				isVisible={showMonopolyResourceSelector}
 				onSelectResource={handleMonopolyResourceSelected}
-				onClose={() => setShowMonopolyResourceSelector(false)}
 			/>
 
 			<YearOfPlentyResourceSelectorPopup
