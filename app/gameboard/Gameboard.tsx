@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
+//import { Client } from "@stomp/stompjs";
+//import SockJS from "sockjs-client";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
 import { LogOut, Send } from "lucide-react";
@@ -24,40 +26,48 @@ import {
 	resourceTypes,
 	} from "./constants";
 import {
-	Resources,
-	GameState,
-	TradeMode,
-	Player,
-	HexTile,
-	GameGetDTO,
-	BoardGetDTO,
-	GameEventDTO,
-	GameChatMessageDTO,
-	PlayerGetDTO,
-	ResourceType,
-} from "./types";
-import {
-	createInitialGameState,
-	parseGameId,
-	mapBoardDtoToHexes,
-	mapBoardDtoToPorts,
-	findDesertHexId,
-	mapResourcesFromServer,
-	fallbackColorForPlayer,
-} from "./mappers";
-import {
-	toPixel,
-	getCornerPoint,
-	createCanonicalEdgeKey,
 	createCanonicalCornerKey,
+	createCanonicalEdgeKey,
 	getCanonicalRoadEndpoints,
+	getCornerPoint,
+	toPixel,
 } from "./geometry";
 import {
-	parseRoadEntry,
-	mergeRoadLists,
-	rememberRoadsInCache,
+	createInitialGameState,
+	fallbackColorForPlayer,
+	findDesertHexId,
+	mapBoardDtoToHexes,
+	mapBoardDtoToPorts,
+	mapResourcesFromServer,
+	parseGameId,
+} from "./mappers";
+import {
 	computeLongestRoadLength,
+	mergeRoadLists,
+	parseRoadEntry,
+	rememberRoadsInCache,
 } from "./roads";
+import {
+	type BoardGetDTO,
+	type GameChatMessageDTO,
+	type GameEventDTO,
+	type GameGetDTO,
+	type GameState,
+	type HexTile,
+	type Player,
+	type ResourceType,
+	type Resources,
+	type TradeMode,
+} from "./types";
+
+
+const developmentCardDisplayName: Record<string, string> = {
+	knight: "Knight",
+	victory_point: "Victory Point",
+	road_building: "Road Building",
+	year_of_plenty: "Year of Plenty",
+	monopoly: "Monopoly",
+};
 
 const createEmptyTradeResources = (): Resources => ({
 	wood: 0,
@@ -227,7 +237,7 @@ export default function Gameboard() {
 					if (gameDto?.bankResources) {
 						setBankResourcesState(gameDto.bankResources as Resources);
 					}
-					setState((previousState: GameState) => ({
+					setState((previousState) => ({
 						...previousState,
 						hexes: mappedHexes,
 						ports: mappedPorts,
@@ -236,8 +246,8 @@ export default function Gameboard() {
 						developmentDeck: gameDto?.developmentDeck ?? previousState.developmentDeck,
 						players:
 							gameDto?.players
-								? serverPlayers.map((serverPlayer: PlayerGetDTO, index: number): Player => {
-									const previousPlayer = previousState.players.find((p: Player) => p.id === (serverPlayer as { id: number }).id);
+								? serverPlayers.map((serverPlayer: Parameters<typeof mapResourcesFromServer>[0], index) => {
+									const previousPlayer = previousState.players.find((p) => p.id === (serverPlayer as { id: number }).id);
 									const cachedRoads = Array.from(roadCacheRef.current.get((serverPlayer as { id: number }).id) ?? [])
 										.map((entry: unknown) => (typeof entry === "string" ? parseRoadEntry(entry as string) : entry))
 										.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null);
@@ -258,9 +268,6 @@ export default function Gameboard() {
 										userId: (serverPlayer as { userId?: number | null }).userId ?? null,
 										name: (serverPlayer as { name: string }).name,
 										bot: Boolean((serverPlayer as { bot?: boolean }).bot),
-										online: (serverPlayer as { online?: boolean | null }).online ?? true,
-										lastSeenAt: (serverPlayer as { lastSeenAt?: string | null }).lastSeenAt ?? null,
-										disconnectedAt: (serverPlayer as { disconnectedAt?: string | null }).disconnectedAt ?? null,
 										color: (serverPlayer as { color?: string | null }).color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
 										resources: mapResourcesFromServer(serverPlayer as Parameters<typeof mapResourcesFromServer>[0]),
 										victoryPoints: serverPlayer.victoryPoints ?? 0,
@@ -372,12 +379,8 @@ export default function Gameboard() {
 			}
 		};
 
-		// expose sync function to outer scope so other handlers (e.g. trades) can trigger immediate sync
-		syncGameStateRef.current = syncGameState;
-
 		let lastSeenGameVersion: number | null = null;
 		let syncInFlight = false;
-
 
 		const pollGameSync = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
 			try {
@@ -415,7 +418,7 @@ export default function Gameboard() {
 				) {
 					lastDiceRolledAtRef.current = nextDiceRolledAt;
 
-					setState((previousState: GameState) => ({
+					setState((previousState) => ({
 						...previousState,
 						diceResult: nextDiceValue,
 						turnPhase: syncDto.turnPhase ?? previousState.turnPhase,
@@ -591,9 +594,6 @@ export default function Gameboard() {
 
 		return () => {
 			cancelled = true;
-			// clear exposed sync reference
-			syncGameStateRef.current = null;
-			syncedEventLogsRef.current = new Set();
 			if (pollHandle !== undefined) {
 				window.clearInterval(pollHandle);
 			}
@@ -603,60 +603,6 @@ export default function Gameboard() {
 			}
 		};
 	}, [apiService, router, searchParams]);
-
-	useEffect(() => {
-		if (!activeGameId) {
-			return;
-		}
-
-		let cancelled = false;
-		const sendHeartbeat = async () => {
-			try {
-				const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/heartbeat`, {});
-				if (cancelled || !Array.isArray(gameDto.players)) {
-					return;
-				}
-
-				setState((previousState) => ({
-					...previousState,
-					players: previousState.players.map((player) => {
-						const serverPlayer = gameDto.players?.find((candidate) => candidate.id === player.id);
-						if (!serverPlayer) {
-							return player;
-						}
-
-						return {
-							...player,
-							name: serverPlayer.name ?? player.name,
-							bot: Boolean(serverPlayer.bot),
-							online: serverPlayer.online ?? true,
-							lastSeenAt: serverPlayer.lastSeenAt ?? null,
-							disconnectedAt: serverPlayer.disconnectedAt ?? null,
-						};
-					}),
-				}));
-			} catch (error) {
-				if (cancelled) {
-					return;
-				}
-				const status = (error as Partial<ApplicationError>)?.status;
-				if (status === 401) {
-					setBoardStatus("Session expired. Please log in again.");
-					router.replace("/login");
-				}
-			}
-		};
-
-		void sendHeartbeat();
-		const heartbeat = window.setInterval(() => {
-			void sendHeartbeat();
-		}, 1000);
-
-		return () => {
-			cancelled = true;
-			window.clearInterval(heartbeat);
-		};
-	}, [activeGameId, apiService, router]);
 
 	const hexById = useMemo(() => {
 		const map = new Map<number, HexTile>();
@@ -798,9 +744,9 @@ export default function Gameboard() {
 	const gameSummaryStats = useMemo(() => {
 		const cardsPlayedCount = gameLog.filter((entry) => /development card|dev card/i.test(entry)).length;
 		const knightsPlayedCount = gameLog.filter((entry) => /knight/i.test(entry)).length;
-		const roadsBuiltCount = state.players.reduce((sum: number, player: Player) => sum + player.roadsOnEdges.length, 0);
-		const settlementsBuiltCount = state.players.reduce((sum: number, player: Player) => sum + player.settlementsOnCorners.length, 0);
-		const citiesBuiltCount = state.players.reduce((sum: number, player: Player) => sum + player.citiesOnCorners.length, 0);
+		const roadsBuiltCount = state.players.reduce((sum, player) => sum + player.roadsOnEdges.length, 0);
+		const settlementsBuiltCount = state.players.reduce((sum, player) => sum + player.settlementsOnCorners.length, 0);
+		const citiesBuiltCount = state.players.reduce((sum, player) => sum + player.citiesOnCorners.length, 0);
 
 		return {
 			cardsPlayedCount,
@@ -906,11 +852,11 @@ export default function Gameboard() {
 	};
 
 	const getPlayerTotalResources = (player: Player): number =>
-		resourceTypes.reduce((sum: number, resource: ResourceType) => sum + player.resources[resource], 0);
+		resourceTypes.reduce((sum, resource) => sum + player.resources[resource], 0);
 	const occupiedEdgeKeys = useMemo(() => {
 		const occupied = new Set<string>();
-		state.players.forEach((player: Player) => {
-			player.roadsOnEdges.forEach((road: { hexId: number; edge: number }) => {
+		state.players.forEach((player) => {
+			player.roadsOnEdges.forEach((road) => {
 				const hex = hexById.get(road.hexId);
 				if (!hex) {
 					return;
@@ -1352,7 +1298,7 @@ export default function Gameboard() {
 			});
 			// The backend will deduct resources from the player and add them to the bank.
 			// The syncGameState will then update the player's resources and bank's resources.
-		} catch {
+		} catch { // eslint-disable-line no-empty
 			addToLog("Could not build settlement. Please try again.");
 			return;
 		}
@@ -1631,7 +1577,7 @@ export default function Gameboard() {
 		if (!mustDiscard) {
 			setDiscardChoices({});
 		}
-	}, [state.turnPhase, isMyTurn, myPlayer, myPlayerResourceTotal, mustMoveRobberFromServer]);
+	}, [state.turnPhase, isMyTurn, myPlayer?.id, myPlayerResourceTotal, mustMoveRobberFromServer]);
 
 	const handleRollDice = async () => {
 		if (!isMyTurn || !activeGameId || state.turnPhase !== "ROLL_DICE") {
@@ -1726,9 +1672,6 @@ export default function Gameboard() {
 									userId: serverPlayer.userId ?? null,
 									name: serverPlayer.name,
 									bot: Boolean(serverPlayer.bot),
-									online: serverPlayer.online ?? true,
-									lastSeenAt: serverPlayer.lastSeenAt ?? null,
-									disconnectedAt: serverPlayer.disconnectedAt ?? null,
 									color: serverPlayer.color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
 									resources: mapResourcesFromServer(serverPlayer),
 									victoryPoints: serverPlayer.victoryPoints ?? 0,
@@ -1769,6 +1712,8 @@ export default function Gameboard() {
 			}
 		}
 	};
+
+	applyGameEventRef.current = applyGameEvent;
 
 	const handleBankTrade = async () => {
 		if (!isMyTurn || !myPlayer || !activeGameId) {
@@ -1876,24 +1821,17 @@ export default function Gameboard() {
 		const logMessage = `${myPlayer.name} trades ${formatBundle(bankGiveResources)} for ${formatBundle(bankReceiveResources)} with bank.`;
 		addToLog(logMessage);
 		setShowTradePopup(false);
-		
-		try {
-			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-				type: "BANK_TRADE",
-				sourcePlayerId: myPlayer.id,
-				giveResources: bankGiveResources,
-				receiveResources: bankReceiveResources,
-				amount: receiveTotal,
-				message: logMessage,
-			});
-			// Trigger immediate sync to reflect the trade results
-			await syncGameStateRef.current?.(activeGameId);
-		} catch {
-			addToLog("Could not complete the bank trade. Please try again.");
-		}
+		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+			type: "BANK_TRADE",
+			sourcePlayerId: myPlayer.id,
+			giveResources: bankGiveResources,
+			receiveResources: bankReceiveResources,
+			amount: receiveTotal,
+			message: logMessage,
+		});
 	};
 
-	const handlePlayerTrade = async () => {
+	const handlePlayerTrade = () => {
 		if (!isMyTurn || !myPlayer || !activeGameId) {
 			addToLog("No active player for trading.");
 			return;
@@ -1942,24 +1880,19 @@ export default function Gameboard() {
 		setActiveOutgoingTradeRequest(tradeRequest);
 		setActiveOutgoingTradeResponses(pendingResponses);
 		setShowTradePopup(false);
-		
-		try {
-			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-				type: "PLAYER_TRADE",
-				sourcePlayerId: myPlayer.id,
-				tradeAction: "REQUEST",
-				tradeRequestId,
-				giveResources: playerGiveResources,
-				receiveResources: playerReceiveResources,
-				message: logMessage,
-			});
-			// Trigger immediate sync to ensure all players see the trade request
-			await syncGameStateRef.current?.(activeGameId);
-		} catch {
+		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
+			type: "PLAYER_TRADE",
+			sourcePlayerId: myPlayer.id,
+			tradeAction: "REQUEST",
+			tradeRequestId,
+			giveResources: playerGiveResources,
+			receiveResources: playerReceiveResources,
+			message: logMessage,
+		}).catch(() => {
 			setActiveOutgoingTradeRequest(null);
 			setActiveOutgoingTradeResponses({});
 			addToLog("Could not send trade request. Please try again.");
-		}
+		});
 	};
 
 	const handleFinalizePlayerTrade = async (targetPlayerId: number) => {
@@ -1991,8 +1924,6 @@ export default function Gameboard() {
 			setActiveOutgoingTradeRequest(null);
 			setActiveOutgoingTradeResponses({});
 			addToLog(logMessage);
-			// Trigger immediate sync to reflect the completed trade
-			await syncGameStateRef.current?.(activeGameId);
 		} catch {
 			addToLog("Could not complete the trade.");
 		}
@@ -2018,8 +1949,6 @@ export default function Gameboard() {
 			lastTradeRequestIdRef.current = null;
 			setActiveTradeRequest(null);
 			addToLog(logMessage);
-			// Trigger immediate sync to reflect the trade acceptance
-			await syncGameStateRef.current?.(activeGameId);
 		} catch {
 			addToLog("Could not accept the trade request.");
 		}
@@ -2051,8 +1980,6 @@ export default function Gameboard() {
 			lastTradeRequestIdRef.current = null;
 			setActiveTradeRequest(null);
 			addToLog(logMessage);
-			// Trigger immediate sync to reflect the trade denial
-			await syncGameStateRef.current?.(activeGameId);
 		} catch {
 			addToLog("Could not deny the trade request.");
 		}
@@ -2182,9 +2109,6 @@ export default function Gameboard() {
 									userId: serverPlayer.userId ?? null,
 									name: serverPlayer.name,
 									bot: Boolean(serverPlayer.bot),
-									online: serverPlayer.online ?? true,
-									lastSeenAt: serverPlayer.lastSeenAt ?? null,
-									disconnectedAt: serverPlayer.disconnectedAt ?? null,
 									color: serverPlayer.color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
 									resources: mapResourcesFromServer(serverPlayer),
 									victoryPoints: serverPlayer.victoryPoints ?? 0,
@@ -2566,9 +2490,6 @@ export default function Gameboard() {
 						userId: (serverPlayer as { userId?: number | null }).userId ?? null,
 						name: (serverPlayer as { name: string }).name,
 						bot: Boolean((serverPlayer as { bot?: boolean | null }).bot),
-						online: (serverPlayer as { online?: boolean | null }).online ?? true,
-						lastSeenAt: (serverPlayer as { lastSeenAt?: string | null }).lastSeenAt ?? null,
-						disconnectedAt: (serverPlayer as { disconnectedAt?: string | null }).disconnectedAt ?? null,
 						color: (serverPlayer as { color?: string | null }).color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
 						resources: mapResourcesFromServer(serverPlayer as Parameters<typeof mapResourcesFromServer>[0]),
 						victoryPoints: serverPlayer.victoryPoints ?? 0,
@@ -2669,6 +2590,8 @@ export default function Gameboard() {
 				bankGiveResources={bankGiveResources}
 				bankReceiveResources={bankReceiveResources}
 				bankResources={bankResourcesState}
+				ports={ports}
+				hexById={hexById}
 				currentPlayer={myPlayer}
 				ports={ports}
 				hexes={state.hexes}
@@ -2927,10 +2850,6 @@ export default function Gameboard() {
 										<span className={styles.colorDot} style={{ backgroundColor: player.color }} />
 										<span>{player.name}</span>
 										{player.bot && <span className={styles.botBadge}>Bot</span>}
-										{myPlayer?.id === player.id && <span className={styles.meBadge}>Me</span>}
-										<span className={`${styles.statusBadge} ${player.online === false ? styles.offlineBadge : styles.onlineBadge}`}>
-											{player.online === false ? "Offline" : "Online"}
-										</span>
 									</div>
 									<span className={styles.playerVpBadge}>{player.victoryPoints}</span>
 								</div>
