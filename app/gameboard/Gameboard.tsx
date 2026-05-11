@@ -115,6 +115,7 @@ export default function Gameboard() {
 	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const lastDiceRolledAtRef = useRef<string | null>(null);
+	const lastTradeRequestIdRef = useRef<string | null>(null);
 	const syncGameStateRef = useRef<((gameId: number) => Promise<"ok" | "unauthorized" | "notfound" | "error">) | null>(null);
 	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
 	const ports = Array.isArray(state.ports) ? state.ports : [];
@@ -1523,14 +1524,14 @@ export default function Gameboard() {
 					return;
 				}
 
-				if (activeTradeRequest?.tradeRequestId && activeTradeRequest.tradeRequestId === event.tradeRequestId) {
-					return;
-				}
+				// Only update trade request if it's a new request ID (version-based update)
+				if (event.tradeRequestId && event.tradeRequestId !== lastTradeRequestIdRef.current) {
+					lastTradeRequestIdRef.current = event.tradeRequestId;
+					setActiveTradeRequest(event);
 
-				setActiveTradeRequest(event);
-
-				if (event.message) {
-					addToLog(event.message);
+					if (event.message) {
+						addToLog(event.message);
+					}
 				}
 				return;
 			}
@@ -1544,6 +1545,7 @@ export default function Gameboard() {
 				}
 
 				if (typeof localPlayerId === "number" && event.targetPlayerId === localPlayerId) {
+					lastTradeRequestIdRef.current = null;
 					setActiveTradeRequest(null);
 				}
 
@@ -1561,6 +1563,7 @@ export default function Gameboard() {
 			}
 
 			if (typeof localPlayerId === "number" && event.targetPlayerId === localPlayerId) {
+				lastTradeRequestIdRef.current = null;
 				setActiveTradeRequest(null);
 			}
 
@@ -1949,6 +1952,7 @@ export default function Gameboard() {
 				receiveResources: activeTradeRequest.receiveResources,
 				message: logMessage,
 			});
+			lastTradeRequestIdRef.current = null;
 			setActiveTradeRequest(null);
 			addToLog(logMessage);
 			// Trigger immediate sync to reflect the trade acceptance
@@ -1964,6 +1968,7 @@ export default function Gameboard() {
 		}
 
 		if (!myPlayer || !activeGameId) {
+			lastTradeRequestIdRef.current = null;
 			setActiveTradeRequest(null);
 			return;
 		}
@@ -1980,6 +1985,7 @@ export default function Gameboard() {
 				receiveResources: activeTradeRequest.receiveResources,
 				message: logMessage,
 			});
+			lastTradeRequestIdRef.current = null;
 			setActiveTradeRequest(null);
 			addToLog(logMessage);
 			// Trigger immediate sync to reflect the trade denial
@@ -2450,6 +2456,8 @@ export default function Gameboard() {
 
 		setPlacementMode(null);
 		setIsDevCardPlayMode(false);
+		lastTradeRequestIdRef.current = null;
+		setActiveTradeRequest(null);
 
 		try {
 			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/end-turn`, {});
@@ -2649,7 +2657,10 @@ export default function Gameboard() {
 				sourcePlayer={activeTradeRequestSourcePlayer}
 				onAccept={handleAcceptTradeRequest}
 				onDeny={handleDenyTradeRequest}
-				onClose={() => setActiveTradeRequest(null)}
+				onClose={() => {
+					lastTradeRequestIdRef.current = null;
+					setActiveTradeRequest(null);
+				}}
 			/>
 
 			{showDicePopup && dicePopupValue !== null ? (
