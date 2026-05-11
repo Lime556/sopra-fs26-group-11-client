@@ -119,6 +119,7 @@ export default function Gameboard() {
 	const [discardModalOpen, setDiscardModalOpen] = useState<boolean>(false);
 	const [discardChoices, setDiscardChoices] = useState<Record<string, number>>({});
 	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
+	const syncedEventLogsRef = useRef<Set<string>>(new Set());
 	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
 	const botActionInFlightRef = useRef(false);
 	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
@@ -1709,8 +1710,6 @@ export default function Gameboard() {
 		}
 	};
 
-	void applyGameEvent;
-	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
 	applyGameEventRef.current = applyGameEvent;
 
 	const handleBankTrade = async () => {
