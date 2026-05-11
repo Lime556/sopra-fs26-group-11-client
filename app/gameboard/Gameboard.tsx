@@ -171,6 +171,7 @@ export default function Gameboard() {
 		let cancelled = false;
 
 		syncedChatMessagesRef.current = new Set();
+		syncedEventLogsRef.current = new Set();
 		roadCacheRef.current = new Map();
 
 		const readStoredGameId = (): number | null => {
@@ -311,21 +312,21 @@ export default function Gameboard() {
 						});
 					}
 
-					if (Array.isArray(gameDto?.eventLog) && gameDto.eventLog.length > 0) {
-						const knownEventLogs = syncedEventLogsRef.current;
-						for (const rawEvent of gameDto.eventLog) {
-							if (typeof rawEvent !== "string" || rawEvent.trim().length === 0 || knownEventLogs.has(rawEvent)) {
-								continue;
+					const serverEventLogs = Array.isArray(gameDto?.eventLog)
+						? gameDto.eventLog.filter((entry: unknown): entry is string => typeof entry === "string" && entry.trim().length > 0)
+						: [];
+
+					if (serverEventLogs.length > 0) {
+						setGameLog((previous) => {
+							const known = syncedEventLogsRef.current;
+							const unseen = serverEventLogs.filter((entry: string) => !known.has(entry));
+							if (unseen.length === 0) {
+								return previous;
 							}
 
-							knownEventLogs.add(rawEvent);
-							try {
-								const parsedEvent = JSON.parse(rawEvent) as GameEventDTO;
-								applyGameEventRef.current?.(parsedEvent);
-							} catch {
-								// ignore malformed event payloads
-							}
-						}
+							unseen.forEach((entry: string) => known.add(entry));
+							return [...unseen.reverse(), ...previous].slice(0, 40);
+						});
 					}
 
 					setBoardStatus("");
@@ -812,6 +813,45 @@ export default function Gameboard() {
 		}
 
 		return { sender, message };
+	};
+
+	const formatEventLogEntry = (entry: string): string => {
+		const segments = entry.split("|").map((part) => part.trim());
+		if (segments.length < 3) {
+			return entry;
+		}
+
+		const keyValues = new Map<string, string>();
+		segments.forEach((segment) => {
+			const separatorIndex = segment.indexOf("=");
+			if (separatorIndex <= 0) {
+				return;
+			}
+
+			const key = segment.slice(0, separatorIndex).trim().toLowerCase();
+			const value = segment.slice(separatorIndex + 1).trim();
+			if (key && value) {
+				keyValues.set(key, value);
+			}
+		});
+
+		const player = keyValues.get("player");
+		const result = keyValues.get("result");
+		if (!player || !result) {
+			return entry;
+		}
+
+		const normalizedResult = result.replace(/\s+/g, " ").trim();
+		if (!normalizedResult) {
+			return `${player} made a move.`;
+		}
+
+		const sentenceBody = normalizedResult.endsWith(".") ? normalizedResult : `${normalizedResult}.`;
+		const capitalizedBody = sentenceBody.charAt(0).toLowerCase() === sentenceBody.charAt(0)
+			? sentenceBody
+			: `${sentenceBody.charAt(0).toLowerCase()}${sentenceBody.slice(1)}`;
+
+		return `${player} ${capitalizedBody}`;
 	};
 
 	const getPlayerTotalResources = (player: Player): number =>
@@ -2854,17 +2894,25 @@ export default function Gameboard() {
 					<div className={styles.logBox}>
 						{gameLog.map((entry: string, index: number) => (
 							(() => {
+								const formattedEventEntry = formatEventLogEntry(entry);
 								const parsedChat = parseChatEntry(entry);
+								const isKnownPlayerChat = Boolean(
+									parsedChat && state.players.some((player) => player.name === parsedChat.sender)
+								);
+								const isChatEntry = entry.startsWith("[CHAT] ") || isKnownPlayerChat;
 								if (!parsedChat) {
-									return <p key={`log-${index}`}>{entry}</p>;
+									return <p key={`log-${index}`} className={styles.logEventEntry}>{formattedEventEntry}</p>;
 								}
 
 								const senderPlayer = state.players.find((player) => player.name === parsedChat.sender);
 								const senderColor = senderPlayer?.color ?? "#f8e7bf";
+								if (!isChatEntry) {
+									return <p key={`log-${index}`} className={styles.logEventEntry}>{formattedEventEntry}</p>;
+								}
 
 								return (
-									<p key={`log-${index}`}>
-										<span style={{ color: senderColor, fontWeight: 700 }}>{parsedChat.sender}</span>
+									<p key={`log-${index}`} className={styles.logChatEntry}>
+										<span className={styles.logChatSender} style={{ color: senderColor }}>{parsedChat.sender}</span>
 										{`: ${parsedChat.message}`}
 									</p>
 								);
