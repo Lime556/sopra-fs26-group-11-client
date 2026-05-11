@@ -1,6 +1,7 @@
 import styles from "@/styles/gameboard.module.css";
-import { Player, ResourceType, Resources, TradeMode } from "../types";
+import { HexTile, Player, PortVisual, ResourceType, Resources, TradeMode } from "../types";
 import { resourceTypes } from "../constants";
+import { createCanonicalCornerKey } from "../geometry";
 
 interface TradeModalProps {
 	isVisible: boolean;
@@ -10,6 +11,8 @@ interface TradeModalProps {
 	bankGiveResources: Resources;
 	bankReceiveResources: Resources;
 	bankResources: Resources;
+	ports: PortVisual[];
+	hexById: Map<number, HexTile>;
 	currentPlayer: Player | null;
 	onClose: () => void;
 	onSetTradeMode: (mode: TradeMode) => void;
@@ -29,6 +32,8 @@ export function TradeModal({
 	bankGiveResources,
 	bankReceiveResources,
 	bankResources,
+	ports,
+	hexById,
 	currentPlayer,
 	onClose,
 	onSetTradeMode,
@@ -49,6 +54,36 @@ export function TradeModal({
 		wool: "🐑",
 		wheat: "🌾",
 		ore: "⛰️",
+	};
+
+	const getBestRatioForResource = (resource: ResourceType): number => {
+		if (!currentPlayer || !ports || !hexById) return 4;
+
+		const isOnPort = (port: PortVisual) => {
+			const hex = hexById.get(port.hexId);
+			if (!hex) return false;
+			return port.corners.some(corner => {
+				const key = createCanonicalCornerKey(hex, corner);
+				const hasBuilding = (buildings: { hexId: number; corner: number }[]) =>
+					buildings.some(b => {
+						const bHex = hexById.get(b.hexId);
+						return bHex && createCanonicalCornerKey(bHex, b.corner) === key;
+					});
+				return hasBuilding(currentPlayer.settlementsOnCorners) || hasBuilding(currentPlayer.citiesOnCorners);
+			});
+		};
+
+		// Check 2:1 Specific Resource Port
+		if (ports.some(p => p.type === resource && isOnPort(p))) return 2;
+		// Check 3:1 Generic Port
+		if (ports.some(p => p.type === "3:1" && isOnPort(p))) return 3;
+
+		return 4;
+	};
+
+	const calculateRequiredBankGive = (): number => {
+		return resourceTypes.reduce((sum, res) => 
+			sum + (bankReceiveResources[res] ?? 0) * getBestRatioForResource(res), 0);
 	};
 
 	const sumBundle = (bundle: Resources): number =>
@@ -77,7 +112,7 @@ export function TradeModal({
 	const canExecuteSelectedBankTrade = Boolean(currentPlayer)
 		&& bankGiveTotal > 0
 		&& bankReceiveTotal > 0
-		&& bankGiveTotal === bankReceiveTotal * 4
+		&& bankGiveTotal === calculateRequiredBankGive()
 		&& hasEnoughForBundle(currentPlayer?.resources ?? bankResources, bankGiveResources)
 		&& hasEnoughForBundle(bankResources, bankReceiveResources);
 
@@ -137,7 +172,7 @@ export function TradeModal({
 
 				<div className={styles.tradeBanner}>
 					{tradeMode === "bank"
-						? "Adjust each resource amount. Bank trades require total give to equal 4x total receive."
+						? "Adjust each resource amount. Your current port bonuses will be applied automatically."
 						: "Choose what you offer and what you want. The request will be broadcast to every other player."}
 				</div>
 
