@@ -116,6 +116,7 @@ export default function Gameboard() {
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const lastDiceRolledAtRef = useRef<string | null>(null);
 	const syncGameStateRef = useRef<((gameId: number) => Promise<"ok" | "unauthorized" | "notfound" | "error">) | null>(null);
+	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
 	const ports = Array.isArray(state.ports) ? state.ports : [];
 
 	
@@ -317,6 +318,7 @@ export default function Gameboard() {
 						: [];
 
 					if (serverEventLogs.length > 0) {
+						const parsedTradeEvents: GameEventDTO[] = [];
 						setGameLog((previous) => {
 							const known = syncedEventLogsRef.current;
 							const unseen = serverEventLogs.filter((entry: string) => !known.has(entry));
@@ -324,8 +326,27 @@ export default function Gameboard() {
 								return previous;
 							}
 
-							unseen.forEach((entry: string) => known.add(entry));
-							return [...unseen.reverse(), ...previous].slice(0, 40);
+							const plainEntries: string[] = [];
+							unseen.forEach((entry: string) => {
+								known.add(entry);
+								const structuredEntry = parseStructuredEventLogEntry(entry);
+								if (structuredEntry?.payload?.type === "PLAYER_TRADE") {
+									parsedTradeEvents.push(structuredEntry.payload);
+									return;
+								}
+
+								plainEntries.push(entry);
+							});
+
+							if (plainEntries.length === 0) {
+								return previous;
+							}
+
+							return [...plainEntries.reverse(), ...previous].slice(0, 40);
+						});
+
+						parsedTradeEvents.forEach((event) => {
+							applyGameEventRef.current(event);
 						});
 					}
 
@@ -815,10 +836,10 @@ export default function Gameboard() {
 		return { sender, message };
 	};
 
-	const formatEventLogEntry = (entry: string): string => {
+	const parseStructuredEventLogEntry = (entry: string): { player: string; action: string; result: string; payload: GameEventDTO | null } | null => {
 		const segments = entry.split("|").map((part) => part.trim());
 		if (segments.length < 3) {
-			return entry;
+			return null;
 		}
 
 		const keyValues = new Map<string, string>();
@@ -835,15 +856,44 @@ export default function Gameboard() {
 			}
 		});
 
-		const player = keyValues.get("player");
-		const result = keyValues.get("result");
-		if (!player || !result) {
+		const player = keyValues.get("player") ?? "";
+		const action = keyValues.get("action") ?? "";
+		const result = keyValues.get("result") ?? "";
+
+		if (!player || !action || !result) {
+			return null;
+		}
+
+		let payload: GameEventDTO | null = null;
+		if (result.startsWith("{") && result.endsWith("}")) {
+			try {
+				payload = JSON.parse(result) as GameEventDTO;
+			} catch {
+				payload = null;
+			}
+		}
+
+		return { player, action, result, payload };
+	};
+
+	const formatEventLogEntry = (entry: string): string => {
+		const structuredEntry = parseStructuredEventLogEntry(entry);
+		if (!structuredEntry) {
 			return entry;
+		}
+
+		const { player, action, result, payload } = structuredEntry;
+		if (payload?.message) {
+			return payload.message;
 		}
 
 		const normalizedResult = result.replace(/\s+/g, " ").trim();
 		if (!normalizedResult) {
 			return `${player} made a move.`;
+		}
+
+		if (action === "PLAYER_TRADE" && normalizedResult.startsWith("{")) {
+			return `${player} requested a trade.`;
 		}
 
 		const sentenceBody = normalizedResult.endsWith(".") ? normalizedResult : `${normalizedResult}.`;
@@ -1555,6 +1605,8 @@ export default function Gameboard() {
 		}
 	};
 
+	applyGameEventRef.current = applyGameEvent;
+
 	const myPlayerResourceTotal = myPlayer ? getPlayerTotalResources(myPlayer) : 0;
 
 	useEffect(() => {
@@ -1714,10 +1766,6 @@ export default function Gameboard() {
 			}
 		}
 	};
-
-	void applyGameEvent;
-	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
-	applyGameEventRef.current = applyGameEvent;
 
 	const handleBankTrade = async () => {
 		if (!isMyTurn || !myPlayer || !activeGameId) {
