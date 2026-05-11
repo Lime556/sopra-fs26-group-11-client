@@ -2593,8 +2593,6 @@ export default function Gameboard() {
 				ports={ports}
 				hexById={hexById}
 				currentPlayer={myPlayer}
-				ports={ports}
-				hexes={state.hexes}
 				onClose={() => setShowTradePopup(false)}
 				onSetTradeMode={setTradeMode}
 				onAdjustPlayerGiveResource={(resource, delta) => {

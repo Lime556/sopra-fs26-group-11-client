@@ -1,8 +1,7 @@
 import styles from "@/styles/gameboard.module.css";
-import { HexTile, Player, PortVisual, ResourceType, Resources, TradeMode } from "../types";
 import { resourceTypes } from "../constants";
 import { createCanonicalCornerKey } from "../geometry";
-import { HexTile, PortVisual } from "../types";
+import { HexTile, Player, PortVisual, ResourceType, Resources, TradeMode } from "../types";
 
 interface TradeModalProps {
 	isVisible: boolean;
@@ -12,11 +11,9 @@ interface TradeModalProps {
 	bankGiveResources: Resources;
 	bankReceiveResources: Resources;
 	bankResources: Resources;
-	ports: PortVisual[];
-	hexById: Map<number, HexTile>;
 	currentPlayer: Player | null;
 	ports: PortVisual[];
-	hexes: HexTile[];
+	hexById: Map<number, HexTile>;
 	onClose: () => void;
 	onSetTradeMode: (mode: TradeMode) => void;
 	onAdjustPlayerGiveResource: (resource: ResourceType, delta: number) => void;
@@ -35,11 +32,9 @@ export function TradeModal({
 	bankGiveResources,
 	bankReceiveResources,
 	bankResources,
-	ports,
-	hexById,
 	currentPlayer,
 	ports,
-	hexes,
+	hexById,
 	onClose,
 	onSetTradeMode,
 	onAdjustPlayerGiveResource,
@@ -61,51 +56,12 @@ export function TradeModal({
 		ore: "⛰️",
 	};
 
-	const getBestRatioForResource = (resource: ResourceType): number => {
-		if (!currentPlayer || !ports || !hexById) return 4;
-
-		const isOnPort = (port: PortVisual) => {
-			const hex = hexById.get(port.hexId);
-			if (!hex) return false;
-			return port.corners.some(corner => {
-				const key = createCanonicalCornerKey(hex, corner);
-				const hasBuilding = (buildings: { hexId: number; corner: number }[]) =>
-					buildings.some(b => {
-						const bHex = hexById.get(b.hexId);
-						return bHex && createCanonicalCornerKey(bHex, b.corner) === key;
-					});
-				return hasBuilding(currentPlayer.settlementsOnCorners) || hasBuilding(currentPlayer.citiesOnCorners);
-			});
-		};
-
-		// Check 2:1 Specific Resource Port
-		if (ports.some(p => p.type === resource && isOnPort(p))) return 2;
-		// Check 3:1 Generic Port
-		if (ports.some(p => p.type === "3:1" && isOnPort(p))) return 3;
-
-		return 4;
-	};
-
-	const calculateRequiredBankGive = (): number => {
-		return resourceTypes.reduce((sum, res) => 
-			sum + (bankReceiveResources[res] ?? 0) * getBestRatioForResource(res), 0);
-	};
-
 	const sumBundle = (bundle: Resources): number =>
 		resourceTypes.reduce((sum, resource) => sum + Math.max(0, bundle[resource] ?? 0), 0);
 
-	const formatBundle = (bundle: Resources): string => {
-		const parts = resourceTypes
-			.filter((resource) => (bundle[resource] ?? 0) > 0)
-			.map((resource) => `${bundle[resource]} ${resource === "wool" ? "sheep" : resource}`);
-		return parts.length > 0 ? parts.join(" + ") : "nothing";
-	};
+	const hasEnoughForBundle = (available: Resources, required: Resources): boolean =>
+		resourceTypes.every((resource) => (required[resource] ?? 0) <= (available[resource] ?? 0));
 
-	const hasEnoughForBundle = (available: Resources, required: Resources): boolean => {
-		return resourceTypes.every((resource) => (required[resource] ?? 0) <= (available[resource] ?? 0));
-	};
-
-	const hexById = new Map(hexes.map((hex) => [hex.id, hex]));
 	const ownedCornerKeys = new Set<string>();
 
 	for (const settlement of currentPlayer?.settlementsOnCorners ?? []) {
@@ -150,7 +106,7 @@ export function TradeModal({
 		return bestRatio;
 	};
 
-	const getPortBonusForResource = (resource: ResourceType): string => {
+	const getPortRatioLabel = (resource: ResourceType): string => {
 		const ratio = getBestRatioForResource(resource);
 		if (ratio === 2) {
 			return "1:2";
@@ -167,7 +123,13 @@ export function TradeModal({
 	const playerReceiveTotal = sumBundle(playerReceiveResources);
 	const bankGiveTotal = sumBundle(bankGiveResources);
 	const bankReceiveTotal = sumBundle(bankReceiveResources);
-	const givesMatchPortRatios = resourceTypes.every((resource) => {
+
+	const canExecutePlayerTrade = Boolean(currentPlayer)
+		&& playerGiveTotal > 0
+		&& playerReceiveTotal > 0
+		&& hasEnoughForBundle(currentPlayer?.resources ?? bankResources, playerGiveResources);
+
+	const bankGiveMatchesPortRatios = resourceTypes.every((resource) => {
 		const giveAmount = Math.max(0, bankGiveResources[resource] ?? 0);
 		if (giveAmount === 0) {
 			return true;
@@ -176,92 +138,62 @@ export function TradeModal({
 		const ratio = getBestRatioForResource(resource);
 		return giveAmount % ratio === 0;
 	});
-	const tradeUnitsFromGive = resourceTypes.reduce((sum, resource) => {
+
+	const bankTradeUnits = resourceTypes.reduce((sum, resource) => {
 		const giveAmount = Math.max(0, bankGiveResources[resource] ?? 0);
 		const ratio = getBestRatioForResource(resource);
 		return sum + Math.floor(giveAmount / ratio);
 	}, 0);
-	const canExecutePlayerTrade = Boolean(currentPlayer)
-		&& playerGiveTotal > 0
-		&& playerReceiveTotal > 0
-		&& hasEnoughForBundle(currentPlayer?.resources ?? bankResources, playerGiveResources);
 
 	const canExecuteSelectedBankTrade = Boolean(currentPlayer)
 		&& bankGiveTotal > 0
 		&& bankReceiveTotal > 0
-		&& givesMatchPortRatios
-		&& tradeUnitsFromGive === bankReceiveTotal
-		&& bankGiveTotal === calculateRequiredBankGive()
+		&& bankGiveMatchesPortRatios
+		&& bankTradeUnits === bankReceiveTotal
 		&& hasEnoughForBundle(currentPlayer?.resources ?? bankResources, bankGiveResources)
 		&& hasEnoughForBundle(bankResources, bankReceiveResources);
-
-	const getPortBonusForResource = (resource: ResourceType): string => {
-		const ratio = getBestRatioForResource(resource);
-		if (ratio === 2) return "2:1 port";
-		if (ratio === 3) return "3:1 port";
-		return "no bonus";
-	};
 
 	const renderAdjustCard = (
 		title: string,
 		bundle: Resources,
 		availability: Resources | undefined,
 		onAdjust: (resource: ResourceType, delta: number) => void
-	) => {
-		return (
-			<div className={styles.tradeAmountCard}>
-				<span className={styles.tradeAmountTitle}>{title}</span>
-				<div className={styles.tradeAdjustList}>
-					{resourceTypes.map((resource) => {
-						const amount = bundle[resource] ?? 0;
-						const maxAmount = availability?.[resource] ?? null;
-						const portBonus = getPortBonusForResource(resource);
-						const showBonus = portBonus !== "no bonus" && title === "You Give";
-						return (
-							<div key={`${title}-${resource}`} className={styles.tradeAdjustRow}>
-								<div className={styles.tradeAdjustResource}>
-									<span className={styles.tradeResourceIcon}>{resourceIconByType[resource]}</span>
-									<span className={styles.tradeAmountResourceName}>{resource === "wool" ? "sheep" : resource}</span>
-									{tradeMode === "bank" && title === "You Give" ? (
-										<span style={{ marginLeft: 2, color: "#4ade80", fontSize: "0.8rem" }}>
-											{getPortBonusForResource(resource)}
-										</span>
-									) : null}
-									{showBonus && <span style={{ fontSize: "0.75rem", color: "#4ade80", marginLeft: "4px" }}>({portBonus})</span>}
-								</div>
-								<div className={styles.tradeAdjustStepper}>
-									<button
-										type="button"
-										onClick={() => onAdjust(resource, -1)}
-										disabled={amount <= 0}
-									>
-										-
-									</button>
-									<span>{amount}</span>
-									<button
-										type="button"
-										onClick={() => onAdjust(resource, 1)}
-										disabled={maxAmount !== null && amount >= maxAmount}
-									>
-										+
-									</button>
-								</div>
+	) => (
+		<div className={styles.tradeAmountCard}>
+			<span className={styles.tradeAmountTitle}>{title}</span>
+			<div className={styles.tradeAdjustList}>
+				{resourceTypes.map((resource) => {
+					const amount = bundle[resource] ?? 0;
+					const maxAmount = availability?.[resource] ?? null;
+					return (
+						<div key={`${title}-${resource}`} className={styles.tradeAdjustRow}>
+							<div className={styles.tradeAdjustResource}>
+								<span className={styles.tradeResourceIcon}>{resourceIconByType[resource]}</span>
+								<span className={styles.tradeAmountResourceName}>{resource === "wool" ? "sheep" : resource}</span>
+								{tradeMode === "bank" && title === "You Give" ? (
+									<span style={{ marginLeft: 4, color: "#4ade80", fontSize: "0.8rem" }}>
+										{getPortRatioLabel(resource)}
+									</span>
+								) : null}
 							</div>
-						);
-					})}
-				</div>
+							<div className={styles.tradeAdjustStepper}>
+								<button type="button" onClick={() => onAdjust(resource, -1)} disabled={amount <= 0}>-</button>
+								<span>{amount}</span>
+								<button type="button" onClick={() => onAdjust(resource, 1)} disabled={maxAmount !== null && amount >= maxAmount}>+</button>
+							</div>
+						</div>
+					);
+				})}
 			</div>
-		);
-	};
+		</div>
+	);
 
 	return (
 		<div className={styles.modalOverlay}>
 			<div className={styles.tradeModal}>
 				<div className={styles.tradeModalHeader}>
 					<h2 className={styles.tradeModalTitle}>Trade</h2>
-					<button type="button" className={styles.tradeCloseButton} onClick={onClose}>
-						✕
-					</button>
+					<button type="button" className={styles.tradeCloseButton} onClick={onClose}>✕</button>
 				</div>
 
 				<div className={styles.tradeBanner}>
@@ -290,30 +222,15 @@ export function TradeModal({
 				{tradeMode === "player" ? (
 					<div className={styles.tradeContentStack}>
 						<div className={styles.tradeAmountGrid}>
-							{renderAdjustCard(
-								"You Offer",
-								playerGiveResources,
-								currentPlayer?.resources ?? bankResources,
-								onAdjustPlayerGiveResource
-							)}
-							{renderAdjustCard(
-								"You Request",
-								playerReceiveResources,
-								undefined,
-								onAdjustPlayerReceiveResource
-							)}
+							{renderAdjustCard("You Offer", playerGiveResources, currentPlayer?.resources ?? bankResources, onAdjustPlayerGiveResource)}
+							{renderAdjustCard("You Request", playerReceiveResources, undefined, onAdjustPlayerReceiveResource)}
 						</div>
 
 						<p className={styles.tradeSummaryText}>
-							Offer {formatBundle(playerGiveResources)} for {formatBundle(playerReceiveResources)}
+							Offer {playerGiveTotal > 0 ? "resources" : "nothing"} for {playerReceiveTotal > 0 ? "resources" : "nothing"}
 						</p>
 
-						<button
-							type="button"
-							className={styles.tradeActionButton}
-							onClick={onPlayerTrade}
-							disabled={!canExecutePlayerTrade}
-						>
+						<button type="button" className={styles.tradeActionButton} onClick={onPlayerTrade} disabled={!canExecutePlayerTrade}>
 							Broadcast Trade Request
 						</button>
 					</div>
@@ -321,31 +238,16 @@ export function TradeModal({
 					<div className={styles.tradeContentStack}>
 						<div className={styles.tradeControlsRow}>
 							<div className={styles.tradeAmountGrid}>
-								{renderAdjustCard(
-									"You Give",
-									bankGiveResources,
-									currentPlayer?.resources ?? bankResources,
-									onAdjustBankGiveResource
-								)}
-								{renderAdjustCard(
-									"You Receive",
-									bankReceiveResources,
-									bankResources,
-									onAdjustBankReceiveResource
-								)}
+								{renderAdjustCard("You Give", bankGiveResources, currentPlayer?.resources ?? bankResources, onAdjustBankGiveResource)}
+								{renderAdjustCard("You Receive", bankReceiveResources, bankResources, onAdjustBankReceiveResource)}
 							</div>
 						</div>
 
 						<p className={styles.tradeSummaryText}>
-							Give {formatBundle(bankGiveResources)} for {formatBundle(bankReceiveResources)}
+							Give {bankGiveTotal > 0 ? "resources" : "nothing"} for {bankReceiveTotal > 0 ? "resources" : "nothing"}
 						</p>
 
-						<button
-							type="button"
-							className={styles.tradeActionButton}
-							onClick={onBankTrade}
-							disabled={!canExecuteSelectedBankTrade}
-						>
+						<button type="button" className={styles.tradeActionButton} onClick={onBankTrade} disabled={!canExecuteSelectedBankTrade}>
 							Execute Bank Trade
 						</button>
 					</div>
