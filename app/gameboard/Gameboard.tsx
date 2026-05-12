@@ -125,6 +125,7 @@ export default function Gameboard() {
 	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const lastDiceRolledAtRef = useRef<string | null>(null);
+	const lastTradeRequestedAtRef = useRef<string | null>(null);
 	const lastTradeRequestIdRef = useRef<string | null>(null);
 	const syncGameStateRef = useRef<((gameId: number) => Promise<"ok" | "unauthorized" | "notfound" | "error">) | null>(null);
 	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
@@ -338,7 +339,7 @@ export default function Gameboard() {
 							unseen.forEach((entry: string) => {
 								known.add(entry);
 								const structuredEntry = parseStructuredEventLogEntry(entry);
-								if (structuredEntry?.payload?.type === "PLAYER_TRADE") {
+								if (structuredEntry && structuredEntry.payload && (structuredEntry.payload.type === "PLAYER_TRADE" || (structuredEntry.payload.type as string) === "PLAYER_TRADE_FINALIZE")) {
 									parsedTradeEvents.push(structuredEntry.payload);
 									return;
 								}
@@ -397,6 +398,8 @@ export default function Gameboard() {
 					gamePhase?: string | null;
 					diceValue?: number | null;
 					diceRolledAt?: string | null;
+					tradeRequestedAt?: string | null;
+					latestTradeRequest?: string | null;
 					currentPlayerId?: number | null;
 					gameFinished?: boolean | null;
 					robberMovedAfterSevenRoll?: boolean | null;
@@ -428,6 +431,22 @@ export default function Gameboard() {
 							syncDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
 					}));
 					showDiceResultPopup(nextDiceValue);
+				}
+
+				// Lightweight Trade Request detection (matches Dice Roll mechanism)
+				const nextTradeRequestedAt = syncDto.tradeRequestedAt ?? null;
+				if (nextTradeRequestedAt !== null && nextTradeRequestedAt !== lastTradeRequestedAtRef.current) {
+					lastTradeRequestedAtRef.current = nextTradeRequestedAt;
+					if (syncDto.latestTradeRequest) {
+						try {
+							const payload = JSON.parse(syncDto.latestTradeRequest) as GameEventDTO;
+
+							// Trigger the event handler to update responses (Accept/Deny) or finalize the UI
+							applyGameEventRef.current(payload);
+						} catch (e) {
+							console.error("Failed to parse trade request from sync", e);
+						}
+					}
 				}
 		
 				if (lastSeenGameVersion === null) {
@@ -1519,16 +1538,16 @@ export default function Gameboard() {
 			return;
 		}
 
-		if (
-			typeof localPlayerId === "number"
-			&& typeof event.sourcePlayerId === "number"
-			&& event.sourcePlayerId === localPlayerId
-			&& activeOutgoingTradeRequest?.tradeRequestId
-			&& event.tradeRequestId
-			&& activeOutgoingTradeRequest.tradeRequestId === event.tradeRequestId
-		) {
-			setActiveOutgoingTradeRequest(null);
-			setActiveOutgoingTradeResponses({});
+		// Clear outgoing trade request and responses when the trade is finalized
+		if ((event.type as string) === "PLAYER_TRADE_FINALIZE") {
+			if (
+				typeof localPlayerId === "number"
+				&& typeof event.sourcePlayerId === "number"
+				&& event.sourcePlayerId === localPlayerId
+			) {
+				setActiveOutgoingTradeRequest(null);
+				setActiveOutgoingTradeResponses({});
+			}
 		}
 
 		if (
@@ -1731,6 +1750,48 @@ export default function Gameboard() {
 			return parts.length > 0 ? parts.join(" + ") : "nothing";
 		};
 
+		const myCornerKeys = new Set<string>();
+		for (const settlement of myPlayer.settlementsOnCorners ?? []) {
+			const hex = hexById.get(settlement.hexId);
+			if (hex) {
+				myCornerKeys.add(createCanonicalCornerKey(hex, settlement.corner));
+			}
+		}
+		for (const city of myPlayer.citiesOnCorners ?? []) {
+			const hex = hexById.get(city.hexId);
+			if (hex) {
+				myCornerKeys.add(createCanonicalCornerKey(hex, city.corner));
+			}
+		}
+
+		const getBestRatioForResource = (resource: ResourceType): number => {
+			let bestRatio = 4;
+
+			for (const port of ports) {
+				const portHex = hexById.get(port.hexId);
+				if (!portHex) {
+					continue;
+				}
+
+				const firstCornerKey = createCanonicalCornerKey(portHex, port.corners[0]);
+				const secondCornerKey = createCanonicalCornerKey(portHex, port.corners[1]);
+				const hasPortAccess = myCornerKeys.has(firstCornerKey) || myCornerKeys.has(secondCornerKey);
+				if (!hasPortAccess) {
+					continue;
+				}
+
+				if (port.type === resource) {
+					return 2;
+				}
+
+				if (port.type === "3:1") {
+					bestRatio = Math.min(bestRatio, 3);
+				}
+			}
+
+			return bestRatio;
+		};
+
 		const giveTotal = sumBundle(bankGiveResources);
 		const receiveTotal = sumBundle(bankReceiveResources);
 		if (giveTotal <= 0 || receiveTotal <= 0) {
@@ -1738,8 +1799,16 @@ export default function Gameboard() {
 			return;
 		}
 
-		if (giveTotal !== receiveTotal * 4) {
-			addToLog("Bank trade ratio is 4:1. Total give must equal 4x total receive.");
+		const selectedGiveResources = resourceTypes.filter((resource) => (bankGiveResources[resource] ?? 0) > 0);
+		if (selectedGiveResources.length !== 1) {
+			addToLog("Bank trade requires exactly one resource type to give.");
+			return;
+		}
+
+		const selectedGiveResource = selectedGiveResources[0];
+		const ratio = getBestRatioForResource(selectedGiveResource);
+		if (giveTotal !== receiveTotal * ratio) {
+			addToLog(`Bank trade ratio is 1:${ratio}. Total give must equal ${ratio}x total receive.`);
 			return;
 		}
 
