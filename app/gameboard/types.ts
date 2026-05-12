@@ -82,6 +82,7 @@ export interface BoatGetDTO {
 
 export interface GameGetDTO {
 	id: number;
+	gameVersion?: number | null;
 	board?: BoardGetDTO | null;
 	bankResources?: Resources | null;
 	currentTurnIndex?: number | null;
@@ -173,6 +174,7 @@ export interface GameEventDTO {
 	nextPlayerId?: number;
 	message?: string;
 	secondResource?: ResourceType;
+	expectedGameVersion?: number;
 }
 
 export interface GameChatMessageDTO {
