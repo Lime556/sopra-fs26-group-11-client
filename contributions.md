@@ -166,13 +166,17 @@ reason).
 |                    | 10.05.2026   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/46514d5c61a1dd517fbc48bb815d50ab0603c59d | strucured and formatted backend log entries so they include clear player action and result information | This makes the log consistend and usable for frontend display |
 |                    | 10.05.2026   | https://github.com/Lime556/sopra-fs26-group-11-server/pull/309/changes/e49e8ef229fab684e3211a78e0a91deff31e4bfb | Tests for user story S4 (Stats and information about players) | We need tests for code, so we can detect bugs faster and easier |
 |                    | 10.05.2026   | https://github.com/Lime556/sopra-fs26-group-11-client/pull/120/changes/2a282b3f753f5518f03b3565549716605c02d6ce | make user profile popup for everyone and connect profile UI to backend API | To see the stats of every person if you want, not just yourself. This can give you insight of your friends and other players you might play with |
-| **[@githubUser5]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **Lime556** | [08.05.] | https://github.com/Lime556/sopra-fs26-group-11-server/commit/d9230206fea9e79e1a3cddf74b6566ac86eb241d | Implement polling first version (#302) | Introduced the first backend-side polling support needed to keep clients updated without relying on WebSockets. |
+|                    | [08.05.] | https://github.com/Lime556/sopra-fs26-group-11-client/commit/178dff3c50c5889ec5b10a714774b0d26e7e99e1 | Add polling first version (#112) | Added the initial frontend/client polling integration so the game UI can regularly fetch updated state. |
+|                    | [09.05.] | https://github.com/Lime556/sopra-fs26-group-11-client/commit/c6caf6d7274fabd4d7569a7688c9d655b15559c3 | Use move-robber endpoint after rolling 7 (#115) | Connected the frontend robber movement flow to the backend endpoint after a 7 is rolled, making robber state changes server-authoritative. |
+|                      | [09.05.] | https://github.com/Lime556/sopra-fs26-group-11-server/commit/6cb6d9d67d107acaf8d6668098cbca98d6c4b674 | Implement robber-after-7 state transition (#305) | Added backend game-phase logic so rolling a 7 correctly forces the robber movement step before the game can continue. |
+|                    | [09.05.] | https://github.com/Lime556/sopra-fs26-group-11-server/commit/b864fbdc057a657e0121acd56047c1d464b89467 | Extend move-robber endpoint payload (#306) | Expanded the robber endpoint payload so the frontend can send the required robber movement data cleanly. |
+
 
 
 ---
 
-## Contributions Week 6 - [] to [End Date]
+## Contributions Week 6 - [10.05.] to [17.05]
 
 | **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
@@ -184,12 +188,15 @@ reason).
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
-| **[@githubUser5]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **Lime556** | [12.05.] | https://github.com/Lime556/sopra-fs26-group-11-server/commit/28d69739b4b16f5086e69a7a39a4a8fc14a877eb | Fix stale game sync with versioned action endpoints (#323) | Added backend-side versioned game action handling so stale client actions are rejected instead of corrupting or overwriting newer game state. |
+|                    | [12.05.] | https://github.com/Lime556/sopra-fs26-group-11-server/commit/b7247186c87066eabacf8b1e41a6a716bc8400ac | Fix stale game sync with versioned actions (#323) | Hardened backend game synchronization by making gameplay mutations follow the versioned action flow. |
+|                    | [12.05.] | https://github.com/Lime556/sopra-fs26-group-11-client/commit/d5e498e34f9fadd2a5f5e3619b5a7a9e2ca9330b | Fix stale game sync with versioned action endpoints (#130) | Connected the frontend to authoritative versioned action responses so the UI only advances after confirmed backend state updates. |
+|                    | [12.05.] | https://github.com/Lime556/sopra-fs26-group-11-client/commit/ca160568b68f8bc9b77d76238c40d22aee075880 | Fix stale game sync with versioned actions (#130) | Added frontend stale-response guards and action-version tracking to prevent old polling responses from rolling the game state backwards. |
+
 
 ---
 
-## Contributions Week 7 - [Begin Date] to [End Date]
+## Contributions Week 7 - [10.05.] to [17.05]
 
 | **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
