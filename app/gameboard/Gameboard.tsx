@@ -127,9 +127,25 @@ export default function Gameboard() {
 	const lastDiceRolledAtRef = useRef<string | null>(null);
 	const lastTradeRequestedAtRef = useRef<string | null>(null);
 	const lastTradeRequestIdRef = useRef<string | null>(null);
+	const currentGameVersionRef = useRef<number | null>(null);
+	const actionPendingRef = useRef<boolean>(false);
 	const syncGameStateRef = useRef<((gameId: number) => Promise<"ok" | "unauthorized" | "notfound" | "error">) | null>(null);
 	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
 	const ports = Array.isArray(state.ports) ? state.ports : [];
+
+	const rememberServerGameVersion = (gameDto?: Pick<GameGetDTO, "gameVersion"> | null): void => {
+		const nextVersion = typeof gameDto?.gameVersion === "number" ? gameDto.gameVersion : null;
+		if (nextVersion === null) {
+			return;
+		}
+		const currentVersion = currentGameVersionRef.current;
+		currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
+	};
+
+	const withExpectedGameVersion = <T extends Record<string, unknown>>(payload: T): T & { expectedGameVersion?: number } => {
+		const expectedGameVersion = currentGameVersionRef.current;
+		return expectedGameVersion === null ? payload : { ...payload, expectedGameVersion };
+	};
 
 	
 
@@ -205,6 +221,12 @@ export default function Gameboard() {
 		const syncGameState = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
 			try {
 				const gameDto = await apiService.get<GameGetDTO>(`/games/${gameId}`);
+				const responseVersion = typeof gameDto?.gameVersion === "number" ? gameDto.gameVersion : null;
+				const currentVersion = currentGameVersionRef.current;
+				if (responseVersion !== null && currentVersion !== null && responseVersion < currentVersion) {
+					return "ok";
+				}
+				rememberServerGameVersion(gameDto);
 
 				let resolvedBoard: BoardGetDTO | null = gameDto?.board ?? null;
 
@@ -410,6 +432,10 @@ export default function Gameboard() {
 				}
 		
 				const nextVersion = typeof syncDto.gameVersion === "number" ? syncDto.gameVersion : 0;
+				const currentVersion = currentGameVersionRef.current;
+				if (currentVersion !== null && nextVersion < currentVersion) {
+					return "ok";
+				}
 
 				const nextDiceRolledAt = syncDto.diceRolledAt ?? null;
 				const nextDiceValue = typeof syncDto.diceValue === "number" ? syncDto.diceValue : null;
@@ -451,11 +477,13 @@ export default function Gameboard() {
 		
 				if (lastSeenGameVersion === null) {
 					lastSeenGameVersion = nextVersion;
+					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
 					return "ok";
 				}
 		
 				if (nextVersion !== lastSeenGameVersion) {
 					lastSeenGameVersion = nextVersion;
+					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
 					return await syncGameState(gameId);
 				}
 		
@@ -490,6 +518,7 @@ export default function Gameboard() {
 			if (!createdGame?.id) {
 				return null;
 			}
+			rememberServerGameVersion(createdGame);
 
 			sessionStorage.setItem("gameId", JSON.stringify(createdGame.id));
 			localStorage.removeItem("gameId");
@@ -1280,11 +1309,12 @@ export default function Gameboard() {
 			}
 
 			try {
-				await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/build-settlement`, {
+				const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/build-settlement`, withExpectedGameVersion({
 					playerId: myPlayer.id,
 					intersectionId: intersectionId,
 					hexId: hexId,
-				});
+				}));
+				rememberServerGameVersion(gameDto);
 				// The backend will deduct resources from the player and add them to the bank.
 				// The syncGameState will then update the player's resources and bank's resources.
 
@@ -1309,12 +1339,12 @@ export default function Gameboard() {
 		}
 
 		try {
-			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-				type: "SETTLEMENT_BUILT",
-				sourcePlayerId: myPlayer.id,
-				hexId,
+			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/build-settlement`, withExpectedGameVersion({
+				playerId: myPlayer.id,
 				intersectionId: globalIntersectionId,
-			});
+				hexId,
+			}));
+			rememberServerGameVersion(gameDto);
 			// The backend will deduct resources from the player and add them to the bank.
 			// The syncGameState will then update the player's resources and bank's resources.
 		} catch { // eslint-disable-line no-empty
@@ -1355,12 +1385,12 @@ export default function Gameboard() {
 		}
 
 		try {
-			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-				type: "CITY_BUILT",
-				sourcePlayerId: myPlayer.id,
-				hexId,
+			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/build-city`, withExpectedGameVersion({
+				playerId: myPlayer.id,
 				intersectionId: globalIntersectionId,
-			});
+				hexId,
+			}));
+			rememberServerGameVersion(gameDto);
 		} catch {
 			addToLog("Could not build city. Please try again.");
 			return;
@@ -1604,7 +1634,12 @@ export default function Gameboard() {
 		}
 
 		try {
-			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/roll-dice`, {});
+			if (actionPendingRef.current) {
+				return;
+			}
+			actionPendingRef.current = true;
+			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/roll-dice`, withExpectedGameVersion({}));
+			rememberServerGameVersion(gameDto);
 		
 			if (typeof gameDto.diceValue === "number") {
 				setState((previousState) => ({
@@ -1628,6 +1663,8 @@ export default function Gameboard() {
 			} else {
 				addToLog("Failed to roll dice.");
 			}
+		} finally {
+			actionPendingRef.current = false;
 		}
 	};
 
@@ -1639,8 +1676,9 @@ export default function Gameboard() {
 		try {
 			const gameDto = await apiService.post<GameGetDTO>(
 				`/games/${activeGameId}/actions/discard-resources`,
-				discardChoices
+				withExpectedGameVersion(discardChoices)
 			);
+			rememberServerGameVersion(gameDto);
 	
 			addToLog("Resources discarded.");
 			setDiscardModalOpen(false);
@@ -1825,16 +1863,20 @@ export default function Gameboard() {
 		}
 
 		const logMessage = `${myPlayer.name} trades ${formatBundle(bankGiveResources)} for ${formatBundle(bankReceiveResources)} with bank.`;
-		addToLog(logMessage);
-		setShowTradePopup(false);
-		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-			type: "BANK_TRADE",
-			sourcePlayerId: myPlayer.id,
-			giveResources: bankGiveResources,
-			receiveResources: bankReceiveResources,
-			amount: receiveTotal,
-			message: logMessage,
-		});
+		try {
+			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/bank-trade`, withExpectedGameVersion({
+				sourcePlayerId: myPlayer.id,
+				giveResources: bankGiveResources,
+				receiveResources: bankReceiveResources,
+				amount: receiveTotal,
+				message: logMessage,
+			}));
+			rememberServerGameVersion(gameDto);
+			addToLog(logMessage);
+			setShowTradePopup(false);
+		} catch {
+			addToLog("Could not complete bank trade. Please try again.");
+		}
 	};
 
 	const handlePlayerTrade = () => {
@@ -1882,21 +1924,19 @@ export default function Gameboard() {
 			message: `${myPlayer.name} requested ${formatBundle(playerGiveResources)} for ${formatBundle(playerReceiveResources)} from all players.`,
 		};
 		const logMessage = tradeRequest.message ?? `${myPlayer.name} requested a trade from all players.`;
-		addToLog(logMessage);
-		setActiveOutgoingTradeRequest(tradeRequest);
-		setActiveOutgoingTradeResponses(pendingResponses);
-		setShowTradePopup(false);
-		void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-			type: "PLAYER_TRADE",
+		void apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/player-trade/request`, withExpectedGameVersion({
 			sourcePlayerId: myPlayer.id,
-			tradeAction: "REQUEST",
 			tradeRequestId,
 			giveResources: playerGiveResources,
 			receiveResources: playerReceiveResources,
 			message: logMessage,
+		})).then((gameDto) => {
+			rememberServerGameVersion(gameDto);
+			addToLog(logMessage);
+			setActiveOutgoingTradeRequest(tradeRequest);
+			setActiveOutgoingTradeResponses(pendingResponses);
+			setShowTradePopup(false);
 		}).catch(() => {
-			setActiveOutgoingTradeRequest(null);
-			setActiveOutgoingTradeResponses({});
 			addToLog("Could not send trade request. Please try again.");
 		});
 	};
@@ -1919,14 +1959,14 @@ export default function Gameboard() {
 
 		const logMessage = `${myPlayer.name} finalized the trade with ${targetPlayer.name}.`;
 		try {
-			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-				type: "PLAYER_TRADE",
+			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/player-trade/finalize`, withExpectedGameVersion({
 				sourcePlayerId: myPlayer.id,
 				targetPlayerId,
 				giveResources: activeOutgoingTradeRequest.giveResources,
 				receiveResources: activeOutgoingTradeRequest.receiveResources,
 				message: logMessage,
-			});
+			}));
+			rememberServerGameVersion(gameDto);
 			setActiveOutgoingTradeRequest(null);
 			setActiveOutgoingTradeResponses({});
 			addToLog(logMessage);
@@ -1942,8 +1982,7 @@ export default function Gameboard() {
 
 		const logMessage = `${myPlayer.name} accepted the trade request.`;
 		try {
-			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-				type: "PLAYER_TRADE",
+			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/player-trade/respond`, withExpectedGameVersion({
 				sourcePlayerId: activeTradeRequest.sourcePlayerId,
 				targetPlayerId: myPlayer.id,
 				tradeAction: "ACCEPT",
@@ -1951,7 +1990,8 @@ export default function Gameboard() {
 				giveResources: activeTradeRequest.giveResources,
 				receiveResources: activeTradeRequest.receiveResources,
 				message: logMessage,
-			});
+			}));
+			rememberServerGameVersion(gameDto);
 			lastTradeRequestIdRef.current = null;
 			setActiveTradeRequest(null);
 			addToLog(logMessage);
@@ -1973,8 +2013,7 @@ export default function Gameboard() {
 
 		const logMessage = `${myPlayer.name} denied the trade request.`;
 		try {
-			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-				type: "PLAYER_TRADE",
+			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/player-trade/respond`, withExpectedGameVersion({
 				sourcePlayerId: activeTradeRequest.sourcePlayerId,
 				targetPlayerId: myPlayer.id,
 				tradeAction: "DENY",
@@ -1982,7 +2021,8 @@ export default function Gameboard() {
 				giveResources: activeTradeRequest.giveResources,
 				receiveResources: activeTradeRequest.receiveResources,
 				message: logMessage,
-			});
+			}));
+			rememberServerGameVersion(gameDto);
 			lastTradeRequestIdRef.current = null;
 			setActiveTradeRequest(null);
 			addToLog(logMessage);
@@ -2077,7 +2117,8 @@ export default function Gameboard() {
 		try {
 			setRobberMoveInFlight(true);
 			if (mustMoveRobberFromServer) {
-				const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/move-robber`, robberPayload);
+				const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/move-robber`, withExpectedGameVersion(robberPayload));
+				rememberServerGameVersion(gameDto);
 
 				if (gameDto.bankResources) {
 					setBankResourcesState(gameDto.bankResources as Resources);
@@ -2153,7 +2194,11 @@ export default function Gameboard() {
 					type: "DEVELOPMENT_CARD_PLAYED_KNIGHT",
 					...robberPayload,
 				};
-				await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, eventPayload);
+				const gameDto = await apiService.post<GameGetDTO>(
+					`/games/${activeGameId}/actions/development-card/play-knight`,
+					withExpectedGameVersion(eventPayload as unknown as Record<string, unknown>)
+				);
+				rememberServerGameVersion(gameDto);
 		
 				setState((previousState) => ({
 					...previousState,
@@ -2198,11 +2243,11 @@ export default function Gameboard() {
 		}
 
 		try {
-			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-				type: "DEVELOPMENT_CARD_PLAYED_MONOPOLY",
+			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/development-card/play-monopoly`, withExpectedGameVersion({
 				sourcePlayerId: myPlayer.id,
 				giveResource: resource, // The backend expects 'giveResource' for the resource to claim
-			});
+			}));
+			rememberServerGameVersion(gameDto);
 			addToLog(`${myPlayer.name} played Monopoly (${resource}).`);
 		} catch {
 			addToLog("Could not play Monopoly card. Please try again.");
@@ -2223,12 +2268,12 @@ export default function Gameboard() {
 		}
 
 		try {
-			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-				type: "DEVELOPMENT_CARD_PLAYED_YEAR_OF_PLENTY",
+			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/development-card/play-year-of-plenty`, withExpectedGameVersion({
 				sourcePlayerId: myPlayer.id,
 				giveResource: resources[0],
 				secondResource: resources[1],
-			});
+			}));
+			rememberServerGameVersion(gameDto);
 			addToLog(`${myPlayer.name} played Year of Plenty.`);
 		} catch {
 			addToLog("Could not play Year of Plenty card. Please try again.");
@@ -2253,10 +2298,10 @@ export default function Gameboard() {
 		}
 
 		try {
-			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-				type: "DEVELOPMENT_CARD_BOUGHT",
+			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/development-card/buy`, withExpectedGameVersion({
 				sourcePlayerId: myPlayer.id,
-			});
+			}));
+			rememberServerGameVersion(gameDto);
 			addToLog(`${myPlayer.name} buys a development card.`); // The backend will deduct resources from the player and add them to the bank. // The syncGameState will then update the player's resources and bank's resources.
 		} catch {
 			addToLog("Could not buy development card. Please try again.");
@@ -2288,10 +2333,10 @@ export default function Gameboard() {
 			}
 
 			if (card === "road_building") {
-				await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-					type: "DEVELOPMENT_CARD_PLAYED_ROAD_BUILDING",
+				const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/development-card/play-road-building`, withExpectedGameVersion({
 					sourcePlayerId: myPlayer.id,
-				});
+				}));
+				rememberServerGameVersion(gameDto);
 				setPlacementMode("road");
 				addToLog(`${myPlayer.name} played Road Building. Place 2 roads for free.`);
 				return;
@@ -2392,10 +2437,11 @@ export default function Gameboard() {
 			}
 
 			try {
-				await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/build-road`, {
+				const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/build-road`, withExpectedGameVersion({
 					playerId: myPlayer.id,
 					edgeId,
-				});
+				}));
+				rememberServerGameVersion(gameDto);
 				// The backend will deduct resources from the player and add them to the bank.
 				// The syncGameState will then update the player's resources and bank's resources.
 				
@@ -2421,12 +2467,12 @@ export default function Gameboard() {
 		}
 
 		try {
-			await apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-				type: "ROAD_BUILT",
-				sourcePlayerId: myPlayer.id,
+			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/build-road`, withExpectedGameVersion({
+				playerId: myPlayer.id,
+				edgeId: globalEdgeId,
 				hexId,
-				edge: globalEdgeId,
-			});
+			}));
+			rememberServerGameVersion(gameDto);
 		} catch {
 			addToLog("Could not build road. Please try again.");
 			return;
@@ -2443,17 +2489,18 @@ export default function Gameboard() {
 	};
 
 	const handleEndTurn = async () => {
-		if (!isMyTurn || !activeGameId || !myPlayer || state.players.length === 0) {
+		if (!isMyTurn || !activeGameId || !myPlayer || state.players.length === 0 || actionPendingRef.current) {
 			return;
 		}
 
-		setPlacementMode(null);
-		setIsDevCardPlayMode(false);
-		lastTradeRequestIdRef.current = null;
-		setActiveTradeRequest(null);
-
 		try {
-			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/end-turn`, {});
+			actionPendingRef.current = true;
+			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/end-turn`, withExpectedGameVersion({}));
+			rememberServerGameVersion(gameDto);
+			setPlacementMode(null);
+			setIsDevCardPlayMode(false);
+			lastTradeRequestIdRef.current = null;
+			setActiveTradeRequest(null);
 			const serverPlayersFromResponse = Array.isArray(gameDto.players) ? gameDto.players : (state.players as unknown as Parameters<typeof mapResourcesFromServer>[0][]);
 			let nextPlayerId = state.currentPlayerId;
 
@@ -2523,16 +2570,11 @@ export default function Gameboard() {
 				};
 			});
 
-			void apiService.post<GameEventDTO>(`/games/${activeGameId}/events`, {
-				type: "TURN_END",
-				sourcePlayerId: myPlayer.id,
-				nextPlayerId: nextPlayerId,
-				message,
-			});
 		} catch (error) {
 			const appError = error as Partial<ApplicationError>;
 			addToLog(appError.message || "Failed to end turn. Please try again.");
-			// Keep local progression even if persistence fails; polling will eventually re-sync.
+		} finally {
+			actionPendingRef.current = false;
 		}
 	};
 
