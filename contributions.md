@@ -142,7 +142,7 @@ reason).
 
 ---
 
-## Contributions Week 5 - [06.05.] to [10.05.]
+## Contributions Week 5 - [06.05.] to [11.05.]
 
 | **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
@@ -156,8 +156,9 @@ reason).
 |                    | 09.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/23c3316e5438c1cd1cf53c3eb5d37713ed62a53b | Backend logic: Robber must be moved by the active player when a 7 is rolled. | It is written in the official game rules that the robber must be moved even if no resources have to be discarded.|
 |                    | 09.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/9fd0c00a53cab21e2a8ea35863320ac709f15a56 | Added tests for robber | To ensure correct backend implementation, it is essential to the newly written code.|
 |                    | 10.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/9e593b3588b24a7aec5b31e11203ea703d92009a | Display the lobby ID inside lobby, disable the join button when the lobby is full and show the host in the lobby overview. | These fixes implement feedback from the M3 beta testing. Displaying the lobby ID inside the lobby is necessary because otherwise the host wouldn't be able to tell it to other players. |
-| **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **Gresay** | 11.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/19189dd5532679bda44b1f5114b01b7f8ca43e71 | Port trading UI and Ratio, #36 | Ports are a crutional part of strategy and a neccesary for the game |
+|                    | 10.05.  | https://github.com/Lime556/sopra-fs26-group-11-client/commit/f344250151a0fe33008869e6a42b8d48da0e3348 | Polling instead of polling #131 | We dessided to change the design of the project. |
+|   |    11.05. |https://github.com/Lime556/sopra-fs26-group-11-server/commit/4d8e241e767d09cc32a000f0aff0a5559eebf0fa | Applieing port trading ratio to the bank trade when settled at a port. #137,#136,#138,#140,#172 | Ports have majour impact on the game strategy and are crutial to the game |
 | **CaroAW** | 10.05.2026   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/a975a0c740f5d9274697428e7674f503cb7784d4 | pollin-based synchronization of the event log  | makes the event history readable, which makes for a better game, because you can go back and read what happened if you weren't actively participating in that moment |
 |                    | 10.05.2026   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/837ee425e0e22111854e17be64c4eb05efe65c26 | display event log in UI, which was already mostly implemented, but I the event log and normal messages are now distinguishable by color and the text is human-readable | It makes for a better experience for the players, if the chat/log is easier to follow |
 |                    | 10.05.2026   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/e2010e893192c8466e01241509415ac9cacf63fc | update event log management | for a good event log |
@@ -171,7 +172,7 @@ reason).
 
 ---
 
-## Contributions Week 6 - [Begin Date] to [End Date]
+## Contributions Week 6 - [] to [End Date]
 
 | **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
@@ -186,3 +187,19 @@ reason).
 | **[@githubUser5]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 
+---
+
+## Contributions Week 7 - [Begin Date] to [End Date]
+
+| **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
+| ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
+| **[@githubUser1]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
+|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **[@githubUser2]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
+|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
+|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
+|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **[@githubUser5]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
+|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
