@@ -403,6 +403,7 @@ export default function Gameboard() {
 		};
 
 		let lastSeenGameVersion: number | null = null;
+		let lastSeenChatMessageCount: number | null = null;
 		let syncInFlight = false;
 
 		const pollGameSync = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
@@ -422,6 +423,7 @@ export default function Gameboard() {
 					diceRolledAt?: string | null;
 					tradeRequestedAt?: string | null;
 					latestTradeRequest?: string | null;
+					chatMessageCount?: number | null;
 					currentPlayerId?: number | null;
 					gameFinished?: boolean | null;
 					robberMovedAfterSevenRoll?: boolean | null;
@@ -432,6 +434,7 @@ export default function Gameboard() {
 				}
 		
 				const nextVersion = typeof syncDto.gameVersion === "number" ? syncDto.gameVersion : 0;
+				const nextChatMessageCount = typeof syncDto.chatMessageCount === "number" ? syncDto.chatMessageCount : null;
 				const currentVersion = currentGameVersionRef.current;
 				if (currentVersion !== null && nextVersion < currentVersion) {
 					return "ok";
@@ -477,12 +480,14 @@ export default function Gameboard() {
 		
 				if (lastSeenGameVersion === null) {
 					lastSeenGameVersion = nextVersion;
+					lastSeenChatMessageCount = nextChatMessageCount;
 					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
 					return "ok";
 				}
 		
-				if (nextVersion !== lastSeenGameVersion) {
+				if (nextVersion !== lastSeenGameVersion || nextChatMessageCount !== lastSeenChatMessageCount) {
 					lastSeenGameVersion = nextVersion;
+					lastSeenChatMessageCount = nextChatMessageCount;
 					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
 					return await syncGameState(gameId);
 				}
