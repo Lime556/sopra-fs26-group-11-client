@@ -1715,6 +1715,11 @@ export default function Gameboard() {
 		}
 	}, [state.turnPhase, isMyTurn, myPlayer?.id, myPlayerResourceTotal, mustMoveRobberFromServer]);
 
+	const isDiscardWaitingPopupVisible =
+		state.turnPhase === "DISCARD"
+		&& myPlayer !== null
+		&& !discardModalOpen;
+
 	const handleRollDice = async () => {
 		if (!isMyTurn || !activeGameId || state.turnPhase !== "ROLL_DICE") {
 			return;
@@ -2666,6 +2671,15 @@ export default function Gameboard() {
 				</div>
 			) : null}
 
+			{isDiscardWaitingPopupVisible ? (
+				<div className={styles.dicePopupOverlay}>
+					<div className={styles.waitingPopupCard} role="status" aria-live="polite">
+						<div className={styles.waitingPopupTitle}>Discarding</div>
+						<div className={styles.waitingPopupValue}>Waiting for all players to discard...</div>
+					</div>
+				</div>
+			) : null}
+
 			{robberTargetModalOpen && pendingRobberHexId !== null ? (
 				<div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-label="Robber target selection">
 					<div className={styles.robberModal}>
@@ -2681,7 +2695,7 @@ export default function Gameboard() {
 								setPendingRobberHexId(null);
 								setRobberTargets([]);
 								setSelectedRobberTargetId(null);
-								setPlacementMode(null);
+								setPlacementMode("knight");
 							}} aria-label="Cancel robber move">×</button>
 						</div>
 						<div className={styles.modalBody}>
