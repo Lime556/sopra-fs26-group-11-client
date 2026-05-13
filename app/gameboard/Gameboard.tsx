@@ -307,6 +307,10 @@ export default function Gameboard() {
 					const serverChatMessages = Array.isArray(gameDto?.chatMessages)
 						? gameDto.chatMessages.filter((entry: unknown): entry is string => typeof entry === "string" && entry.trim().length > 0)
 						: [];
+					if (responseVersion !== null) {
+						lastSeenGameVersion = responseVersion;
+					}
+					lastSeenChatMessageCount = serverChatMessages.length;
 					if (gameDto?.bankResources) {
 						setBankResourcesState(gameDto.bankResources as Resources);
 					}
@@ -419,6 +423,7 @@ export default function Gameboard() {
 
 		let lastSeenGameVersion: number | null = null;
 		let lastSeenChatMessageCount: number | null = null;
+		let versionPollInFlight = false;
 		let syncInFlight = false;
 		let heartbeatInFlight = false;
 
@@ -452,6 +457,8 @@ export default function Gameboard() {
 				const nextVersion = typeof syncDto.gameVersion === "number" ? syncDto.gameVersion : 0;
 				const nextChatMessageCount = typeof syncDto.chatMessageCount === "number" ? syncDto.chatMessageCount : null;
 				const currentVersion = currentGameVersionRef.current;
+				const previousVersion = lastSeenGameVersion;
+				const previousChatMessageCount = lastSeenChatMessageCount;
 				if (currentVersion !== null && nextVersion < currentVersion) {
 					return "ok";
 				}
@@ -494,18 +501,21 @@ export default function Gameboard() {
 					}
 				}
 		
-				if (lastSeenGameVersion === null) {
+				if (previousVersion === null) {
 					lastSeenGameVersion = nextVersion;
 					lastSeenChatMessageCount = nextChatMessageCount;
 					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
 					return "ok";
 				}
 		
-				if (nextVersion !== lastSeenGameVersion || nextChatMessageCount !== lastSeenChatMessageCount) {
-					lastSeenGameVersion = nextVersion;
-					lastSeenChatMessageCount = nextChatMessageCount;
-					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
-					return await syncGameState(gameId);
+				if (nextVersion !== previousVersion || nextChatMessageCount !== previousChatMessageCount) {
+					const syncStatus = await syncGameState(gameId);
+					if (syncStatus === "ok") {
+						lastSeenGameVersion = nextVersion;
+						lastSeenChatMessageCount = nextChatMessageCount;
+						currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
+					}
+					return syncStatus;
 				}
 		
 				return "ok";
@@ -520,6 +530,57 @@ export default function Gameboard() {
 				return "error";
 			} finally {
 				syncInFlight = false;
+			}
+		};
+
+		const pollGameVersion = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+			try {
+				if (versionPollInFlight || syncInFlight) {
+					return "ok";
+				}
+
+				versionPollInFlight = true;
+
+				const versionDto = await apiService.get<{
+					gameId?: number | null;
+					gameVersion?: number | null;
+					chatMessageCount?: number | null;
+				}>(`/games/${gameId}/version`);
+
+				if (cancelled) {
+					return "ok";
+				}
+
+				const nextVersion = typeof versionDto.gameVersion === "number" ? versionDto.gameVersion : 0;
+				const nextChatMessageCount = typeof versionDto.chatMessageCount === "number" ? versionDto.chatMessageCount : null;
+				const currentVersion = currentGameVersionRef.current;
+				if (currentVersion !== null && nextVersion < currentVersion) {
+					return "ok";
+				}
+
+				if (lastSeenGameVersion === null) {
+					lastSeenGameVersion = nextVersion;
+					lastSeenChatMessageCount = nextChatMessageCount;
+					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
+					return "ok";
+				}
+
+				if (nextVersion === lastSeenGameVersion && nextChatMessageCount === lastSeenChatMessageCount) {
+					return "ok";
+				}
+
+				return await pollGameSync(gameId);
+			} catch (error) {
+				const status = (error as Partial<ApplicationError>)?.status;
+				if (status === 401) {
+					return "unauthorized";
+				}
+				if (status === 404) {
+					return "notfound";
+				}
+				return "error";
+			} finally {
+				versionPollInFlight = false;
 			}
 		};
 
@@ -664,11 +725,11 @@ export default function Gameboard() {
 				}
 			}
 
-			void pollGameSync(gameId as number);
+			lastSeenGameVersion = currentGameVersionRef.current;
 			void heartbeatGamePresence(gameId as number);
 
 			const poll = window.setInterval(() => {
-				void pollGameSync(gameId as number).then((status) => {
+				void pollGameVersion(gameId as number).then((status) => {
 					if (cancelled || status === "ok") {
 						return;
 					}
