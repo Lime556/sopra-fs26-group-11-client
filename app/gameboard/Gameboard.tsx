@@ -55,6 +55,7 @@ import {
 	type GameState,
 	type HexTile,
 	type Player,
+	type PlayerGetDTO,
 	type ResourceType,
 	type Resources,
 	type TradeMode,
@@ -147,7 +148,56 @@ export default function Gameboard() {
 		return expectedGameVersion === null ? payload : { ...payload, expectedGameVersion };
 	};
 
-	
+	const mapServerPlayersToStatePlayers = (serverPlayers: PlayerGetDTO[], previousPlayers: Player[]): Player[] =>
+		serverPlayers.map((serverPlayer, index) => {
+			const previousPlayer = previousPlayers.find((p) => p.id === serverPlayer.id);
+			const cachedRoads = Array.from(roadCacheRef.current.get(serverPlayer.id) ?? [])
+				.map((entry: unknown) => (typeof entry === "string" ? parseRoadEntry(entry) : entry))
+				.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null);
+
+			const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
+				? (serverPlayer.roadsOnEdges as unknown[])
+					.map((entry: unknown) =>
+						typeof entry === "string"
+							? parseRoadEntry(entry)
+							: entry && typeof (entry as { hexId?: number }).hexId === "number"
+								? {
+									hexId: (entry as { hexId: number }).hexId,
+									edge:
+										(entry as { edge?: number; edgeIndex?: number }).edge ??
+										(entry as { edge?: number; edgeIndex?: number }).edgeIndex,
+								}
+								: null
+					)
+					.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null)
+				: [];
+
+			const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
+			rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
+
+			return {
+				id: serverPlayer.id,
+				userId: serverPlayer.userId ?? null,
+				name: serverPlayer.name,
+				bot: Boolean(serverPlayer.bot),
+				online: serverPlayer.online ?? previousPlayer?.online ?? true,
+				lastSeenAt: serverPlayer.lastSeenAt ?? previousPlayer?.lastSeenAt ?? null,
+				disconnectedAt: serverPlayer.disconnectedAt ?? previousPlayer?.disconnectedAt ?? null,
+				color: serverPlayer.color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
+				resources: mapResourcesFromServer(serverPlayer),
+				victoryPoints: serverPlayer.victoryPoints ?? 0,
+				developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
+				knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
+				developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
+				freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
+				hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
+				hasLargestArmy: serverPlayer.hasLargestArmy ?? false,
+				settlementsOnCorners: serverPlayer.settlementsOnCorners ?? previousPlayer?.settlementsOnCorners ?? [],
+				citiesOnCorners: serverPlayer.citiesOnCorners ?? previousPlayer?.citiesOnCorners ?? [],
+				roadsOnEdges: mergedRoads,
+			};
+		});
+
 
 	const showDiceResultPopup = (diceValue: number) => {
 		setDicePopupValue(diceValue);
@@ -269,42 +319,7 @@ export default function Gameboard() {
 						developmentDeck: gameDto?.developmentDeck ?? previousState.developmentDeck,
 						players:
 							gameDto?.players
-								? serverPlayers.map((serverPlayer: Parameters<typeof mapResourcesFromServer>[0], index) => {
-									const previousPlayer = previousState.players.find((p) => p.id === (serverPlayer as { id: number }).id);
-									const cachedRoads = Array.from(roadCacheRef.current.get((serverPlayer as { id: number }).id) ?? [])
-										.map((entry: unknown) => (typeof entry === "string" ? parseRoadEntry(entry as string) : entry))
-										.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null);
-									
-									const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
-										? serverPlayer.roadsOnEdges.map((entry: unknown) => (
-											typeof entry === "string" 
-												? parseRoadEntry(entry) 
-												: (entry && typeof (entry as { hexId?: number }).hexId === "number" 
-													? { hexId: (entry as { hexId: number }).hexId, edge: (entry as { edge?: number; edgeIndex?: number }).edge ?? (entry as { edge?: number; edgeIndex?: number }).edgeIndex } 
-													: null)
-										)).filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null)
-										: [];
-									const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
-									rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
-									return {
-										id: (serverPlayer as { id: number }).id,
-										userId: (serverPlayer as { userId?: number | null }).userId ?? null,
-										name: (serverPlayer as { name: string }).name,
-										bot: Boolean((serverPlayer as { bot?: boolean }).bot),
-										color: (serverPlayer as { color?: string | null }).color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
-										resources: mapResourcesFromServer(serverPlayer as Parameters<typeof mapResourcesFromServer>[0]),
-										victoryPoints: serverPlayer.victoryPoints ?? 0,
-										developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
-										knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
-										developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
-										freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
-										hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
-										hasLargestArmy: serverPlayer.hasLargestArmy ?? false,
-										settlementsOnCorners: serverPlayer.settlementsOnCorners ?? previousPlayer?.settlementsOnCorners ?? [],
-										citiesOnCorners: serverPlayer.citiesOnCorners ?? previousPlayer?.citiesOnCorners ?? [],
-										roadsOnEdges: mergedRoads,
-									};
-								})
+								? mapServerPlayersToStatePlayers(serverPlayers, previousState.players)
 								: previousState.players,
 						currentPlayerId: (() => {
 							if (serverPlayers.length === 0) {
@@ -405,6 +420,7 @@ export default function Gameboard() {
 		let lastSeenGameVersion: number | null = null;
 		let lastSeenChatMessageCount: number | null = null;
 		let syncInFlight = false;
+		let heartbeatInFlight = false;
 
 		const pollGameSync = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
 			try {
@@ -507,6 +523,51 @@ export default function Gameboard() {
 			}
 		};
 
+		const heartbeatGamePresence = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+			try {
+				if (heartbeatInFlight) {
+					return "ok";
+				}
+
+				heartbeatInFlight = true;
+				const gameDto = await apiService.post<GameGetDTO>(`/games/${gameId}/heartbeat`, {});
+				if (cancelled) {
+					return "ok";
+				}
+
+				rememberServerGameVersion(gameDto);
+				const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
+				if (serverPlayers.length > 0) {
+					setState((previousState) => ({
+						...previousState,
+						players: mapServerPlayersToStatePlayers(serverPlayers, previousState.players),
+						currentPlayerId:
+							typeof gameDto.currentTurnIndex === "number" && serverPlayers.length > 0
+								? serverPlayers[((gameDto.currentTurnIndex % serverPlayers.length) + serverPlayers.length) % serverPlayers.length].id
+								: previousState.currentPlayerId,
+						turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
+						gamePhase: gameDto.gamePhase ?? previousState.gamePhase,
+						robberMovedAfterSevenRoll:
+							gameDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
+					}));
+				}
+				setWinnerPlayerName(gameDto?.winner?.name ?? null);
+				setIsGameFinished(Boolean(gameDto?.gameFinished) || Boolean(gameDto?.finishedAt));
+				return "ok";
+			} catch (error) {
+				const status = (error as Partial<ApplicationError>)?.status;
+				if (status === 401) {
+					return "unauthorized";
+				}
+				if (status === 404) {
+					return "notfound";
+				}
+				return "error";
+			} finally {
+				heartbeatInFlight = false;
+			}
+		};
+
 		const createGameIfNeeded = async (): Promise<number | null> => {
 			let createdGame: GameGetDTO | null = null;
 			try {
@@ -605,6 +666,7 @@ export default function Gameboard() {
 			}
 
 			void pollGameSync(gameId as number);
+			void heartbeatGamePresence(gameId as number);
 
 			const poll = window.setInterval(() => {
 				void pollGameSync(gameId as number).then((status) => {
@@ -632,23 +694,43 @@ export default function Gameboard() {
 				});
 			}, 1000);
 
+			const presencePoll = window.setInterval(() => {
+				void heartbeatGamePresence(gameId as number).then((status) => {
+					if (cancelled || status === "ok") {
+						return;
+					}
+
+					if (status === "unauthorized") {
+						setBoardStatus("Session expired. Please log in again.");
+						router.replace("/login");
+						window.clearInterval(presencePoll);
+					}
+				});
+			}, 2000);
+
 			if (cancelled) {
 				window.clearInterval(poll);
+				window.clearInterval(presencePoll);
 				return;
 			}
 
-			return { poll };
+			return { poll, presencePoll };
 		};
 
 		let pollHandle: number | undefined;
+		let presencePollHandle: number | undefined;
 		void bootstrapBoard().then((handles) => {
 			pollHandle = handles?.poll;
+			presencePollHandle = handles?.presencePoll;
 		});
 
 		return () => {
 			cancelled = true;
 			if (pollHandle !== undefined) {
 				window.clearInterval(pollHandle);
+			}
+			if (presencePollHandle !== undefined) {
+				window.clearInterval(presencePollHandle);
 			}
 			if (dicePopupTimeoutRef.current !== null) {
 				globalThis.clearTimeout(dicePopupTimeoutRef.current);
@@ -1698,60 +1780,7 @@ export default function Gameboard() {
 	
 				const updatedPlayers =
 					serverPlayers.length > 0
-						? serverPlayers.map((serverPlayer, index) => {
-								const previousPlayer = previousState.players.find((p) => p.id === serverPlayer.id);
-	
-								const cachedRoads = Array.from(roadCacheRef.current.get(serverPlayer.id) ?? [])
-									.map((entry: unknown) => (typeof entry === "string" ? parseRoadEntry(entry) : entry))
-									.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null);
-	
-								const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
-									? serverPlayer.roadsOnEdges
-											.map((entry: unknown) =>
-												typeof entry === "string"
-													? parseRoadEntry(entry)
-													: entry && typeof (entry as { hexId?: number }).hexId === "number"
-														? {
-																hexId: (entry as { hexId: number }).hexId,
-																edge:
-																	(entry as { edge?: number; edgeIndex?: number }).edge ??
-																	(entry as { edge?: number; edgeIndex?: number }).edgeIndex,
-															}
-														: null
-											)
-											.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null)
-									: [];
-	
-								const mergedRoads = mergeRoadLists(
-									serverRoads,
-									mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? [])
-								);
-	
-								rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
-	
-								return {
-									id: serverPlayer.id,
-									userId: serverPlayer.userId ?? null,
-									name: serverPlayer.name,
-									bot: Boolean(serverPlayer.bot),
-									color: serverPlayer.color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
-									resources: mapResourcesFromServer(serverPlayer),
-									victoryPoints: serverPlayer.victoryPoints ?? 0,
-									developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
-									knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
-									developmentCardVictoryPoints:
-										serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
-									freeRoadBuildsRemaining:
-										serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
-									hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
-									hasLargestArmy: serverPlayer.hasLargestArmy ?? false,
-									settlementsOnCorners:
-										serverPlayer.settlementsOnCorners ?? previousPlayer?.settlementsOnCorners ?? [],
-									citiesOnCorners:
-										serverPlayer.citiesOnCorners ?? previousPlayer?.citiesOnCorners ?? [],
-									roadsOnEdges: mergedRoads,
-								};
-							})
+						? mapServerPlayersToStatePlayers(serverPlayers, previousState.players)
 						: previousState.players;
 	
 				return {
@@ -2133,48 +2162,7 @@ export default function Gameboard() {
 					const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
 					const updatedPlayers =
 						serverPlayers.length > 0
-							? serverPlayers.map((serverPlayer, index) => {
-								const previousPlayer = previousState.players.find((p) => p.id === serverPlayer.id);
-								const cachedRoads = Array.from(roadCacheRef.current.get(serverPlayer.id) ?? [])
-									.map((entry: unknown) => (typeof entry === "string" ? parseRoadEntry(entry) : entry))
-									.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null);
-								const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
-									? serverPlayer.roadsOnEdges
-										.map((entry: unknown) =>
-											typeof entry === "string"
-												? parseRoadEntry(entry)
-												: entry && typeof (entry as { hexId?: number }).hexId === "number"
-													? {
-														hexId: (entry as { hexId: number }).hexId,
-														edge:
-															(entry as { edge?: number; edgeIndex?: number }).edge ??
-															(entry as { edge?: number; edgeIndex?: number }).edgeIndex,
-													}
-													: null
-										)
-										.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null)
-									: [];
-								const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
-								rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
-								return {
-									id: serverPlayer.id,
-									userId: serverPlayer.userId ?? null,
-									name: serverPlayer.name,
-									bot: Boolean(serverPlayer.bot),
-									color: serverPlayer.color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
-									resources: mapResourcesFromServer(serverPlayer),
-									victoryPoints: serverPlayer.victoryPoints ?? 0,
-									developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
-									knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
-									developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
-									freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
-									hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
-									hasLargestArmy: serverPlayer.hasLargestArmy ?? false,
-									settlementsOnCorners: serverPlayer.settlementsOnCorners ?? previousPlayer?.settlementsOnCorners ?? [],
-									citiesOnCorners: serverPlayer.citiesOnCorners ?? previousPlayer?.citiesOnCorners ?? [],
-									roadsOnEdges: mergedRoads,
-								};
-							})
+							? mapServerPlayersToStatePlayers(serverPlayers, previousState.players)
 							: previousState.players;
 
 					const nextCurrentPlayerId =
@@ -2524,43 +2512,10 @@ export default function Gameboard() {
 				const newIsSetupPhase = newGamePhase === "SETUP" || newGamePhase === "SETUP_SECOND_ROUND";
 				const syncPlayers = Array.isArray(gameDto.players) ? gameDto.players : previousState.players;
 
-				const updatedPlayers = (syncPlayers as Parameters<typeof mapResourcesFromServer>[0][]).map((serverPlayer, index) => {
-					const previousPlayer = previousState.players.find((p) => p.id === (serverPlayer as { id: number }).id);
-					const cachedRoads = Array.from(roadCacheRef.current.get((serverPlayer as { id: number }).id) ?? [])
-						.map((entry: unknown) => (typeof entry === "string" ? parseRoadEntry(entry as string) : entry))
-						.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null);
-					
-					const serverRoads = Array.isArray(serverPlayer.roadsOnEdges)
-						? serverPlayer.roadsOnEdges.map((entry: unknown) => (
-							typeof entry === "string" 
-								? parseRoadEntry(entry) 
-								: (entry && typeof (entry as { hexId?: number }).hexId === "number" 
-									? { hexId: (entry as { hexId: number }).hexId, edge: (entry as { edge?: number; edgeIndex?: number }).edge ?? (entry as { edge?: number; edgeIndex?: number }).edgeIndex } 
-									: null)
-										)).filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null)
-						: [];
-					
-					const mergedRoads = mergeRoadLists(serverRoads, mergeRoadLists(cachedRoads, previousPlayer?.roadsOnEdges ?? []));
-					rememberRoadsInCache(roadCacheRef.current, serverPlayer.id, mergedRoads);
-
-					return {
-						id: (serverPlayer as { id: number }).id,
-						userId: (serverPlayer as { userId?: number | null }).userId ?? null,
-						name: (serverPlayer as { name: string }).name,
-						bot: Boolean((serverPlayer as { bot?: boolean | null }).bot),
-						color: (serverPlayer as { color?: string | null }).color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
-						resources: mapResourcesFromServer(serverPlayer as Parameters<typeof mapResourcesFromServer>[0]),
-						victoryPoints: serverPlayer.victoryPoints ?? 0,
-						developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
-						knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
-						developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
-						freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
-						hasLongestRoad: serverPlayer.hasLongestRoad ?? false,
-						settlementsOnCorners: serverPlayer.settlementsOnCorners ?? previousPlayer?.settlementsOnCorners ?? [],
-						citiesOnCorners: serverPlayer.citiesOnCorners ?? previousPlayer?.citiesOnCorners ?? [],
-						roadsOnEdges: mergedRoads,
-					};
-				});
+				const updatedPlayers = mapServerPlayersToStatePlayers(
+					syncPlayers as PlayerGetDTO[],
+					previousState.players
+				);
 
 				return {
 					...previousState,
@@ -2891,40 +2846,48 @@ export default function Gameboard() {
 				<section className={styles.sidebarCard}>
 					<h2 className={styles.panelTitle}>Players</h2>
 					<ul className={styles.playerList}>
-						{state.players.map((player) => (
-							<li
-								key={player.id}
-								className={`${styles.playerCard} ${player.id === state.currentPlayerId ? styles.playerCardCurrent : ""}`}
-							>
-								<div className={styles.playerHeader}>
-									<div className={styles.playerName}>
-										<span className={styles.colorDot} style={{ backgroundColor: player.color }} />
-										<span>{player.name}</span>
-										{player.bot && <span className={styles.botBadge}>Bot</span>}
-									</div>
-									<span className={styles.playerVpBadge}>{player.victoryPoints}</span>
-								</div>
+						{state.players.map((player) => {
+							const playerIsMe = myPlayer?.id === player.id;
 
-								<div className={styles.playerStatsGrid}>
-									<div className={`${styles.playerStatCell} ${styles.totalResourceCell}`}>
-										<span className={styles.playerStatIcon}>?</span>
-										<span className={styles.playerStatValue}>{getPlayerTotalResources(player)}</span>
+							return (
+								<li
+									key={player.id}
+									className={`${styles.playerCard} ${player.id === state.currentPlayerId ? styles.playerCardCurrent : ""}`}
+								>
+									<div className={styles.playerHeader}>
+										<div className={styles.playerName}>
+											<span className={styles.colorDot} style={{ backgroundColor: player.color }} />
+											<span>{player.name}</span>
+											{player.bot && <span className={styles.botBadge}>Bot</span>}
+											{playerIsMe && <span className={styles.meBadge}>Me</span>}
+											<span className={`${styles.statusBadge} ${player.online === false ? styles.offlineBadge : styles.onlineBadge}`}>
+												{player.online === false ? "Offline" : "Online"}
+											</span>
+										</div>
+										<span className={styles.playerVpBadge}>{player.victoryPoints}</span>
 									</div>
-									<div className={`${styles.playerStatCell} ${styles.devCardCell}`}>
-										<span className={styles.playerStatIcon}>🎴</span>
-										<span className={styles.playerStatValue}>{player.developmentCards.length}</span>
+
+									<div className={styles.playerStatsGrid}>
+										<div className={`${styles.playerStatCell} ${styles.totalResourceCell}`}>
+											<span className={styles.playerStatIcon}>?</span>
+											<span className={styles.playerStatValue}>{getPlayerTotalResources(player)}</span>
+										</div>
+										<div className={`${styles.playerStatCell} ${styles.devCardCell}`}>
+											<span className={styles.playerStatIcon}>🎴</span>
+											<span className={styles.playerStatValue}>{player.developmentCards.length}</span>
+										</div>
+										<div className={`${styles.playerStatCell} ${styles.knightCell} ${player.hasLargestArmy ? styles.roadCellHolder : ""}`}>
+											<span className={styles.playerStatIcon}>⚔️</span>
+											<span className={styles.playerStatValue}>{player.knightsPlayed}</span>
+										</div>
+										<div className={`${styles.playerStatCell} ${styles.roadCell} ${player.hasLongestRoad ? styles.roadCellHolder : ""}`}>
+											<span className={styles.playerStatIcon}>🛣️</span>
+											<span className={styles.playerStatValue}>{longestRoadLengthByPlayerId.get(player.id) ?? 0}</span>
+										</div>
 									</div>
-											<div className={`${styles.playerStatCell} ${styles.knightCell} ${player.hasLargestArmy ? styles.roadCellHolder : ""}`}>
-										<span className={styles.playerStatIcon}>⚔️</span>
-										<span className={styles.playerStatValue}>{player.knightsPlayed}</span>
-									</div>
-									<div className={`${styles.playerStatCell} ${styles.roadCell} ${player.hasLongestRoad ? styles.roadCellHolder : ""}`}>
-										<span className={styles.playerStatIcon}>🛣️</span>
-										<span className={styles.playerStatValue}>{longestRoadLengthByPlayerId.get(player.id) ?? 0}</span>
-									</div>
-								</div>
-							</li>
-						))}
+								</li>
+							);
+						})}
 					</ul>
 				</section>
 
