@@ -535,7 +535,6 @@ export default function Gameboard() {
 					return "ok";
 				}
 
-				rememberServerGameVersion(gameDto);
 				const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
 				if (serverPlayers.length > 0) {
 					setState((previousState) => ({
@@ -706,7 +705,7 @@ export default function Gameboard() {
 						window.clearInterval(presencePoll);
 					}
 				});
-			}, 2000);
+			}, 10_000);
 
 			if (cancelled) {
 				window.clearInterval(poll);
