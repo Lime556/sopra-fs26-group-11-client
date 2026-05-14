@@ -6,6 +6,10 @@ import { calculateHexPoints, calculatePortPosition, getCornerPoint, toPixel } fr
 import { hexSize, tileImageByType } from "../constants";
 import { GameState, HexTile, PortVisual } from "../types";
 
+const MAX_ROADS = 15;
+const MAX_SETTLEMENTS = 5;
+const MAX_CITIES = 4;
+
 interface RenderedRoadSegment {
 	key: string;
 	x1: number;
@@ -82,13 +86,22 @@ export function BoardColumn({
 	const canUseActionPhase = isMyTurn && state.turnPhase === "ACTION" && !isSetupPhase;
 	const canUseSetupPlacement = isMyTurn && isSetupPhase;
 
-	const mySetupSettlementCount = state.players.find(p => p.id === state.currentPlayerId)?.settlementsOnCorners.length ?? 0;
-	const mySetupRoadCount = state.players.find(p => p.id === state.currentPlayerId)?.roadsOnEdges.length ?? 0;
+	const currentPlayer = state.players.find(p => p.id === state.currentPlayerId);
+	const myRoadCount = currentPlayer?.roadsOnEdges.length ?? 0;
+	const mySettlementCount = currentPlayer?.settlementsOnCorners.length ?? 0;
+	const myCityCount = currentPlayer?.citiesOnCorners.length ?? 0;
+
+	const mySetupSettlementCount = mySettlementCount;
+	const mySetupRoadCount = myRoadCount;
 	const setupRoundFinished = isSetupPhase && 
 		((state.gamePhase === "SETUP" && mySetupSettlementCount >= 1 && mySetupRoadCount >= 1) ||
 		 (state.gamePhase === "SETUP_SECOND_ROUND" && mySetupSettlementCount >= 2 && mySetupRoadCount >= 2));
 
-		 const canEndTurn =
+	const hasMaxRoads = myRoadCount >= MAX_ROADS;
+	const hasMaxSettlements = mySettlementCount >= MAX_SETTLEMENTS;
+	const hasMaxCities = myCityCount >= MAX_CITIES;
+
+	const canEndTurn =
 		 (canUseActionPhase && !mustMoveRobberBeforeEndTurn)
 		 || (isMyTurn && setupRoundFinished);
 	const canUseRoadOrSettlement = canUseActionPhase || (canUseSetupPlacement && !setupRoundFinished);
@@ -473,9 +486,9 @@ export function BoardColumn({
 
 						<button
 							type="button"
-							className={`${styles.actionSquareButton} ${!canUseRoadOrSettlement ? styles.buttonDisabled : styles.roadButton}`}
+							className={`${styles.actionSquareButton} ${(!canUseRoadOrSettlement || (hasMaxRoads && !isRoadPlacementMode)) ? styles.buttonDisabled : styles.roadButton}`}
 							onClick={handleBuildRoadAction}
-							disabled={!canUseRoadOrSettlement}
+							disabled={!canUseRoadOrSettlement || (hasMaxRoads && !isRoadPlacementMode)}
 						>
 							<Minus size={26} />
 							<span className={styles.actionLabel}>{isRoadPlacementMode ? "Cancel Road" : "Road"}</span>
@@ -490,9 +503,9 @@ export function BoardColumn({
 
 						<button
 							type="button"
-							className={`${styles.actionSquareButton} ${!canUseRoadOrSettlement ? styles.buttonDisabled : styles.settlementButton}`}
+							className={`${styles.actionSquareButton} ${(!canUseRoadOrSettlement || (hasMaxSettlements && !isSettlementPlacementMode)) ? styles.buttonDisabled : styles.settlementButton}`}
 							onClick={handleBuildSettlementAction}
-							disabled={!canUseRoadOrSettlement}
+							disabled={!canUseRoadOrSettlement || (hasMaxSettlements && !isSettlementPlacementMode)}
 						>
 							<Home size={24} />
 							<span className={styles.actionLabel}>
@@ -513,9 +526,9 @@ export function BoardColumn({
 
 						<button
 							type="button"
-							className={`${styles.actionSquareButton} ${!canUseActionPhase ? styles.buttonDisabled : styles.cityButton}`}
+							className={`${styles.actionSquareButton} ${(!canUseActionPhase || (hasMaxCities && !isCityPlacementMode)) ? styles.buttonDisabled : styles.cityButton}`}
 							onClick={handleBuildCityAction}
-							disabled={!canUseActionPhase}
+							disabled={!canUseActionPhase || (hasMaxCities && !isCityPlacementMode)}
 						>
 							<Castle size={24} />
 							<span className={styles.actionLabel}>
