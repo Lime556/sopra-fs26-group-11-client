@@ -61,6 +61,10 @@ import {
 	type TradeMode,
 } from "./types";
 
+const MAX_ROADS = 15;
+const MAX_SETTLEMENTS = 5;
+const MAX_CITIES = 4;
+
 
 const developmentCardDisplayName: Record<string, string> = {
 	knight: "Knight",
@@ -1207,6 +1211,10 @@ export default function Gameboard() {
 			return false;
 		}
 
+		if (myPlayer.roadsOnEdges.length >= MAX_ROADS) {
+			return false;
+		}
+
 		const hex = hexById.get(hexId);
 		if (!hex) {
 			return false;
@@ -1308,6 +1316,10 @@ export default function Gameboard() {
 			return false;
 		}
 	
+		if (myPlayer.settlementsOnCorners.length >= MAX_SETTLEMENTS && !isSetupPhase) {
+			return false;
+		}
+
 		const hex = hexById.get(hexId);
 		if (!hex) {
 			return false;
@@ -1365,6 +1377,10 @@ export default function Gameboard() {
 			return false;
 		}
 	
+		if (myPlayer.citiesOnCorners.length >= MAX_CITIES) {
+			return false;
+		}
+
 		const hex = hexById.get(hexId);
 		if (!hex) {
 			return false;
@@ -1388,6 +1404,12 @@ export default function Gameboard() {
 		}
 
 		setIsDevCardPlayMode(false);
+
+		if (myPlayer.settlementsOnCorners.length >= MAX_SETTLEMENTS) {
+			addToLog(`You have reached the maximum of ${MAX_SETTLEMENTS} settlements.`);
+			setPlacementMode(null);
+			return;
+		}
 
 		if (isSetupPhase) {
 			if (!canPlaceSetupSettlement) {
@@ -1415,6 +1437,12 @@ export default function Gameboard() {
 		}
 
 		setIsDevCardPlayMode(false);
+
+		if (myPlayer.citiesOnCorners.length >= MAX_CITIES) {
+			addToLog(`You have reached the maximum of ${MAX_CITIES} cities.`);
+			setPlacementMode(null);
+			return;
+		}
 
 		if (!canAffordCity) {
 			addToLog("Building a city costs 2 wheat and 3 ore.");
@@ -2425,6 +2453,12 @@ export default function Gameboard() {
 
 		setIsDevCardPlayMode(false);
 
+		if (myPlayer.roadsOnEdges.length >= MAX_ROADS) {
+			addToLog(`You have reached the maximum of ${MAX_ROADS} roads.`);
+			setPlacementMode(null);
+			return;
+		}
+
 		if (isSetupPhase) {
 			if (!canPlaceSetupRoad) {
 				addToLog("Setup: place your settlement first.");
@@ -2978,7 +3012,7 @@ export default function Gameboard() {
 								))}
 							</div>
 							<div className={styles.currentPlayerLine}>
-								Free roads available: {myPlayer.freeRoadBuildsRemaining}
+								Remaining: Roads {MAX_ROADS - myPlayer.roadsOnEdges.length} | Settlements {MAX_SETTLEMENTS - myPlayer.settlementsOnCorners.length} | Cities {MAX_CITIES - myPlayer.citiesOnCorners.length}
 							</div>
 						</>
 					) : (
