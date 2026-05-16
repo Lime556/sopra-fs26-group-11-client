@@ -245,7 +245,25 @@
   .dangerButton:hover {
     background: #b91c1c;
   }
-  
+
+  .tutorialButton {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border: none;
+    border-radius: 16px;
+    background: #ef8600;
+    color: white;
+    padding: 14px 24px;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .tutorialButton:hover {
+    background: #d87700;
+  }
+
   .logoutButton {
     display: inline-flex;
     align-items: center;

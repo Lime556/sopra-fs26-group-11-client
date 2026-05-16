@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
 import { LogOut } from "lucide-react";
+import { CircleQuestionMark } from "lucide-react";
 
 import LobbySidebar, { TabType } from "@/components/lobby/LobbySidebar";
 import LobbiesTab, { LobbyItem } from "@/components/lobby/LobbiesTab";
@@ -681,10 +682,16 @@ export default function Lobby() {
             !
           </p>
         </div>
-        <button onClick={handleLogout} className={styles.logoutButton}>
-          <LogOut size={20} />
-          Logout
-        </button>
+        <div className={styles.headerActions}>
+          <button onClick={() => router.push("/tutorial")} className={styles.tutorialButton}>
+            <CircleQuestionMark size={20} />
+            Tutorial
+          </button>
+          <button onClick={handleLogout} className={styles.logoutButton}>
+            <LogOut size={20} />
+            Logout
+          </button>
+        </div>
       </div>
       {statusMessage && <p className={styles.statusMessage}>{statusMessage}</p>}
 
