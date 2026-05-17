@@ -311,10 +311,14 @@ export default function Gameboard() {
 					const serverChatMessages = Array.isArray(gameDto?.chatMessages)
 						? gameDto.chatMessages.filter((entry: unknown): entry is string => typeof entry === "string" && entry.trim().length > 0)
 						: [];
+					const serverEventLogs = Array.isArray(gameDto?.eventLog)
+						? gameDto.eventLog.filter((entry: unknown): entry is string => typeof entry === "string" && entry.trim().length > 0)
+						: [];
 					if (responseVersion !== null) {
 						lastSeenGameVersion = responseVersion;
 					}
 					lastSeenChatMessageCount = serverChatMessages.length;
+					lastSeenEventLogCount = serverEventLogs.length;
 					if (gameDto?.bankResources) {
 						setBankResourcesState(gameDto.bankResources as Resources);
 					}
@@ -366,10 +370,6 @@ export default function Gameboard() {
 							return [...unseen.reverse(), ...previous].slice(0, 40);
 						});
 					}
-
-					const serverEventLogs = Array.isArray(gameDto?.eventLog)
-						? gameDto.eventLog.filter((entry: unknown): entry is string => typeof entry === "string" && entry.trim().length > 0)
-						: [];
 
 					if (serverEventLogs.length > 0) {
 						const parsedTradeEvents: GameEventDTO[] = [];
@@ -427,6 +427,7 @@ export default function Gameboard() {
 
 		let lastSeenGameVersion: number | null = null;
 		let lastSeenChatMessageCount: number | null = null;
+		let lastSeenEventLogCount: number | null = null;
 		let versionPollInFlight = false;
 		let syncInFlight = false;
 		let heartbeatInFlight = false;
@@ -449,6 +450,7 @@ export default function Gameboard() {
 					tradeRequestedAt?: string | null;
 					latestTradeRequest?: string | null;
 					chatMessageCount?: number | null;
+					eventLogCount?: number | null;
 					currentPlayerId?: number | null;
 					gameFinished?: boolean | null;
 					robberMovedAfterSevenRoll?: boolean | null;
@@ -460,9 +462,11 @@ export default function Gameboard() {
 		
 				const nextVersion = typeof syncDto.gameVersion === "number" ? syncDto.gameVersion : 0;
 				const nextChatMessageCount = typeof syncDto.chatMessageCount === "number" ? syncDto.chatMessageCount : null;
+				const nextEventLogCount = typeof syncDto.eventLogCount === "number" ? syncDto.eventLogCount : null;
 				const currentVersion = currentGameVersionRef.current;
 				const previousVersion = lastSeenGameVersion;
 				const previousChatMessageCount = lastSeenChatMessageCount;
+				const previousEventLogCount = lastSeenEventLogCount;
 				if (currentVersion !== null && nextVersion < currentVersion) {
 					return "ok";
 				}
@@ -508,15 +512,21 @@ export default function Gameboard() {
 				if (previousVersion === null) {
 					lastSeenGameVersion = nextVersion;
 					lastSeenChatMessageCount = nextChatMessageCount;
+					lastSeenEventLogCount = nextEventLogCount;
 					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
 					return "ok";
 				}
 		
-				if (nextVersion !== previousVersion || nextChatMessageCount !== previousChatMessageCount) {
+				if (
+					nextVersion !== previousVersion
+					|| nextChatMessageCount !== previousChatMessageCount
+					|| nextEventLogCount !== previousEventLogCount
+				) {
 					const syncStatus = await syncGameState(gameId);
 					if (syncStatus === "ok") {
 						lastSeenGameVersion = nextVersion;
 						lastSeenChatMessageCount = nextChatMessageCount;
+						lastSeenEventLogCount = nextEventLogCount;
 						currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
 					}
 					return syncStatus;
@@ -549,6 +559,7 @@ export default function Gameboard() {
 					gameId?: number | null;
 					gameVersion?: number | null;
 					chatMessageCount?: number | null;
+					eventLogCount?: number | null;
 				}>(`/games/${gameId}/version`);
 
 				if (cancelled) {
@@ -557,6 +568,7 @@ export default function Gameboard() {
 
 				const nextVersion = typeof versionDto.gameVersion === "number" ? versionDto.gameVersion : 0;
 				const nextChatMessageCount = typeof versionDto.chatMessageCount === "number" ? versionDto.chatMessageCount : null;
+				const nextEventLogCount = typeof versionDto.eventLogCount === "number" ? versionDto.eventLogCount : null;
 				const currentVersion = currentGameVersionRef.current;
 				if (currentVersion !== null && nextVersion < currentVersion) {
 					return "ok";
@@ -565,11 +577,16 @@ export default function Gameboard() {
 				if (lastSeenGameVersion === null) {
 					lastSeenGameVersion = nextVersion;
 					lastSeenChatMessageCount = nextChatMessageCount;
+					lastSeenEventLogCount = nextEventLogCount;
 					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
 					return "ok";
 				}
 
-				if (nextVersion === lastSeenGameVersion && nextChatMessageCount === lastSeenChatMessageCount) {
+				if (
+					nextVersion === lastSeenGameVersion
+					&& nextChatMessageCount === lastSeenChatMessageCount
+					&& nextEventLogCount === lastSeenEventLogCount
+				) {
 					return "ok";
 				}
 
