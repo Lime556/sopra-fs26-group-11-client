@@ -1040,7 +1040,7 @@ export default function Gameboard() {
 			}),
 		[state.players]
 	);
-	const winnerDisplayName = winnerPlayerName ?? leaderboardPlayers[0]?.name ?? "Unknown Player";
+	const winnerDisplayName = winnerPlayerName;
 	const perPlayerGameStats = useMemo(() => {
 		const statsByPlayerId = new Map<number, {
 			cardsPlayedCount: number;
