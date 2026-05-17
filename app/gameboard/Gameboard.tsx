@@ -377,6 +377,7 @@ export default function Gameboard() {
 		const storageKey = `gameLog:${activeGameId}`;
 		const stored = sessionStorage.getItem(storageKey);
 		if (!stored) {
+			syncedChatMessageCountRef.current = 0;
 			return;
 		}
 
@@ -384,14 +385,39 @@ export default function Gameboard() {
 			const parsed = JSON.parse(stored) as unknown;
 			if (Array.isArray(parsed)) {
 				const restoredEntries = parsed
-					.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
-					.slice(0, 40);
+					.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
 				if (restoredEntries.length > 0) {
 					setGameLog(restoredEntries);
 				}
+				syncedChatMessageCountRef.current = 0;
+				return;
 			}
+
+			if (
+				typeof parsed === "object"
+				&& parsed !== null
+				&& "entries" in parsed
+				&& Array.isArray((parsed as { entries: unknown }).entries)
+			) {
+				const payload = parsed as { entries: unknown[]; syncedChatMessageCount?: unknown };
+				const restoredEntries = payload.entries
+					.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+
+				if (restoredEntries.length > 0) {
+					setGameLog(restoredEntries);
+				}
+
+				syncedChatMessageCountRef.current =
+					typeof payload.syncedChatMessageCount === "number" && Number.isFinite(payload.syncedChatMessageCount)
+						? Math.max(0, payload.syncedChatMessageCount)
+						: 0;
+				return;
+			}
+
+			syncedChatMessageCountRef.current = 0;
 		} catch {
 			// Ignore corrupted local log cache.
+			syncedChatMessageCountRef.current = 0;
 		}
 	}, [activeGameId]);
 
@@ -401,7 +427,13 @@ export default function Gameboard() {
 		}
 
 		const storageKey = `gameLog:${activeGameId}`;
-		sessionStorage.setItem(storageKey, JSON.stringify(gameLog.slice(0, 40)));
+		sessionStorage.setItem(
+			storageKey,
+			JSON.stringify({
+				entries: gameLog,
+				syncedChatMessageCount: syncedChatMessageCountRef.current,
+			})
+		);
 	}, [activeGameId, gameLog]);
 
 	useEffect(() => {
@@ -594,7 +626,7 @@ export default function Gameboard() {
 								return previous;
 							}
 
-							return [...unseen.reverse(), ...previous].slice(0, 40);
+							return [...unseen.reverse(), ...previous];
 						});
 					}
 
@@ -621,7 +653,7 @@ export default function Gameboard() {
 								return previous;
 							}
 
-							return [...plainEntries.reverse(), ...previous].slice(0, 40);
+							return [...plainEntries.reverse(), ...previous];
 						});
 					}
 
@@ -1219,7 +1251,7 @@ export default function Gameboard() {
 			if (previous[0] === message) {
 				return previous;
 			}
-			return [message, ...previous].slice(0, 12);
+			return [message, ...previous];
 		});
 	};
 
