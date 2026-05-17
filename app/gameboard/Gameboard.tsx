@@ -83,6 +83,49 @@ const createEmptyTradeResources = (): Resources => ({
 	ore: 0,
 });
 
+const calculateWonResources = (before: Resources, after: Resources): Resources => ({
+	wood: Math.max(0, after.wood - before.wood),
+	brick: Math.max(0, after.brick - before.brick),
+	wool: Math.max(0, after.wool - before.wool),
+	wheat: Math.max(0, after.wheat - before.wheat),
+	ore: Math.max(0, after.ore - before.ore),
+});
+
+const findGainedResource = (before: Resources, after: Resources): ResourceType | null =>
+	resourceTypes.find((resource) => after[resource] > before[resource]) ?? null;
+
+const findLocalStatePlayer = (players: Player[], sessionUserId: string, sessionUsername: string): Player | null => {
+	const parsedSessionUserId = Number.parseInt(sessionUserId ?? "", 10);
+	const hasSessionUserId = Number.isFinite(parsedSessionUserId);
+	return (
+		(hasSessionUserId ? players.find((player) => player.userId === parsedSessionUserId) : null) ??
+		players.find((player) => player.name === sessionUsername) ??
+		null
+	);
+};
+
+const findMatchingServerPlayer = (
+	serverPlayers: PlayerGetDTO[],
+	localPlayer: Player | null,
+	sessionUserId: string,
+	sessionUsername: string
+): PlayerGetDTO | null => {
+	if (localPlayer) {
+		const byId = serverPlayers.find((player) => player.id === localPlayer.id);
+		if (byId) {
+			return byId;
+		}
+	}
+
+	const parsedSessionUserId = Number.parseInt(sessionUserId ?? "", 10);
+	const hasSessionUserId = Number.isFinite(parsedSessionUserId);
+	return (
+		(hasSessionUserId ? serverPlayers.find((player) => player.userId === parsedSessionUserId) : null) ??
+		serverPlayers.find((player) => player.name === sessionUsername) ??
+		null
+	);
+};
+
 type TradeResponseStatus = "PENDING" | "ACCEPTED" | "DENIED";
 
 const createTradeRequestId = (): string => {
@@ -166,6 +209,9 @@ export default function Gameboard() {
 	const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
 	const [showDicePopup, setShowDicePopup] = useState<boolean>(false);
 	const [dicePopupValue, setDicePopupValue] = useState<number | null>(null);
+	const [diceWonResources, setDiceWonResources] = useState<Resources | null>(null);
+	const [initialPlacementWonResources, setInitialPlacementWonResources] = useState<Resources | null>(null);
+	const [stolenResourcePopup, setStolenResourcePopup] = useState<{ resource: ResourceType; targetName: string | null } | null>(null);
 	const [showMonopolyResourceSelector, setShowMonopolyResourceSelector] = useState<boolean>(false);
 	const [showYearOfPlentyResourceSelector, setShowYearOfPlentyResourceSelector] = useState<boolean>(false);
 	const [activeGameId, setActiveGameId] = useState<number | null>(null);
@@ -184,13 +230,20 @@ export default function Gameboard() {
 	const botActionInFlightRef = useRef(false);
 	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const stolenResourcePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const lastDiceRolledAtRef = useRef<string | null | undefined>(undefined);
 	const lastTradeRequestedAtRef = useRef<string | null>(null);
 	const lastTradeRequestIdRef = useRef<string | null>(null);
 	const currentGameVersionRef = useRef<number | null>(null);
 	const actionPendingRef = useRef<boolean>(false);
 	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
+	const latestStateRef = useRef<GameState>(state);
+	const sessionUserIdRef = useRef<string>(sessionUserId);
+	const sessionUsernameRef = useRef<string>(sessionUsername);
 	const ports = Array.isArray(state.ports) ? state.ports : [];
+	latestStateRef.current = state;
+	sessionUserIdRef.current = sessionUserId;
+	sessionUsernameRef.current = sessionUsername;
 
 	const ambienceOverride =
 	process.env.NODE_ENV === "development"
@@ -293,6 +346,17 @@ export default function Gameboard() {
 		dicePopupTimeoutRef.current = globalThis.setTimeout(() => {
 			setShowDicePopup(false);
 			dicePopupTimeoutRef.current = null;
+		}, 2600);
+	};
+
+	const showStolenResourcePopup = (resource: ResourceType, targetName: string | null) => {
+		setStolenResourcePopup({ resource, targetName });
+		if (stolenResourcePopupTimeoutRef.current !== null) {
+			globalThis.clearTimeout(stolenResourcePopupTimeoutRef.current);
+		}
+		stolenResourcePopupTimeoutRef.current = globalThis.setTimeout(() => {
+			setStolenResourcePopup(null);
+			stolenResourcePopupTimeoutRef.current = null;
 		}, 2600);
 	};
 
@@ -444,6 +508,16 @@ export default function Gameboard() {
 						&& nextDiceRolledAt !== lastDiceRolledAtRef.current
 						&& nextDiceValue !== null;
 					lastDiceRolledAtRef.current = nextDiceRolledAt;
+
+					if (shouldShowDicePopup) {
+						const previousLocalPlayer = findLocalStatePlayer(latestStateRef.current.players, sessionUserIdRef.current, sessionUsernameRef.current);
+						const nextLocalPlayer = findMatchingServerPlayer(serverPlayers, previousLocalPlayer, sessionUserIdRef.current, sessionUsernameRef.current);
+						setDiceWonResources(
+							previousLocalPlayer && nextLocalPlayer
+								? calculateWonResources(previousLocalPlayer.resources, mapResourcesFromServer(nextLocalPlayer))
+								: createEmptyTradeResources()
+						);
+					}
 
 					if (gameDto?.bankResources) {
 						setBankResourcesState(gameDto.bankResources as Resources);
@@ -842,6 +916,10 @@ export default function Gameboard() {
 				globalThis.clearTimeout(dicePopupTimeoutRef.current);
 				dicePopupTimeoutRef.current = null;
 			}
+			if (stolenResourcePopupTimeoutRef.current !== null) {
+				globalThis.clearTimeout(stolenResourcePopupTimeoutRef.current);
+				stolenResourcePopupTimeoutRef.current = null;
+			}
 		};
 	}, [apiService, router, searchParams]);
 
@@ -922,6 +1000,9 @@ export default function Gameboard() {
 			: [],
 		[activeOutgoingTradeRequest, activeOutgoingTradeResponses, state.players]
 	);
+	const dicePopupWonEntries = diceWonResources
+		? resourceTypes.filter((resource) => (diceWonResources[resource] ?? 0) > 0)
+		: [];
 
 	useEffect(() => {
 		if (!isMyTurn || state.turnPhase !== "ACTION") {
@@ -1860,13 +1941,30 @@ export default function Gameboard() {
 				return;
 			}
 			actionPendingRef.current = true;
+			setDiceWonResources(null);
+			setInitialPlacementWonResources(null);
+			const resourcesBeforeRoll = myPlayer?.resources ?? null;
 			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/roll-dice`, withExpectedGameVersion({}));
 			rememberServerGameVersion(gameDto);
+
+			const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
+			const serverCurrentPlayer = myPlayer
+				? serverPlayers.find((player) => player.id === myPlayer.id)
+				: null;
+			if (resourcesBeforeRoll && serverCurrentPlayer) {
+				setDiceWonResources(calculateWonResources(resourcesBeforeRoll, mapResourcesFromServer(serverCurrentPlayer)));
+			} else if (typeof gameDto.diceValue === "number") {
+				setDiceWonResources(createEmptyTradeResources());
+			}
 		
 			if (typeof gameDto.diceValue === "number") {
 				lastDiceRolledAtRef.current = gameDto.diceRolledAt ?? lastDiceRolledAtRef.current;
 				setState((previousState) => ({
 					...previousState,
+					players:
+						serverPlayers.length > 0
+							? mapServerPlayersToStatePlayers(serverPlayers, previousState.players)
+							: previousState.players,
 					diceResult: gameDto.diceValue ?? previousState.diceResult,
 					turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
 					gamePhase: gameDto.gamePhase ?? previousState.gamePhase,
@@ -2284,6 +2382,8 @@ export default function Gameboard() {
 		}
 
 		let movedSuccessfully = false;
+		let stolenResource: ResourceType | null = null;
+		const resourcesBeforeRobberMove = myPlayer.resources;
 		try {
 			setRobberMoveInFlight(true);
 			if (mustMoveRobberFromServer) {
@@ -2294,8 +2394,13 @@ export default function Gameboard() {
 					setBankResourcesState(gameDto.bankResources as Resources);
 				}
 
+				const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
+				const serverCurrentPlayer = serverPlayers.find((player) => player.id === myPlayer.id) ?? null;
+				if (targetPlayer && serverCurrentPlayer) {
+					stolenResource = findGainedResource(resourcesBeforeRobberMove, mapResourcesFromServer(serverCurrentPlayer));
+				}
+
 				setState((previousState) => {
-					const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
 					const updatedPlayers =
 						serverPlayers.length > 0
 							? mapServerPlayersToStatePlayers(serverPlayers, previousState.players)
@@ -2328,15 +2433,32 @@ export default function Gameboard() {
 					withExpectedGameVersion(eventPayload as unknown as Record<string, unknown>)
 				);
 				rememberServerGameVersion(gameDto);
+
+				const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
+				const serverCurrentPlayer = serverPlayers.find((player) => player.id === myPlayer.id) ?? null;
+				if (targetPlayer && serverCurrentPlayer) {
+					stolenResource = findGainedResource(resourcesBeforeRobberMove, mapResourcesFromServer(serverCurrentPlayer));
+				}
 		
 				setState((previousState) => ({
 					...previousState,
+					players:
+						serverPlayers.length > 0
+							? mapServerPlayersToStatePlayers(serverPlayers, previousState.players)
+							: previousState.players,
 					robberHexId: pendingRobberHexId,
+					robberMovedAfterSevenRoll:
+						gameDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
 				}));
 			}
 		
 			if (targetPlayer) {
-				addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId} and stole from ${targetPlayer.name}.`);
+				if (stolenResource) {
+					showStolenResourcePopup(stolenResource, targetPlayer.name);
+					addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId} and stole ${stolenResource} from ${targetPlayer.name}.`);
+				} else {
+					addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId} and stole from ${targetPlayer.name}.`);
+				}
 			} else {
 				addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId}.`);
 			}
@@ -2577,8 +2699,25 @@ export default function Gameboard() {
 					edgeId,
 				}));
 				rememberServerGameVersion(gameDto);
-				// The backend will deduct resources from the player and add them to the bank.
-				// The syncGameState will then update the player's resources and bank's resources.
+				const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
+				const serverCurrentPlayer = serverPlayers.find((player) => player.id === myPlayer.id) ?? null;
+				if (serverCurrentPlayer) {
+					setInitialPlacementWonResources(mapResourcesFromServer(serverCurrentPlayer));
+				}
+
+				setState((previousState) => ({
+					...previousState,
+					players:
+						serverPlayers.length > 0
+							? mapServerPlayersToStatePlayers(serverPlayers, previousState.players)
+							: previousState.players,
+					turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
+					gamePhase: gameDto.gamePhase ?? previousState.gamePhase,
+					currentPlayerId:
+						typeof gameDto.currentTurnIndex === "number" && serverPlayers.length > 0
+							? serverPlayers[((gameDto.currentTurnIndex % serverPlayers.length) + serverPlayers.length) % serverPlayers.length].id
+							: previousState.currentPlayerId,
+				}));
 				
 				setPlacementMode(null);
 				addToLog(`${myPlayer.name} placed a setup road.`);
@@ -2634,6 +2773,8 @@ export default function Gameboard() {
 			rememberServerGameVersion(gameDto);
 			setPlacementMode(null);
 			setIsDevCardPlayMode(false);
+			setDiceWonResources(null);
+			setInitialPlacementWonResources(null);
 			lastTradeRequestIdRef.current = null;
 			setActiveTradeRequest(null);
 			const serverPlayersFromResponse = Array.isArray(gameDto.players) ? gameDto.players : (state.players as unknown as Parameters<typeof mapResourcesFromServer>[0][]);
@@ -2799,14 +2940,46 @@ export default function Gameboard() {
 				}}
 			/>
 
-			{showDicePopup && dicePopupValue !== null ? (
-				<div className={styles.dicePopupOverlay}>
-					<div className={styles.dicePopupCard} role="status" aria-live="polite">
-						<div className={styles.dicePopupTitle}>Dice Rolled</div>
-						<div className={styles.dicePopupValue}>{dicePopupValue}</div>
+				{showDicePopup && dicePopupValue !== null ? (
+					<div className={styles.dicePopupOverlay}>
+						<div className={styles.dicePopupCard} role="status" aria-live="polite">
+							<div className={styles.dicePopupTitle}>Dice Rolled</div>
+							<div className={styles.dicePopupValue}>{dicePopupValue}</div>
+							<div className={styles.dicePopupResources}>
+								<span className={styles.dicePopupResourcesLabel}>Resources won</span>
+								{dicePopupWonEntries.length > 0 ? (
+									<div className={styles.dicePopupResourceChips}>
+										{dicePopupWonEntries.map((resource) => (
+											<span key={resource} className={styles.dicePopupResourceChip}>
+												<span aria-hidden="true">{resourceEmojiByType[resource]}</span>
+												<span>+{diceWonResources?.[resource] ?? 0}</span>
+											</span>
+										))}
+									</div>
+								) : (
+									<span className={styles.dicePopupResourcesEmpty}>No resources won</span>
+								)}
+							</div>
+						</div>
 					</div>
-				</div>
-			) : null}
+				) : null}
+
+				{stolenResourcePopup ? (
+					<div className={styles.dicePopupOverlay}>
+						<div className={styles.dicePopupCard} role="status" aria-live="polite">
+							<div className={styles.dicePopupTitle}>Resource Stolen</div>
+							<div className={styles.stolenResourcePopupValue}>
+								<span aria-hidden="true">{resourceEmojiByType[stolenResourcePopup.resource]}</span>
+								<span>{stolenResourcePopup.resource}</span>
+							</div>
+							{stolenResourcePopup.targetName ? (
+								<div className={styles.stolenResourcePopupTarget}>
+									From {stolenResourcePopup.targetName}
+								</div>
+							) : null}
+						</div>
+					</div>
+				) : null}
 
 			{isDiscardWaitingPopupVisible ? (
 				<div className={styles.dicePopupOverlay}>
@@ -2984,10 +3157,12 @@ export default function Gameboard() {
 					handleBuyDevelopmentCard={handleBuyDevelopmentCard}
 					developmentCards={myPlayer?.developmentCards ?? []}
 					isDevCardPlayMode={isDevCardPlayMode}
-					handleToggleDevCardPlayMode={handleToggleDevCardPlayMode}
-					handlePlayDevelopmentCard={handlePlayDevelopmentCard}
-					handleRollDice={handleRollDice}
-					handleBuildRoadAction={handleBuildRoadAction}
+						handleToggleDevCardPlayMode={handleToggleDevCardPlayMode}
+						handlePlayDevelopmentCard={handlePlayDevelopmentCard}
+						handleRollDice={handleRollDice}
+						diceWonResources={diceWonResources}
+						initialPlacementWonResources={initialPlacementWonResources}
+						handleBuildRoadAction={handleBuildRoadAction}
 					handleBuildSettlementAction={handleBuildSettlementAction}
 					handleBuildCityAction={handleBuildCityAction}
 					handleEndTurn={handleEndTurn}
