@@ -183,11 +183,14 @@ reason).
 | **ayleenmr** | 13.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/a97382936943e6aa5d31253a49a46fa7f462271f | Added pop-up when waiting for other players to discard and fixed close button in robber target pop-up (#137) | The "Waiting for other players" pop-up informs the players that they have to wait before the current player can move the robber. This prevents confusion over the game state. The close button on the robber target pop-up allows players to go back and choose a different tile to place the robber on. |
 |                    | 14.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/e5741b8c06fc2f29ea6a76c71d19527db52d9d69 | Added tests for uncovered functions (#329)  | Testing is important to ensure correct functionality. This commit increases the total test coverage. |
 |                    | 16.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/d283243e13b9748224f27f3b05401126a3525f0b | Implemented tutorial UI with basic game interface explanations and added access point in the lobby (#117 #135) | The tutorial will help new players to learn the rules of the game and to familiarize themselves with the game interface. |
-| **[@githubUser2]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **Gresay** | 13.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/a208d8028163e84ec388842331b55c00633d5efb | Test coverage focus on line coverage #329 | Testing is important to enshure the program behavous correctly. |
+|                    | 13.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/96ebe75318a67b0be1bc61b58abf148c957e1f5c | Testing focus branch covetage. #329| Testing is important to enshure the program behavous correctly.  |
+| | 14.04. | https://github.com/Lime556/sopra-fs26-group-11-server/commit/dd2e42a289e4a13e670666f08ac17287985297da | Limmiting the buildable stuff for each player. #333| Having limmited actions to build is a core limmitation for the game.|
+| | 14.05. | https://github.com/Lime556/sopra-fs26-group-11-client/commit/62357b0d71a0e3047f54705c2f5b6f47b26ed960 | Limiting buildables showing in the frontend. #333 | having limmits without knowing it can be enerving for unexperienced players.|
+| | 17.05. | https://github.com/Lime556/sopra-fs26-group-11-client/commit/fd3fec1a4ecaef7e20dadf489834f41780ac2133 | making counteroffers for trading. #165, #166, #170, #41 | counteroffering and making different trades if one is not possible makes the game more interesting. |
 | **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
-| **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
+| **Ziske11** | 17.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/pull/151/changes/5f99de8bb00360fbb0f35539eb06a4e2d6919478 | Added Won ressources popup after rolling a dice, or other player rolled dice, or initial settlement | to have a better overview over the entire Gameplay. |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **Lime556** | [12.05.] | https://github.com/Lime556/sopra-fs26-group-11-server/commit/28d69739b4b16f5086e69a7a39a4a8fc14a877eb | Fix stale game sync with versioned action endpoints (#323) | Added backend-side versioned game action handling so stale client actions are rejected instead of corrupting or overwriting newer game state. |
 |                    | [12.05.] | https://github.com/Lime556/sopra-fs26-group-11-server/commit/b7247186c87066eabacf8b1e41a6a716bc8400ac | Fix stale game sync with versioned actions (#323) | Hardened backend game synchronization by making gameplay mutations follow the versioned action flow. |
@@ -197,7 +200,7 @@ reason).
 
 ---
 
-## Contributions Week 7 - [10.05.] to [17.05]
+## Contributions Week 7 - [17.05.] to [23.05]
 
 | **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |

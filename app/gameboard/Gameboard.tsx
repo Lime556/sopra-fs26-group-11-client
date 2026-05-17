@@ -13,7 +13,7 @@ import { ApplicationError } from "@/types/error";
 import { BoardColumn } from "./components/BoardColumn";
 import { EndGameOverlay } from "./components/EndGameOverlay";
 import { TradeModal } from "./components/TradeModal";
-import { TradeRequestPopup } from "./components/TradeRequestPopup";
+import { TradeRequestPopup, type CounterOfferData } from "./components/TradeRequestPopup";
 import { MonopolyResourceSelectorPopup } from "./components/MonopolyResourceSelectorPopup";
 import { YearOfPlentyResourceSelectorPopup } from "./components/YearOfPlentyResourceSelectorPopup";
 import { TradeRequestSummaryPopup } from "./components/TradeRequestSummaryPopup";
@@ -49,6 +49,7 @@ import {
 } from "./roads";
 import {
 	type BoardGetDTO,
+	type GameAmbienceDTO,
 	type GameChatMessageDTO,
 	type GameEventDTO,
 	type GameGetDTO,
@@ -82,10 +83,105 @@ const createEmptyTradeResources = (): Resources => ({
 	ore: 0,
 });
 
-type TradeResponseStatus = "PENDING" | "ACCEPTED" | "DENIED";
+const calculateWonResources = (before: Resources, after: Resources): Resources => ({
+	wood: Math.max(0, after.wood - before.wood),
+	brick: Math.max(0, after.brick - before.brick),
+	wool: Math.max(0, after.wool - before.wool),
+	wheat: Math.max(0, after.wheat - before.wheat),
+	ore: Math.max(0, after.ore - before.ore),
+});
+
+const findGainedResource = (before: Resources, after: Resources): ResourceType | null =>
+	resourceTypes.find((resource) => after[resource] > before[resource]) ?? null;
+
+const findLocalStatePlayer = (players: Player[], sessionUserId: string, sessionUsername: string): Player | null => {
+	const parsedSessionUserId = Number.parseInt(sessionUserId ?? "", 10);
+	const hasSessionUserId = Number.isFinite(parsedSessionUserId);
+	return (
+		(hasSessionUserId ? players.find((player) => player.userId === parsedSessionUserId) : null) ??
+		players.find((player) => player.name === sessionUsername) ??
+		null
+	);
+};
+
+const findMatchingServerPlayer = (
+	serverPlayers: PlayerGetDTO[],
+	localPlayer: Player | null,
+	sessionUserId: string,
+	sessionUsername: string
+): PlayerGetDTO | null => {
+	if (localPlayer) {
+		const byId = serverPlayers.find((player) => player.id === localPlayer.id);
+		if (byId) {
+			return byId;
+		}
+	}
+
+	const parsedSessionUserId = Number.parseInt(sessionUserId ?? "", 10);
+	const hasSessionUserId = Number.isFinite(parsedSessionUserId);
+	return (
+		(hasSessionUserId ? serverPlayers.find((player) => player.userId === parsedSessionUserId) : null) ??
+		serverPlayers.find((player) => player.name === sessionUsername) ??
+		null
+	);
+};
+
+type TradeResponseStatus = "PENDING" | "ACCEPTED" | "DENIED" | "COUNTEROFFER";
 
 const createTradeRequestId = (): string => {
 	return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const AMBIENCE_POLL_INTERVAL_MS = 5 * 60 * 1000;
+const AMBIENCE_EFFECTS_STORAGE_KEY = "ambienceEffectsEnabled";
+
+const ambienceEmojiByWeather: Record<GameAmbienceDTO["weather"], string> = {
+	SUNNY: "☀️",
+	CLOUDY: "☁️",
+	RAINY: "🌧️",
+	LIGHTNING: "⚡",
+	SNOWING: "❄️",
+	FOGGY: "🌫️",
+	UNKNOWN: "🌙",
+};
+
+const ambienceLabelByTimeOfDay: Record<GameAmbienceDTO["timeOfDay"], string> = {
+	SUNRISE: "Sunrise",
+	DAY: "Day",
+	SUNSET: "Sunset",
+	NIGHT: "Night",
+	UNKNOWN: "Ambience",
+};
+
+const normalizeAmbience = (input: GameAmbienceDTO | null): GameAmbienceDTO | null => {
+	if (!input) {
+		return null;
+	}
+
+	if (input.weather === "SUNNY" && input.timeOfDay === "NIGHT") {
+		return {
+			...input,
+			description: "Clear night",
+		};
+	}
+
+	return input;
+};
+
+const isClearNight = (ambience: GameAmbienceDTO): boolean =>
+	ambience.weather === "SUNNY" && ambience.timeOfDay === "NIGHT";
+
+const getAmbienceIcon = (ambience: GameAmbienceDTO): string =>
+	isClearNight(ambience) ? "🌙" : ambienceEmojiByWeather[ambience.weather];
+
+const getAmbienceLabel = (ambience: GameAmbienceDTO): string => {
+	if (isClearNight(ambience)) {
+		return "Clear night";
+	}
+	if (ambience.weather === "LIGHTNING" && ambience.timeOfDay === "NIGHT") {
+		return "Stormy night";
+	}
+	return ambienceLabelByTimeOfDay[ambience.timeOfDay];
 };
 
 export default function Gameboard() {
@@ -96,6 +192,8 @@ export default function Gameboard() {
 	const { value: sessionUserId } = useLocalStorage<string>("userId", "", { storage: "session" });
 	const [state, setState] = useState<GameState>(createInitialGameState);
 	const [boardStatus, setBoardStatus] = useState<string>("Loading board...");
+	const [ambience, setAmbience] = useState<GameAmbienceDTO | null>(null);
+	const [ambienceEffectsEnabled, setAmbienceEffectsEnabled] = useState<boolean>(true);
 	const [gameLog, setGameLog] = useState<string[]>(["Trading ready."]);
 	const [tradeMode, setTradeMode] = useState<TradeMode>("bank");
 	const [playerGiveResources, setPlayerGiveResources] = useState<Resources>(createEmptyTradeResources);
@@ -105,12 +203,20 @@ export default function Gameboard() {
 	const [showTradePopup, setShowTradePopup] = useState<boolean>(false);
 	const [activeTradeRequest, setActiveTradeRequest] = useState<GameEventDTO | null>(null);
 	const [activeOutgoingTradeRequest, setActiveOutgoingTradeRequest] = useState<GameEventDTO | null>(null);
+	const [showTradeSummaryPopup, setShowTradeSummaryPopup] = useState<boolean>(false);
 	const [activeOutgoingTradeResponses, setActiveOutgoingTradeResponses] = useState<Record<number, TradeResponseStatus>>({});
+	const [myCounterOfferData, setMyCounterOfferData] = useState<CounterOfferData | null>(null);
+	const [myCounterOfferStatus, setMyCounterOfferStatus] = useState<"PENDING" | "DENIED" | null>(null);
+	const [activeOutgoingTradeCounteroffers, setActiveOutgoingTradeCounteroffers] = useState<Record<number, CounterOfferData>>({});
+	const [tradeTargetPlayerId, setTradeTargetPlayerId] = useState<number | null>(null);
 	const [chatMessage, setChatMessage] = useState<string>("");
 	const [winnerPlayerName, setWinnerPlayerName] = useState<string | null>(null);
 	const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
 	const [showDicePopup, setShowDicePopup] = useState<boolean>(false);
 	const [dicePopupValue, setDicePopupValue] = useState<number | null>(null);
+	const [diceWonResources, setDiceWonResources] = useState<Resources | null>(null);
+	const [initialPlacementWonResources, setInitialPlacementWonResources] = useState<Resources | null>(null);
+	const [stolenResourcePopup, setStolenResourcePopup] = useState<{ resource: ResourceType; targetName: string | null } | null>(null);
 	const [showMonopolyResourceSelector, setShowMonopolyResourceSelector] = useState<boolean>(false);
 	const [showYearOfPlentyResourceSelector, setShowYearOfPlentyResourceSelector] = useState<boolean>(false);
 	const [activeGameId, setActiveGameId] = useState<number | null>(null);
@@ -123,20 +229,53 @@ export default function Gameboard() {
 	const [robberMoveInFlight, setRobberMoveInFlight] = useState<boolean>(false);
 	const [discardModalOpen, setDiscardModalOpen] = useState<boolean>(false);
 	const [discardChoices, setDiscardChoices] = useState<Record<string, number>>({});
-	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
+	const syncedChatMessageCountRef = useRef<number>(0);
 	const syncedEventLogsRef = useRef<Set<string>>(new Set());
 	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
 	const botActionInFlightRef = useRef(false);
 	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const lastDiceRolledAtRef = useRef<string | null>(null);
+	const stolenResourcePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const lastDiceRolledAtRef = useRef<string | null | undefined>(undefined);
 	const lastTradeRequestedAtRef = useRef<string | null>(null);
 	const lastTradeRequestIdRef = useRef<string | null>(null);
 	const currentGameVersionRef = useRef<number | null>(null);
 	const actionPendingRef = useRef<boolean>(false);
-	const syncGameStateRef = useRef<((gameId: number) => Promise<"ok" | "unauthorized" | "notfound" | "error">) | null>(null);
 	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
+	const latestStateRef = useRef<GameState>(state);
+	const sessionUserIdRef = useRef<string>(sessionUserId);
+	const sessionUsernameRef = useRef<string>(sessionUsername);
 	const ports = Array.isArray(state.ports) ? state.ports : [];
+	latestStateRef.current = state;
+	sessionUserIdRef.current = sessionUserId;
+	sessionUsernameRef.current = sessionUsername;
+
+	const ambienceOverride =
+	process.env.NODE_ENV === "development"
+		? {
+				weather: searchParams.get("weather") as GameAmbienceDTO["weather"] | null,
+				timeOfDay: searchParams.get("timeOfDay") as GameAmbienceDTO["timeOfDay"] | null,
+				description: "Local ambience test",
+			}
+		: null;
+
+	const rawDisplayedAmbience: GameAmbienceDTO | null =
+		ambienceOverride?.weather && ambienceOverride?.timeOfDay
+			? {
+					weather: ambienceOverride.weather,
+					timeOfDay: ambienceOverride.timeOfDay,
+					description: ambienceOverride.description,
+				}
+			: ambience;
+	const displayedAmbience = normalizeAmbience(rawDisplayedAmbience);
+
+	const toggleAmbienceEffects = (): void => {
+		setAmbienceEffectsEnabled((previous) => {
+			const next = !previous;
+			window.localStorage.setItem(AMBIENCE_EFFECTS_STORAGE_KEY, String(next));
+			return next;
+		});
+	};
 
 	const rememberServerGameVersion = (gameDto?: Pick<GameGetDTO, "gameVersion"> | null): void => {
 		const nextVersion = typeof gameDto?.gameVersion === "number" ? gameDto.gameVersion : null;
@@ -215,6 +354,21 @@ export default function Gameboard() {
 		}, 2600);
 	};
 
+	const showStolenResourcePopup = (resource: ResourceType, targetName: string | null) => {
+		setStolenResourcePopup({ resource, targetName });
+		if (stolenResourcePopupTimeoutRef.current !== null) {
+			globalThis.clearTimeout(stolenResourcePopupTimeoutRef.current);
+		}
+		stolenResourcePopupTimeoutRef.current = globalThis.setTimeout(() => {
+			setStolenResourcePopup(null);
+			stolenResourcePopupTimeoutRef.current = null;
+		}, 2600);
+	};
+
+	useEffect(() => {
+		setAmbienceEffectsEnabled(localStorage.getItem(AMBIENCE_EFFECTS_STORAGE_KEY) !== "false");
+	}, []);
+
 	useEffect(() => {
 		if (!activeGameId) {
 			return;
@@ -251,9 +405,45 @@ export default function Gameboard() {
 	}, [activeGameId, gameLog]);
 
 	useEffect(() => {
+		if (!activeGameId) {
+			setAmbience(null);
+			return;
+		}
+
 		let cancelled = false;
 
-		syncedChatMessagesRef.current = new Set();
+		const fetchAmbience = async (): Promise<void> => {
+			try {
+				const nextAmbience = await apiService.get<GameAmbienceDTO>(`/games/${activeGameId}/ambience`);
+				if (!cancelled) {
+					setAmbience(nextAmbience);
+				}
+			} catch {
+				if (!cancelled) {
+					setAmbience((previousAmbience) => previousAmbience ?? {
+						weather: "UNKNOWN",
+						timeOfDay: "UNKNOWN",
+						description: "Weather ambience unavailable",
+					});
+				}
+			}
+		};
+
+		void fetchAmbience();
+		const ambiencePoll = window.setInterval(() => {
+			void fetchAmbience();
+		}, AMBIENCE_POLL_INTERVAL_MS);
+
+		return () => {
+			cancelled = true;
+			window.clearInterval(ambiencePoll);
+		};
+	}, [activeGameId, apiService]);
+
+	useEffect(() => {
+		let cancelled = false;
+
+		syncedChatMessageCountRef.current = 0;
 		syncedEventLogsRef.current = new Set();
 		roadCacheRef.current = new Map();
 
@@ -319,6 +509,26 @@ export default function Gameboard() {
 					}
 					lastSeenChatMessageCount = serverChatMessages.length;
 					lastSeenEventLogCount = serverEventLogs.length;
+
+					const nextDiceRolledAt = gameDto?.diceRolledAt ?? null;
+					const nextDiceValue = typeof gameDto?.diceValue === "number" ? gameDto.diceValue : null;
+					const shouldShowDicePopup =
+						lastDiceRolledAtRef.current !== undefined
+						&& nextDiceRolledAt !== null
+						&& nextDiceRolledAt !== lastDiceRolledAtRef.current
+						&& nextDiceValue !== null;
+					lastDiceRolledAtRef.current = nextDiceRolledAt;
+
+					if (shouldShowDicePopup) {
+						const previousLocalPlayer = findLocalStatePlayer(latestStateRef.current.players, sessionUserIdRef.current, sessionUsernameRef.current);
+						const nextLocalPlayer = findMatchingServerPlayer(serverPlayers, previousLocalPlayer, sessionUserIdRef.current, sessionUsernameRef.current);
+						setDiceWonResources(
+							previousLocalPlayer && nextLocalPlayer
+								? calculateWonResources(previousLocalPlayer.resources, mapResourcesFromServer(nextLocalPlayer))
+								: createEmptyTradeResources()
+						);
+					}
+
 					if (gameDto?.bankResources) {
 						setBankResourcesState(gameDto.bankResources as Resources);
 					}
@@ -355,24 +565,40 @@ export default function Gameboard() {
 						diceResult: gameDto?.diceValue ?? previousState.diceResult,
 					}));
 
+					if (shouldShowDicePopup && nextDiceValue !== null) {
+						showDiceResultPopup(nextDiceValue);
+					}
+
+					const nextTradeRequestedAt = gameDto?.tradeRequestedAt ?? null;
+					if (nextTradeRequestedAt !== null && nextTradeRequestedAt !== lastTradeRequestedAtRef.current) {
+						lastTradeRequestedAtRef.current = nextTradeRequestedAt;
+						if (gameDto?.latestTradeRequest) {
+							try {
+								const payload = JSON.parse(gameDto.latestTradeRequest) as GameEventDTO;
+								applyGameEventRef.current(payload);
+							} catch {
+								// Ignore malformed trade snapshots; eventLog still contains the raw entry.
+							}
+						}
+					}
+
 					setWinnerPlayerName(gameDto?.winner?.name ?? null);
 					setIsGameFinished(Boolean(gameDto?.gameFinished) || Boolean(gameDto?.finishedAt));
 
 					if (serverChatMessages.length > 0) {
+						const seenChatCount = syncedChatMessageCountRef.current;
+						const unseen = serverChatMessages.slice(seenChatCount);
+						syncedChatMessageCountRef.current = serverChatMessages.length;
 						setGameLog((previous) => {
-							const known = syncedChatMessagesRef.current;
-							const unseen = serverChatMessages.filter((message: string) => !known.has(message));
 							if (unseen.length === 0) {
 								return previous;
 							}
 
-							unseen.forEach((message: string) => known.add(message));
 							return [...unseen.reverse(), ...previous].slice(0, 40);
 						});
 					}
 
 					if (serverEventLogs.length > 0) {
-						const parsedTradeEvents: GameEventDTO[] = [];
 						setGameLog((previous) => {
 							const known = syncedEventLogsRef.current;
 							const unseen = serverEventLogs.filter((entry: string) => !known.has(entry));
@@ -385,7 +611,6 @@ export default function Gameboard() {
 								known.add(entry);
 								const structuredEntry = parseStructuredEventLogEntry(entry);
 								if (structuredEntry && structuredEntry.payload && (structuredEntry.payload.type === "PLAYER_TRADE" || (structuredEntry.payload.type as string) === "PLAYER_TRADE_FINALIZE")) {
-									parsedTradeEvents.push(structuredEntry.payload);
 									return;
 								}
 
@@ -397,10 +622,6 @@ export default function Gameboard() {
 							}
 
 							return [...plainEntries.reverse(), ...previous].slice(0, 40);
-						});
-
-						parsedTradeEvents.forEach((event) => {
-							applyGameEventRef.current(event);
 						});
 					}
 
@@ -590,7 +811,14 @@ export default function Gameboard() {
 					return "ok";
 				}
 
-				return await pollGameSync(gameId);
+				const syncStatus = await pollGameSync(gameId);
+				if (syncStatus === "ok") {
+					lastSeenGameVersion = nextVersion;
+					lastSeenChatMessageCount = nextChatMessageCount;
+					lastSeenEventLogCount = nextEventLogCount;
+					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
+				}
+				return syncStatus;
 			} catch (error) {
 				const status = (error as Partial<ApplicationError>)?.status;
 				if (status === 401) {
@@ -658,6 +886,9 @@ export default function Gameboard() {
 				if (!cancelled && status === 401) {
 					setBoardStatus("Session expired. Please log in again.");
 					router.replace("/login");
+				}
+				if (!cancelled && status === 409) {
+					setBoardStatus("You are already in an active lobby or game.");
 				}
 				return null;
 			}
@@ -817,6 +1048,10 @@ export default function Gameboard() {
 				globalThis.clearTimeout(dicePopupTimeoutRef.current);
 				dicePopupTimeoutRef.current = null;
 			}
+			if (stolenResourcePopupTimeoutRef.current !== null) {
+				globalThis.clearTimeout(stolenResourcePopupTimeoutRef.current);
+				stolenResourcePopupTimeoutRef.current = null;
+			}
 		};
 	}, [apiService, router, searchParams]);
 
@@ -893,10 +1128,15 @@ export default function Gameboard() {
 					playerId: player.id,
 					playerName: player.name,
 					status: activeOutgoingTradeResponses[player.id] ?? "PENDING",
+					counterOffer: activeOutgoingTradeCounteroffers[player.id]?.giveResources,
+					counterRequest: activeOutgoingTradeCounteroffers[player.id]?.receiveResources,
 				}))
 			: [],
-		[activeOutgoingTradeRequest, activeOutgoingTradeResponses, state.players]
+		[activeOutgoingTradeRequest, activeOutgoingTradeResponses, activeOutgoingTradeCounteroffers, state.players]
 	);
+	const dicePopupWonEntries = diceWonResources
+		? resourceTypes.filter((resource) => (diceWonResources[resource] ?? 0) > 0)
+		: [];
 
 	useEffect(() => {
 		if (!isMyTurn || state.turnPhase !== "ACTION") {
@@ -1695,12 +1935,20 @@ export default function Gameboard() {
 		if (event.type === "PLAYER_TRADE") {
 			if (event.tradeAction === "REQUEST") {
 				if (typeof localPlayerId === "number" && event.sourcePlayerId === localPlayerId) {
-					setActiveOutgoingTradeRequest(event);
-					setActiveOutgoingTradeResponses((previous) => {
-						if (Object.keys(previous).length > 0) {
-							return previous;
-						}
+					// If this is a targeted request I sent, it's a counteroffer.
+					if (event.targetPlayerId) {
+						setMyCounterOfferStatus("PENDING");
+						setMyCounterOfferData({
+							giveResources: event.giveResources as Resources,
+							receiveResources: event.receiveResources as Resources,
+							tradeRequestId: event.tradeRequestId ?? "",
+						});
+						return;
+					}
 
+					setActiveOutgoingTradeRequest(event);
+					setActiveOutgoingTradeCounteroffers({});
+					setActiveOutgoingTradeResponses((previous) => {
 						return state.players
 							.filter((player) => player.id !== event.sourcePlayerId)
 							.reduce<Record<number, TradeResponseStatus>>((accumulator, player) => {
@@ -1709,6 +1957,31 @@ export default function Gameboard() {
 							}, {});
 					});
 					return;
+				}
+
+				// Ignore targeted requests if I am not the target.
+				// This prevents observers from seeing private counter-offers as new popups.
+				if (event.targetPlayerId !== null && event.targetPlayerId !== undefined && event.targetPlayerId !== localPlayerId) {
+					return;
+				}
+
+				// Detect counter-offer: Targeted request while I have an outgoing broadcast
+				if (event.targetPlayerId === localPlayerId && activeOutgoingTradeRequest) {
+					setActiveOutgoingTradeResponses((prev) => ({
+						...prev,
+						[event.sourcePlayerId as number]: "COUNTEROFFER",
+					}));
+					if (event.giveResources && event.receiveResources) {
+						setActiveOutgoingTradeCounteroffers((prev) => ({
+							...prev,
+							[event.sourcePlayerId as number]: { 
+								giveResources: event.giveResources as Resources, 
+								receiveResources: event.receiveResources as Resources,
+								tradeRequestId: event.tradeRequestId ?? "",
+							},
+						}));
+					}
+					return; // This was a counteroffer to my outgoing trade, do not show a new popup.
 				}
 
 				// Only update trade request if it's a new request ID (version-based update)
@@ -1724,16 +1997,27 @@ export default function Gameboard() {
 			}
 
 			if (event.tradeAction === "DENY") {
-				if (typeof localPlayerId === "number" && event.sourcePlayerId === localPlayerId && typeof event.targetPlayerId === "number") {
-					setActiveOutgoingTradeResponses((previous) => ({
-						...previous,
-						[event.targetPlayerId as number]: "DENIED",
-					}));
-				}
-
-				if (typeof localPlayerId === "number" && event.targetPlayerId === localPlayerId) {
-					lastTradeRequestIdRef.current = null;
-					setActiveTradeRequest(null);
+				if (typeof localPlayerId === "number" && typeof event.targetPlayerId === "number" && typeof event.sourcePlayerId === "number") {
+					if (event.sourcePlayerId === localPlayerId) {
+						// My trade request (broadcast or counteroffer) was denied
+						setActiveOutgoingTradeResponses((previous) => ({
+							...previous,
+							[event.targetPlayerId as number]: "DENIED",
+						}));
+						if (myCounterOfferStatus === "PENDING") {
+							setMyCounterOfferStatus("DENIED");
+						}
+					} else if (event.targetPlayerId === localPlayerId) {
+						// I denied someone's request (e.g. I denied a counteroffer)
+						setActiveOutgoingTradeResponses((previous) => ({
+							...previous,
+							[event.sourcePlayerId as number]: "DENIED",
+						}));
+						if (activeTradeRequest && event.sourcePlayerId === activeTradeRequest.sourcePlayerId) {
+							setActiveTradeRequest(null);
+							setTradeTargetPlayerId(null);
+						}
+					}
 				}
 
 				if (event.message) {
@@ -1750,8 +2034,11 @@ export default function Gameboard() {
 			}
 
 			if (typeof localPlayerId === "number" && event.targetPlayerId === localPlayerId) {
-				lastTradeRequestIdRef.current = null;
 				setActiveTradeRequest(null);
+				setShowTradePopup(false);
+				setMyCounterOfferStatus(null);
+				setMyCounterOfferData(null);
+				setTradeTargetPlayerId(null);
 			}
 
 			if (event.message) {
@@ -1762,14 +2049,18 @@ export default function Gameboard() {
 
 		// Clear outgoing trade request and responses when the trade is finalized
 		if ((event.type as string) === "PLAYER_TRADE_FINALIZE") {
-			if (
-				typeof localPlayerId === "number"
-				&& typeof event.sourcePlayerId === "number"
-				&& event.sourcePlayerId === localPlayerId
-			) {
-				setActiveOutgoingTradeRequest(null);
-				setActiveOutgoingTradeResponses({});
-			}
+	
+			setActiveOutgoingTradeRequest(null);
+			setActiveOutgoingTradeResponses({});
+			setActiveOutgoingTradeCounteroffers({});
+			setMyCounterOfferStatus(null);
+			setMyCounterOfferData(null);
+			setShowTradeSummaryPopup(false); 
+			setActiveTradeRequest(null);
+			setTradeTargetPlayerId(null);
+
+			setShowTradePopup(false);
+			return;
 		}
 
 		if (
@@ -1835,12 +2126,30 @@ export default function Gameboard() {
 				return;
 			}
 			actionPendingRef.current = true;
+			setDiceWonResources(null);
+			setInitialPlacementWonResources(null);
+			const resourcesBeforeRoll = myPlayer?.resources ?? null;
 			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/roll-dice`, withExpectedGameVersion({}));
 			rememberServerGameVersion(gameDto);
+
+			const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
+			const serverCurrentPlayer = myPlayer
+				? serverPlayers.find((player) => player.id === myPlayer.id)
+				: null;
+			if (resourcesBeforeRoll && serverCurrentPlayer) {
+				setDiceWonResources(calculateWonResources(resourcesBeforeRoll, mapResourcesFromServer(serverCurrentPlayer)));
+			} else if (typeof gameDto.diceValue === "number") {
+				setDiceWonResources(createEmptyTradeResources());
+			}
 		
 			if (typeof gameDto.diceValue === "number") {
+				lastDiceRolledAtRef.current = gameDto.diceRolledAt ?? lastDiceRolledAtRef.current;
 				setState((previousState) => ({
 					...previousState,
+					players:
+						serverPlayers.length > 0
+							? mapServerPlayersToStatePlayers(serverPlayers, previousState.players)
+							: previousState.players,
 					diceResult: gameDto.diceValue ?? previousState.diceResult,
 					turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
 					gamePhase: gameDto.gamePhase ?? previousState.gamePhase,
@@ -2024,7 +2333,8 @@ export default function Gameboard() {
 	};
 
 	const handlePlayerTrade = () => {
-		if (!isMyTurn || !myPlayer || !activeGameId) {
+		const isTargetedToCurrentPlayer = tradeTargetPlayerId !== null && tradeTargetPlayerId === state.currentPlayerId;
+		if (!(isMyTurn || isTargetedToCurrentPlayer) || !myPlayer || !activeGameId) {
 			addToLog("No active player for trading.");
 			return;
 		}
@@ -2050,14 +2360,7 @@ export default function Gameboard() {
 			addToLog(`${myPlayer.name} lacks ${missingFromCurrentPlayer} for this trade.`);
 			return;
 		}
-
-		const pendingResponses = state.players
-			.filter((player) => player.id !== myPlayer.id)
-			.reduce<Record<number, TradeResponseStatus>>((accumulator, player) => {
-				accumulator[player.id] = "PENDING";
-				return accumulator;
-			}, {});
-
+		
 		const tradeRequest: GameEventDTO = {
 			type: "PLAYER_TRADE",
 			sourcePlayerId: myPlayer.id,
@@ -2065,32 +2368,59 @@ export default function Gameboard() {
 			tradeRequestId,
 			giveResources: playerGiveResources,
 			receiveResources: playerReceiveResources,
-			message: `${myPlayer.name} requested ${formatBundle(playerGiveResources)} for ${formatBundle(playerReceiveResources)} from all players.`,
+			message: tradeTargetPlayerId
+				? `${myPlayer.name} counter-offered ${formatBundle(playerGiveResources)} for ${formatBundle(playerReceiveResources)} to ${state.players.find(p => p.id === tradeTargetPlayerId)?.name ?? "a player"}.`
+				: `${myPlayer.name} requested ${formatBundle(playerGiveResources)} for ${formatBundle(playerReceiveResources)} from all players.`,
 		};
+
+		if (tradeTargetPlayerId) {
+			tradeRequest.targetPlayerId = tradeTargetPlayerId;
+		}
+
+		const pendingResponses = tradeTargetPlayerId
+			? {} // No pending responses for a targeted counteroffer from my perspective
+			: state.players
+				.filter((player) => player.id !== myPlayer.id)
+				.reduce<Record<number, TradeResponseStatus>>((accumulator, player) => {
+					accumulator[player.id] = "PENDING";
+					return accumulator;
+				}, {});
+
 		const logMessage = tradeRequest.message ?? `${myPlayer.name} requested a trade from all players.`;
-		void apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/player-trade/request`, withExpectedGameVersion({
+		const payload: Record<string, unknown> = {
 			sourcePlayerId: myPlayer.id,
 			tradeRequestId,
 			giveResources: playerGiveResources,
 			receiveResources: playerReceiveResources,
 			message: logMessage,
-		})).then((gameDto) => {
+		};
+
+		if (tradeTargetPlayerId) {
+			payload.targetPlayerId = tradeTargetPlayerId;
+		}
+
+		void apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/player-trade/request`, withExpectedGameVersion(payload)).then((gameDto) => {
 			rememberServerGameVersion(gameDto);
+			if (!tradeTargetPlayerId) { // Only set outgoing request if it's a broadcast
+				setActiveOutgoingTradeRequest(tradeRequest);
+				setActiveOutgoingTradeResponses(pendingResponses);
+				setShowTradeSummaryPopup(true);
+			}
 			addToLog(logMessage);
-			setActiveOutgoingTradeRequest(tradeRequest);
-			setActiveOutgoingTradeResponses(pendingResponses);
 			setShowTradePopup(false);
 		}).catch(() => {
 			addToLog("Could not send trade request. Please try again.");
 		});
 	};
 
-	const handleFinalizePlayerTrade = async (targetPlayerId: number) => {
+	const handleFinalizePlayerTrade = async (targetPlayerId: number, isCounter?: boolean) => {
 		if (!myPlayer || !activeOutgoingTradeRequest || !activeGameId) {
 			return;
 		}
 
-		if (activeOutgoingTradeResponses[targetPlayerId] !== "ACCEPTED") {
+		const status = activeOutgoingTradeResponses[targetPlayerId];
+		const hasCounter = !!activeOutgoingTradeCounteroffers[targetPlayerId];
+		if (status !== "ACCEPTED" && status !== "COUNTEROFFER" && !(status === "DENIED" && hasCounter)) {
 			addToLog("Select a player who accepted the trade request.");
 			return;
 		}
@@ -2101,21 +2431,68 @@ export default function Gameboard() {
 			return;
 		}
 
+		const counter = activeOutgoingTradeCounteroffers[targetPlayerId];
+		if (isCounter && !counter) {
+			addToLog("Counteroffer data no longer available.");
+			return;
+		}
+
+		const giveResources = isCounter ? counter.receiveResources : activeOutgoingTradeRequest.giveResources;
+		const receiveResources = isCounter ? counter.giveResources : activeOutgoingTradeRequest.receiveResources;
+
 		const logMessage = `${myPlayer.name} finalized the trade with ${targetPlayer.name}.`;
 		try {
 			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/player-trade/finalize`, withExpectedGameVersion({
 				sourcePlayerId: myPlayer.id,
 				targetPlayerId,
-				giveResources: activeOutgoingTradeRequest.giveResources,
-				receiveResources: activeOutgoingTradeRequest.receiveResources,
+				giveResources,
+				receiveResources,
 				message: logMessage,
 			}));
 			rememberServerGameVersion(gameDto);
 			setActiveOutgoingTradeRequest(null);
 			setActiveOutgoingTradeResponses({});
+			setActiveOutgoingTradeCounteroffers({});
+			setMyCounterOfferStatus(null);
+			setMyCounterOfferData(null);
+			setShowTradeSummaryPopup(false);
+			setShowTradePopup(false);
+			setActiveTradeRequest(null);
 			addToLog(logMessage);
 		} catch {
 			addToLog("Could not complete the trade.");
+		}
+	};
+
+	const handleDenyCounteroffer = async (targetPlayerId: number) => {
+		if (!activeGameId || !myPlayer || !activeOutgoingTradeRequest) {
+			return;
+		}
+
+		const counter = activeOutgoingTradeCounteroffers[targetPlayerId];
+		if (!counter) return;
+
+		const targetPlayer = state.players.find(p => p.id === targetPlayerId);
+		const logMessage = `${myPlayer.name} denied the counteroffer from ${targetPlayer?.name ?? "a player"}.`;
+
+		try {
+			await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/player-trade/respond`, withExpectedGameVersion({
+				sourcePlayerId: targetPlayerId,
+				targetPlayerId: myPlayer.id,
+				tradeAction: "DENY",
+				tradeRequestId: counter.tradeRequestId,
+				giveResources: counter.giveResources,
+				receiveResources: counter.receiveResources,
+				message: logMessage,
+			}));
+
+			setActiveOutgoingTradeResponses((prev) => ({
+				...prev,
+				[targetPlayerId]: "DENIED",
+			}));
+			addToLog(logMessage);
+		} catch {
+			addToLog("Could not deny the counteroffer.");
 		}
 	};
 
@@ -2136,12 +2513,35 @@ export default function Gameboard() {
 				message: logMessage,
 			}));
 			rememberServerGameVersion(gameDto);
-			lastTradeRequestIdRef.current = null;
 			setActiveTradeRequest(null);
+			setTradeTargetPlayerId(null);
 			addToLog(logMessage);
 		} catch {
 			addToLog("Could not accept the trade request.");
 		}
+	};
+
+	const handleCounteroffer = () => {
+		if (!activeTradeRequest) return;
+
+		// Pre-populate the standard trade modal with the swapped resources of the original offer
+		setTradeMode("player");
+		setTradeTargetPlayerId(activeTradeRequest.sourcePlayerId ?? null);
+		
+		setBankGiveResources(createEmptyTradeResources());
+		setBankReceiveResources(createEmptyTradeResources());
+		setPlayerGiveResources({ ...createEmptyTradeResources(), ...(activeTradeRequest.receiveResources ?? {}) });
+		setPlayerReceiveResources({ ...createEmptyTradeResources(), ...(activeTradeRequest.giveResources ?? {}) });
+
+		// Open the editing modal; the original popup is hidden via the isVisible check below
+		setShowTradePopup(true);
+	};
+
+	const handleCloseTradePopup = () => {
+		setActiveTradeRequest(null);
+		setMyCounterOfferStatus(null);
+		setMyCounterOfferData(null);
+		setTradeTargetPlayerId(null);
 	};
 
 	const handleDenyTradeRequest = async () => {
@@ -2167,8 +2567,7 @@ export default function Gameboard() {
 				message: logMessage,
 			}));
 			rememberServerGameVersion(gameDto);
-			lastTradeRequestIdRef.current = null;
-			setActiveTradeRequest(null);
+			handleCloseTradePopup();
 			addToLog(logMessage);
 		} catch {
 			addToLog("Could not deny the trade request.");
@@ -2258,6 +2657,8 @@ export default function Gameboard() {
 		}
 
 		let movedSuccessfully = false;
+		let stolenResource: ResourceType | null = null;
+		const resourcesBeforeRobberMove = myPlayer.resources;
 		try {
 			setRobberMoveInFlight(true);
 			if (mustMoveRobberFromServer) {
@@ -2268,8 +2669,13 @@ export default function Gameboard() {
 					setBankResourcesState(gameDto.bankResources as Resources);
 				}
 
+				const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
+				const serverCurrentPlayer = serverPlayers.find((player) => player.id === myPlayer.id) ?? null;
+				if (targetPlayer && serverCurrentPlayer) {
+					stolenResource = findGainedResource(resourcesBeforeRobberMove, mapResourcesFromServer(serverCurrentPlayer));
+				}
+
 				setState((previousState) => {
-					const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
 					const updatedPlayers =
 						serverPlayers.length > 0
 							? mapServerPlayersToStatePlayers(serverPlayers, previousState.players)
@@ -2302,15 +2708,32 @@ export default function Gameboard() {
 					withExpectedGameVersion(eventPayload as unknown as Record<string, unknown>)
 				);
 				rememberServerGameVersion(gameDto);
+
+				const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
+				const serverCurrentPlayer = serverPlayers.find((player) => player.id === myPlayer.id) ?? null;
+				if (targetPlayer && serverCurrentPlayer) {
+					stolenResource = findGainedResource(resourcesBeforeRobberMove, mapResourcesFromServer(serverCurrentPlayer));
+				}
 		
 				setState((previousState) => ({
 					...previousState,
+					players:
+						serverPlayers.length > 0
+							? mapServerPlayersToStatePlayers(serverPlayers, previousState.players)
+							: previousState.players,
 					robberHexId: pendingRobberHexId,
+					robberMovedAfterSevenRoll:
+						gameDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
 				}));
 			}
 		
 			if (targetPlayer) {
-				addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId} and stole from ${targetPlayer.name}.`);
+				if (stolenResource) {
+					showStolenResourcePopup(stolenResource, targetPlayer.name);
+					addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId} and stole ${stolenResource} from ${targetPlayer.name}.`);
+				} else {
+					addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId} and stole from ${targetPlayer.name}.`);
+				}
 			} else {
 				addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId}.`);
 			}
@@ -2551,8 +2974,25 @@ export default function Gameboard() {
 					edgeId,
 				}));
 				rememberServerGameVersion(gameDto);
-				// The backend will deduct resources from the player and add them to the bank.
-				// The syncGameState will then update the player's resources and bank's resources.
+				const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
+				const serverCurrentPlayer = serverPlayers.find((player) => player.id === myPlayer.id) ?? null;
+				if (serverCurrentPlayer) {
+					setInitialPlacementWonResources(mapResourcesFromServer(serverCurrentPlayer));
+				}
+
+				setState((previousState) => ({
+					...previousState,
+					players:
+						serverPlayers.length > 0
+							? mapServerPlayersToStatePlayers(serverPlayers, previousState.players)
+							: previousState.players,
+					turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
+					gamePhase: gameDto.gamePhase ?? previousState.gamePhase,
+					currentPlayerId:
+						typeof gameDto.currentTurnIndex === "number" && serverPlayers.length > 0
+							? serverPlayers[((gameDto.currentTurnIndex % serverPlayers.length) + serverPlayers.length) % serverPlayers.length].id
+							: previousState.currentPlayerId,
+				}));
 				
 				setPlacementMode(null);
 				addToLog(`${myPlayer.name} placed a setup road.`);
@@ -2608,7 +3048,12 @@ export default function Gameboard() {
 			rememberServerGameVersion(gameDto);
 			setPlacementMode(null);
 			setIsDevCardPlayMode(false);
+			setDiceWonResources(null);
+			setInitialPlacementWonResources(null);
 			lastTradeRequestIdRef.current = null;
+			setMyCounterOfferStatus(null);
+			setMyCounterOfferData(null);
+			setShowTradeSummaryPopup(false); // Close summary popup on turn end
 			setActiveTradeRequest(null);
 			const serverPlayersFromResponse = Array.isArray(gameDto.players) ? gameDto.players : (state.players as unknown as Parameters<typeof mapResourcesFromServer>[0][]);
 			let nextPlayerId = state.currentPlayerId;
@@ -2677,6 +3122,7 @@ export default function Gameboard() {
 		setPlayerReceiveResources(createEmptyTradeResources());
 		setBankGiveResources(createEmptyTradeResources());
 		setBankReceiveResources(createEmptyTradeResources());
+		setTradeTargetPlayerId(null);
 
 		setShowTradePopup(true);
 		addToLog(`${myPlayer.name} opened trade requests.`);
@@ -2717,6 +3163,7 @@ export default function Gameboard() {
 				ports={ports}
 				hexById={hexById}
 				currentPlayer={myPlayer}
+				targetPlayerId={tradeTargetPlayerId}
 				onClose={() => setShowTradePopup(false)}
 				onSetTradeMode={setTradeMode}
 				onAdjustPlayerGiveResource={(resource, delta) => {
@@ -2748,39 +3195,73 @@ export default function Gameboard() {
 			/>
 
 			<TradeRequestSummaryPopup
-				isVisible={activeOutgoingTradeRequest !== null && activeOutgoingTradeRequest.sourcePlayerId === myPlayer?.id}
+				isVisible={showTradeSummaryPopup && activeOutgoingTradeRequest !== null && activeOutgoingTradeRequest.sourcePlayerId === myPlayer?.id}
 				tradeRequest={activeOutgoingTradeRequest}
 				currentPlayer={myPlayer}
 				sourcePlayer={activeOutgoingTradeSourcePlayer}
 				responses={activeOutgoingTradeResponseEntries}
 				onFinalizeTrade={handleFinalizePlayerTrade}
+				onDenyCounteroffer={handleDenyCounteroffer}
 				onClose={() => {
-					setActiveOutgoingTradeRequest(null);
-					setActiveOutgoingTradeResponses({});
+					setShowTradeSummaryPopup(false);
+					// Do NOT clear activeOutgoingTradeRequest here, as counteroffers might still come in.
+					// It will be cleared on finalize or end turn.
 				}}
 			/>
 
 			<TradeRequestPopup
-				isVisible={activeTradeRequest !== null}
+				isVisible={activeTradeRequest !== null && !showTradePopup}
 				tradeRequest={activeTradeRequest}
 				currentPlayer={myPlayer}
 				sourcePlayer={activeTradeRequestSourcePlayer}
 				onAccept={handleAcceptTradeRequest}
+				onCounteroffer={handleCounteroffer}
+				counterOfferData={myCounterOfferData}
+				counterOfferStatus={myCounterOfferStatus}
 				onDeny={handleDenyTradeRequest}
-				onClose={() => {
-					lastTradeRequestIdRef.current = null;
-					setActiveTradeRequest(null);
-				}}
+				onClose={handleCloseTradePopup}
 			/>
 
-			{showDicePopup && dicePopupValue !== null ? (
-				<div className={styles.dicePopupOverlay}>
-					<div className={styles.dicePopupCard} role="status" aria-live="polite">
-						<div className={styles.dicePopupTitle}>Dice Rolled</div>
-						<div className={styles.dicePopupValue}>{dicePopupValue}</div>
+				{showDicePopup && dicePopupValue !== null ? (
+					<div className={styles.dicePopupOverlay}>
+						<div className={styles.dicePopupCard} role="status" aria-live="polite">
+							<div className={styles.dicePopupTitle}>Dice Rolled</div>
+							<div className={styles.dicePopupValue}>{dicePopupValue}</div>
+							<div className={styles.dicePopupResources}>
+								<span className={styles.dicePopupResourcesLabel}>Resources won</span>
+								{dicePopupWonEntries.length > 0 ? (
+									<div className={styles.dicePopupResourceChips}>
+										{dicePopupWonEntries.map((resource) => (
+											<span key={resource} className={styles.dicePopupResourceChip}>
+												<span aria-hidden="true">{resourceEmojiByType[resource]}</span>
+												<span>+{diceWonResources?.[resource] ?? 0}</span>
+											</span>
+										))}
+									</div>
+								) : (
+									<span className={styles.dicePopupResourcesEmpty}>No resources won</span>
+								)}
+							</div>
+						</div>
 					</div>
-				</div>
-			) : null}
+				) : null}
+
+				{stolenResourcePopup ? (
+					<div className={styles.dicePopupOverlay}>
+						<div className={styles.dicePopupCard} role="status" aria-live="polite">
+							<div className={styles.dicePopupTitle}>Resource Stolen</div>
+							<div className={styles.stolenResourcePopupValue}>
+								<span aria-hidden="true">{resourceEmojiByType[stolenResourcePopup.resource]}</span>
+								<span>{stolenResourcePopup.resource}</span>
+							</div>
+							{stolenResourcePopup.targetName ? (
+								<div className={styles.stolenResourcePopupTarget}>
+									From {stolenResourcePopup.targetName}
+								</div>
+							) : null}
+						</div>
+					</div>
+				) : null}
 
 			{isDiscardWaitingPopupVisible ? (
 				<div className={styles.dicePopupOverlay}>
@@ -2958,16 +3439,31 @@ export default function Gameboard() {
 					handleBuyDevelopmentCard={handleBuyDevelopmentCard}
 					developmentCards={myPlayer?.developmentCards ?? []}
 					isDevCardPlayMode={isDevCardPlayMode}
-					handleToggleDevCardPlayMode={handleToggleDevCardPlayMode}
-					handlePlayDevelopmentCard={handlePlayDevelopmentCard}
-					handleRollDice={handleRollDice}
-					handleBuildRoadAction={handleBuildRoadAction}
+						handleToggleDevCardPlayMode={handleToggleDevCardPlayMode}
+						handlePlayDevelopmentCard={handlePlayDevelopmentCard}
+						handleRollDice={handleRollDice}
+						diceWonResources={diceWonResources}
+						initialPlacementWonResources={initialPlacementWonResources}
+						handleBuildRoadAction={handleBuildRoadAction}
 					handleBuildSettlementAction={handleBuildSettlementAction}
 					handleBuildCityAction={handleBuildCityAction}
 					handleEndTurn={handleEndTurn}
 					mustMoveRobberBeforeEndTurn={mustMoveRobberFromServer}
+					ambience={displayedAmbience}
+					weatherEffectsEnabled={ambienceEffectsEnabled}
 				/>
 			<aside className={styles.rightPanel}>
+				{displayedAmbience ? (
+					<section className={styles.ambiencePanel} aria-label={displayedAmbience.description}>
+						<div className={styles.ambienceSummary}>
+							<span className={styles.ambienceEmoji}>{getAmbienceIcon(displayedAmbience)}</span>
+							<span className={styles.ambienceText}>{getAmbienceLabel(displayedAmbience)}</span>
+						</div>
+						<button type="button" className={styles.ambienceToggleButton} onClick={toggleAmbienceEffects}>
+							Effects: {ambienceEffectsEnabled ? "On" : "Off"}
+						</button>
+					</section>
+				) : null}
 				<section className={styles.sidebarCard}>
 					<h2 className={styles.panelTitle}>Players</h2>
 					<ul className={styles.playerList}>

@@ -3,8 +3,8 @@ import Image from "next/image";
 import styles from "@/styles/gameboard.module.css";
 import { findDesertHexId, getPortColor, getPortIcon, getPortLabel } from "../mappers";
 import { calculateHexPoints, calculatePortPosition, getCornerPoint, toPixel } from "../geometry";
-import { hexSize, tileImageByType } from "../constants";
-import { GameState, HexTile, PortVisual } from "../types";
+import { hexSize, resourceEmojiByType, resourceTypes, tileImageByType } from "../constants";
+import { GameAmbienceDTO, GameState, HexTile, PortVisual, Resources } from "../types";
 
 const MAX_ROADS = 15;
 const MAX_SETTLEMENTS = 5;
@@ -44,12 +44,34 @@ interface BoardColumnProps {
 	handleToggleDevCardPlayMode: () => void;
 	handlePlayDevelopmentCard: (card: string) => void;
 	handleRollDice: () => void;
+	diceWonResources: Resources | null;
+	initialPlacementWonResources: Resources | null;
 	handleBuildRoadAction: () => void;
 	handleBuildSettlementAction: () => void;
 	handleBuildCityAction: () => void;
 	handleEndTurn: () => void;
 	mustMoveRobberBeforeEndTurn: boolean;
+	ambience?: GameAmbienceDTO | null;
+	weatherEffectsEnabled?: boolean;
 }
+
+const weatherAmbienceClass: Record<GameAmbienceDTO["weather"], string> = {
+	SUNNY: styles.weatherSunny,
+	CLOUDY: styles.weatherCloudy,
+	RAINY: styles.weatherRainy,
+	LIGHTNING: styles.weatherLightning,
+	SNOWING: styles.weatherSnowing,
+	FOGGY: styles.weatherFoggy,
+	UNKNOWN: styles.weatherUnknown,
+};
+
+const timeAmbienceClass: Record<GameAmbienceDTO["timeOfDay"], string> = {
+	SUNRISE: styles.timeSunrise,
+	DAY: styles.timeDay,
+	SUNSET: styles.timeSunset,
+	NIGHT: styles.timeNight,
+	UNKNOWN: styles.timeUnknown,
+};
 
 export function BoardColumn({
 	boardStatus,
@@ -76,11 +98,15 @@ export function BoardColumn({
 	handleToggleDevCardPlayMode,
 	handlePlayDevelopmentCard,
 	handleRollDice,
+	diceWonResources,
+	initialPlacementWonResources,
 	handleBuildRoadAction,
 	handleBuildSettlementAction,
 	handleBuildCityAction,
 	handleEndTurn,
 	mustMoveRobberBeforeEndTurn,
+	ambience,
+	weatherEffectsEnabled = true,
 }: BoardColumnProps) {
 	const playableDevelopmentCards = developmentCards.filter((card) => card !== "victory_point");
 	const canUseActionPhase = isMyTurn && state.turnPhase === "ACTION" && !isSetupPhase;
@@ -100,11 +126,27 @@ export function BoardColumn({
 	const hasMaxRoads = myRoadCount >= MAX_ROADS;
 	const hasMaxSettlements = mySettlementCount >= MAX_SETTLEMENTS;
 	const hasMaxCities = myCityCount >= MAX_CITIES;
+	const wonResourceEntries = diceWonResources
+		? resourceTypes.filter((resource) => (diceWonResources[resource] ?? 0) > 0)
+		: [];
+	const initialPlacementWonResourceEntries = initialPlacementWonResources
+		? resourceTypes.filter((resource) => (initialPlacementWonResources[resource] ?? 0) > 0)
+		: [];
 
 	const canEndTurn =
 		 (canUseActionPhase && !mustMoveRobberBeforeEndTurn)
 		 || (isMyTurn && setupRoundFinished);
 	const canUseRoadOrSettlement = canUseActionPhase || (canUseSetupPlacement && !setupRoundFinished);
+	const effectiveAmbience: Pick<GameAmbienceDTO, "weather" | "timeOfDay"> = ambience ?? {
+		weather: "UNKNOWN",
+		timeOfDay: "UNKNOWN",
+	};
+	const ambienceLayerClassName = [
+		styles.boardAmbienceLayer,
+		weatherEffectsEnabled ? weatherAmbienceClass[effectiveAmbience.weather] : "",
+		weatherEffectsEnabled ? timeAmbienceClass[effectiveAmbience.timeOfDay] : "",
+		weatherEffectsEnabled ? "" : styles.ambienceEffectsDisabled,
+	].join(" ");
 
 	return (
 		<div className={styles.boardColumn}>
@@ -452,6 +494,7 @@ export function BoardColumn({
 							)
 						: null}
 				</svg>
+				<div className={ambienceLayerClassName} aria-hidden="true" />
 			</main>
 
 			<div className={styles.actionStrip}>
@@ -465,6 +508,42 @@ export function BoardColumn({
 						<span className={styles.actionEmoji}>🎲</span>
 						<span>Roll Dice</span>
 					</button>
+
+					{diceWonResources ? (
+						<div className={styles.diceWonResources} role="status" aria-live="polite">
+							<span className={styles.diceWonResourcesLabel}>Resources won</span>
+							{wonResourceEntries.length > 0 ? (
+								<div className={styles.diceWonResourceChips}>
+									{wonResourceEntries.map((resource) => (
+										<span key={resource} className={styles.diceWonResourceChip}>
+											<span aria-hidden="true">{resourceEmojiByType[resource]}</span>
+											<span>+{diceWonResources[resource]}</span>
+										</span>
+									))}
+								</div>
+							) : (
+								<span className={styles.diceWonResourcesEmpty}>No resources won</span>
+							)}
+						</div>
+					) : null}
+
+					{initialPlacementWonResources ? (
+						<div className={styles.diceWonResources} role="status" aria-live="polite">
+							<span className={styles.diceWonResourcesLabel}>Ressources won from inital Placement</span>
+							{initialPlacementWonResourceEntries.length > 0 ? (
+								<div className={styles.diceWonResourceChips}>
+									{initialPlacementWonResourceEntries.map((resource) => (
+										<span key={resource} className={styles.diceWonResourceChip}>
+											<span aria-hidden="true">{resourceEmojiByType[resource]}</span>
+											<span>+{initialPlacementWonResources[resource]}</span>
+										</span>
+									))}
+								</div>
+							) : (
+								<span className={styles.diceWonResourcesEmpty}>No resources won</span>
+							)}
+						</div>
+					) : null}
 
 					<div className={styles.actionGrid}>
 						<button

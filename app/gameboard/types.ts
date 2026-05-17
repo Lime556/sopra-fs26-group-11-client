@@ -90,6 +90,8 @@ export interface GameGetDTO {
 	gamePhase?: string | null;
 	diceValue?: number | null;
 	diceRolledAt?: string | null;
+	tradeRequestedAt?: string | null;
+	latestTradeRequest?: string | null;
 	robberTileIndex?: number | null;
 	developmentDeck?: DevelopmentDeckDTO | null;
 	players?: PlayerGetDTO[];
@@ -112,6 +114,28 @@ export interface GameStateDTO {
     diceRolledAt?: string | null;
     gameVersion?: number | null;
     gameFinished: boolean;
+}
+
+export type WeatherCategory =
+	| "SUNNY"
+	| "CLOUDY"
+	| "RAINY"
+	| "LIGHTNING"
+	| "SNOWING"
+	| "FOGGY"
+	| "UNKNOWN";
+
+export type TimeOfDayMood =
+	| "SUNRISE"
+	| "DAY"
+	| "SUNSET"
+	| "NIGHT"
+	| "UNKNOWN";
+
+export interface GameAmbienceDTO {
+	weather: WeatherCategory;
+	timeOfDay: TimeOfDayMood;
+	description: string;
 }
 
 export interface PlayerGetDTO {
