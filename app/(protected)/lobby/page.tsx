@@ -343,6 +343,11 @@ export default function Lobby() {
         return;
       }
 
+      if (status === 409 && message.includes("active lobby or game")) {
+        setPasswordError("You are already in an active lobby or game.");
+        return;
+      }
+
       setPasswordError("Incorrect password");
     }
   };
@@ -365,6 +370,11 @@ export default function Lobby() {
 
       if (status === 409 && message.includes("already joined")) {
         router.push(`/lobby/${lobbyId}`);
+        return;
+      }
+
+      if (status === 409 && message.includes("active lobby or game")) {
+        setStatusMessage("You are already in an active lobby or game.");
         return;
       }
 
