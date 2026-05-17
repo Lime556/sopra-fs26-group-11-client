@@ -599,6 +599,52 @@
   background: #b7781f;
 }
 
+.diceWonResources {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.55rem 0.65rem;
+  border: 2px solid rgba(90, 72, 39, 0.34);
+  border-radius: 10px;
+  background: rgba(255, 250, 239, 0.72);
+}
+
+.diceWonResourcesLabel {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  line-height: 1;
+  text-transform: uppercase;
+  color: #5c441f;
+}
+
+.diceWonResourceChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.diceWonResourceChip {
+  min-width: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.28rem 0.42rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #2f2115;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.diceWonResourcesEmpty {
+  color: #6f5a3a;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 .actionGrid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1396,6 +1442,71 @@
   font-weight: 900;
   color: #2f2115;
   line-height: 1;
+}
+
+.dicePopupResources {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+}
+
+.dicePopupResourcesLabel {
+  color: #5c431f;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.dicePopupResourceChips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.dicePopupResourceChip {
+  min-width: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.28rem 0.42rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.6);
+  color: #2f2115;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.dicePopupResourcesEmpty {
+  color: #6f5a3a;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.stolenResourcePopupValue {
+  margin-top: 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  color: #2f2115;
+  font-size: 1.35rem;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: capitalize;
+}
+
+.stolenResourcePopupTarget {
+  margin-top: 0.45rem;
+  color: #5c431f;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .waitingPopupCard {
