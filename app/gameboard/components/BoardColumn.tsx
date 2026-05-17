@@ -5,6 +5,8 @@ import { findDesertHexId, getPortColor, getPortIcon, getPortLabel } from "../map
 import { calculateHexPoints, calculatePortPosition, getCornerPoint, toPixel } from "../geometry";
 import { hexSize, resourceEmojiByType, resourceTypes, tileImageByType } from "../constants";
 import { GameState, HexTile, PortVisual, Resources } from "../types";
+import { hexSize, tileImageByType } from "../constants";
+import { GameAmbienceDTO, GameState, HexTile, PortVisual } from "../types";
 
 const MAX_ROADS = 15;
 const MAX_SETTLEMENTS = 5;
@@ -51,7 +53,27 @@ interface BoardColumnProps {
 	handleBuildCityAction: () => void;
 	handleEndTurn: () => void;
 	mustMoveRobberBeforeEndTurn: boolean;
+	ambience?: GameAmbienceDTO | null;
+	weatherEffectsEnabled?: boolean;
 }
+
+const weatherAmbienceClass: Record<GameAmbienceDTO["weather"], string> = {
+	SUNNY: styles.weatherSunny,
+	CLOUDY: styles.weatherCloudy,
+	RAINY: styles.weatherRainy,
+	LIGHTNING: styles.weatherLightning,
+	SNOWING: styles.weatherSnowing,
+	FOGGY: styles.weatherFoggy,
+	UNKNOWN: styles.weatherUnknown,
+};
+
+const timeAmbienceClass: Record<GameAmbienceDTO["timeOfDay"], string> = {
+	SUNRISE: styles.timeSunrise,
+	DAY: styles.timeDay,
+	SUNSET: styles.timeSunset,
+	NIGHT: styles.timeNight,
+	UNKNOWN: styles.timeUnknown,
+};
 
 export function BoardColumn({
 	boardStatus,
@@ -85,6 +107,8 @@ export function BoardColumn({
 	handleBuildCityAction,
 	handleEndTurn,
 	mustMoveRobberBeforeEndTurn,
+	ambience,
+	weatherEffectsEnabled = true,
 }: BoardColumnProps) {
 	const playableDevelopmentCards = developmentCards.filter((card) => card !== "victory_point");
 	const canUseActionPhase = isMyTurn && state.turnPhase === "ACTION" && !isSetupPhase;
@@ -115,6 +139,16 @@ export function BoardColumn({
 		 (canUseActionPhase && !mustMoveRobberBeforeEndTurn)
 		 || (isMyTurn && setupRoundFinished);
 	const canUseRoadOrSettlement = canUseActionPhase || (canUseSetupPlacement && !setupRoundFinished);
+	const effectiveAmbience: Pick<GameAmbienceDTO, "weather" | "timeOfDay"> = ambience ?? {
+		weather: "UNKNOWN",
+		timeOfDay: "UNKNOWN",
+	};
+	const ambienceLayerClassName = [
+		styles.boardAmbienceLayer,
+		weatherEffectsEnabled ? weatherAmbienceClass[effectiveAmbience.weather] : "",
+		weatherEffectsEnabled ? timeAmbienceClass[effectiveAmbience.timeOfDay] : "",
+		weatherEffectsEnabled ? "" : styles.ambienceEffectsDisabled,
+	].join(" ");
 
 	return (
 		<div className={styles.boardColumn}>
@@ -462,6 +496,7 @@ export function BoardColumn({
 							)
 						: null}
 				</svg>
+				<div className={ambienceLayerClassName} aria-hidden="true" />
 			</main>
 
 			<div className={styles.actionStrip}>
