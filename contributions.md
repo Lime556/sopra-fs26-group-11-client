@@ -190,7 +190,7 @@ reason).
 | | 17.05. | https://github.com/Lime556/sopra-fs26-group-11-client/commit/fd3fec1a4ecaef7e20dadf489834f41780ac2133 | making counteroffers for trading. #165, #166, #170, #41 | counteroffering and making different trades if one is not possible makes the game more interesting. |
 | **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
-| **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
+| **Ziske11** | 17.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/pull/151/changes/5f99de8bb00360fbb0f35539eb06a4e2d6919478 | Added Won ressources popup after rolling a dice, or other player rolled dice, or initial settlement | to have a better overview over the entire Gameplay. |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **Lime556** | [12.05.] | https://github.com/Lime556/sopra-fs26-group-11-server/commit/28d69739b4b16f5086e69a7a39a4a8fc14a877eb | Fix stale game sync with versioned action endpoints (#323) | Added backend-side versioned game action handling so stale client actions are rejected instead of corrupting or overwriting newer game state. |
 |                    | [12.05.] | https://github.com/Lime556/sopra-fs26-group-11-server/commit/b7247186c87066eabacf8b1e41a6a716bc8400ac | Fix stale game sync with versioned actions (#323) | Hardened backend game synchronization by making gameplay mutations follow the versioned action flow. |
