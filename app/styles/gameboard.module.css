@@ -78,6 +78,54 @@
   color: var(--text-main);
 }
 
+.botAiPanel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  border: 2px solid rgba(68, 50, 26, 0.32);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  background: linear-gradient(180deg, rgba(255, 243, 214, 0.95), rgba(246, 228, 186, 0.88));
+  color: var(--text-main);
+  font-weight: 800;
+}
+
+.botAiSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.botAiLabel {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.botAiDescription {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+.botAiToggleButton {
+  flex: 0 0 auto;
+  border: 1px solid rgba(68, 50, 26, 0.28);
+  border-radius: 6px;
+  padding: 0.32rem 0.55rem;
+  background: rgba(255, 249, 234, 0.78);
+  color: var(--text-main);
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.botAiToggleButton:hover {
+  background: rgba(255, 249, 234, 0.98);
+}
+
 .playerList {
   list-style: none;
   display: grid;

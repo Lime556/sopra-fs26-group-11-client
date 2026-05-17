@@ -134,6 +134,7 @@ const createTradeRequestId = (): string => {
 
 const AMBIENCE_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const AMBIENCE_EFFECTS_STORAGE_KEY = "ambienceEffectsEnabled";
+const BOT_AI_STORAGE_KEY = "botAiEnabled";
 
 const ambienceEmojiByWeather: Record<GameAmbienceDTO["weather"], string> = {
 	SUNNY: "☀️",
@@ -194,6 +195,7 @@ export default function Gameboard() {
 	const [boardStatus, setBoardStatus] = useState<string>("Loading board...");
 	const [ambience, setAmbience] = useState<GameAmbienceDTO | null>(null);
 	const [ambienceEffectsEnabled, setAmbienceEffectsEnabled] = useState<boolean>(true);
+	const [botAiEnabled, setBotAiEnabled] = useState<boolean>(false);
 	const [gameLog, setGameLog] = useState<string[]>(["Trading ready."]);
 	const [tradeMode, setTradeMode] = useState<TradeMode>("bank");
 	const [playerGiveResources, setPlayerGiveResources] = useState<Resources>(createEmptyTradeResources);
@@ -273,6 +275,14 @@ export default function Gameboard() {
 		setAmbienceEffectsEnabled((previous) => {
 			const next = !previous;
 			window.localStorage.setItem(AMBIENCE_EFFECTS_STORAGE_KEY, String(next));
+			return next;
+		});
+	};
+
+	const toggleBotAi = (): void => {
+		setBotAiEnabled((previous) => {
+			const next = !previous;
+			window.localStorage.setItem(BOT_AI_STORAGE_KEY, String(next));
 			return next;
 		});
 	};
@@ -367,6 +377,10 @@ export default function Gameboard() {
 
 	useEffect(() => {
 		setAmbienceEffectsEnabled(localStorage.getItem(AMBIENCE_EFFECTS_STORAGE_KEY) !== "false");
+	}, []);
+
+	useEffect(() => {
+		setBotAiEnabled(localStorage.getItem(BOT_AI_STORAGE_KEY) === "true");
 	}, []);
 
 	useEffect(() => {
@@ -958,6 +972,7 @@ export default function Gameboard() {
 	const currentBotActionKey = currentPlayer?.bot
 		? JSON.stringify({
 			id: currentPlayer.id,
+			aiEnabled: botAiEnabled,
 			turnPhase: state.turnPhase,
 			gamePhase: state.gamePhase,
 			diceResult: state.diceResult,
@@ -981,7 +996,7 @@ export default function Gameboard() {
 				return;
 			}
 			botActionInFlightRef.current = true;
-			void apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/bot/fallback`, {})
+			void apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/bot/fallback`, { useAi: botAiEnabled })
 				.catch((error) => {
 					console.error("Failed to execute bot fallback action", error);
 				})
@@ -991,7 +1006,7 @@ export default function Gameboard() {
 		}, 500);
 
 		return () => window.clearTimeout(timeout);
-	}, [activeGameId, apiService, currentBotActionKey, currentPlayer?.bot, isGameFinished]);
+	}, [activeGameId, apiService, botAiEnabled, currentBotActionKey, currentPlayer?.bot, isGameFinished]);
 
 	const activeOutgoingTradeResponseEntries = useMemo(
 		() => activeOutgoingTradeRequest
@@ -3337,6 +3352,15 @@ export default function Gameboard() {
 						</button>
 					</section>
 				) : null}
+				<section className={styles.botAiPanel} aria-label="Bot AI settings">
+					<div className={styles.botAiSummary}>
+						<span className={styles.botAiLabel}>Bot AI</span>
+						<span className={styles.botAiDescription}>{botAiEnabled ? "Hugging Face enabled" : "Deterministic fallback"}</span>
+					</div>
+					<button type="button" className={styles.botAiToggleButton} onClick={toggleBotAi}>
+						{botAiEnabled ? "AI On" : "AI Off"}
+					</button>
+				</section>
 				<section className={styles.sidebarCard}>
 					<h2 className={styles.panelTitle}>Players</h2>
 					<ul className={styles.playerList}>
