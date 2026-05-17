@@ -183,8 +183,10 @@ reason).
 | **ayleenmr** | 13.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/a97382936943e6aa5d31253a49a46fa7f462271f | Added pop-up when waiting for other players to discard and fixed close button in robber target pop-up (#137) | The "Waiting for other players" pop-up informs the players that they have to wait before the current player can move the robber. This prevents confusion over the game state. The close button on the robber target pop-up allows players to go back and choose a different tile to place the robber on. |
 |                    | 14.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/e5741b8c06fc2f29ea6a76c71d19527db52d9d69 | Added tests for uncovered functions (#329)  | Testing is important to ensure correct functionality. This commit increases the total test coverage. |
 |                    | 16.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/d283243e13b9748224f27f3b05401126a3525f0b | Implemented tutorial UI with basic game interface explanations and added access point in the lobby (#117 #135) | The tutorial will help new players to learn the rules of the game and to familiarize themselves with the game interface. |
-| **[@githubUser2]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **Gresay** | 13.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/a208d8028163e84ec388842331b55c00633d5efb | Test coverage focus on line coverage #329 | Testing is important to enshure the program behavous correctly. |
+|                    | 13.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/96ebe75318a67b0be1bc61b58abf148c957e1f5c | Testing focus branch covetage| Testing is important to enshure the program behavous correctly.  |
+| | 14.04. | https://github.com/Lime556/sopra-fs26-group-11-server/commit/dd2e42a289e4a13e670666f08ac17287985297da | Limmiting the buildable stuff for each player. | Having limmited actions to build is a core limmitation for the game.|
+| | 14.05. | https://github.com/Lime556/sopra-fs26-group-11-client/commit/62357b0d71a0e3047f54705c2f5b6f47b26ed960 | Limiting buildables showing in the frontend | having limmits without knowing it can be enerving for unexperienced players.|
 | **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
@@ -197,7 +199,7 @@ reason).
 
 ---
 
-## Contributions Week 7 - [10.05.] to [17.05]
+## Contributions Week 7 - [17.05.] to [23.05]
 
 | **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
