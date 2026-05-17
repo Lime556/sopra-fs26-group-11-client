@@ -221,6 +221,19 @@ export default function LobbyRoom() {
       await apiService.post(`/lobbies/${lobby.id}/leave`, null);
       router.push("/lobby");
     } catch (err) {
+      const status = err instanceof Error ? (err as { status?: number }).status : undefined;
+      if (status === 409) {
+        try {
+          const refreshedLobby = await apiService.get<LobbyGetDTO>(`/lobbies/${lobby.id}`);
+          if (refreshedLobby.gameId) {
+            router.push(`/gameboard?gameId=${refreshedLobby.gameId}`);
+            return;
+          }
+        } catch (refreshError) {
+          console.error(refreshError);
+        }
+      }
+
       console.error(err);
       setStartInfo("Failed to leave lobby. Please try again.");
     } finally {

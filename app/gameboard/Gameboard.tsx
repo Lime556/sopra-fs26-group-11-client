@@ -763,6 +763,9 @@ export default function Gameboard() {
 					setBoardStatus("Session expired. Please log in again.");
 					router.replace("/login");
 				}
+				if (!cancelled && status === 409) {
+					setBoardStatus("You are already in an active lobby or game.");
+				}
 				return null;
 			}
 
