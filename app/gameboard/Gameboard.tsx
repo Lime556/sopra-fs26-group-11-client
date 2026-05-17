@@ -802,6 +802,9 @@ export default function Gameboard() {
 					setBoardStatus("Session expired. Please log in again.");
 					router.replace("/login");
 				}
+				if (!cancelled && status === 409) {
+					setBoardStatus("You are already in an active lobby or game.");
+				}
 				return null;
 			}
 
@@ -1089,7 +1092,7 @@ export default function Gameboard() {
 			}),
 		[state.players]
 	);
-	const winnerDisplayName = winnerPlayerName ?? leaderboardPlayers[0]?.name ?? "Unknown Player";
+	const winnerDisplayName = winnerPlayerName;
 	const perPlayerGameStats = useMemo(() => {
 		const statsByPlayerId = new Map<number, {
 			cardsPlayedCount: number;

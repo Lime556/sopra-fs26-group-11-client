@@ -120,6 +120,9 @@ export default function Lobbies() {
       return "This lobby no longer exists.";
     }
     if (appError.status === 409) {
+      if (joinError.message.toLowerCase().includes("active lobby or game")) {
+        return "You are already in an active lobby or game.";
+      }
       if (joinError.message.toLowerCase().includes("already")) {
         return "You are already in this lobby.";
       }
