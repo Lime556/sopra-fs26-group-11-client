@@ -185,7 +185,7 @@ reason).
 |                    | 16.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/d283243e13b9748224f27f3b05401126a3525f0b | Implemented tutorial UI with basic game interface explanations and added access point in the lobby (#117 #135) | The tutorial will help new players to learn the rules of the game and to familiarize themselves with the game interface. |
 | **[@githubUser2]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
-| **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
+| **Ziske11** | 17.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/pull/149/changes/6e1726b6da84f3745b800839681c65fbb7eb998e | Display Won ressources in UI | You can now see the ressources you won after rolling a dice, to have a better overview of the whole gameplay. After initial settlement and after each Player rolls the dice.|
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
