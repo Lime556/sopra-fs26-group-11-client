@@ -49,6 +49,7 @@ import {
 } from "./roads";
 import {
 	type BoardGetDTO,
+	type GameAmbienceDTO,
 	type GameChatMessageDTO,
 	type GameEventDTO,
 	type GameGetDTO,
@@ -88,6 +89,58 @@ const createTradeRequestId = (): string => {
 	return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const AMBIENCE_POLL_INTERVAL_MS = 5 * 60 * 1000;
+const AMBIENCE_EFFECTS_STORAGE_KEY = "ambienceEffectsEnabled";
+
+const ambienceEmojiByWeather: Record<GameAmbienceDTO["weather"], string> = {
+	SUNNY: "☀️",
+	CLOUDY: "☁️",
+	RAINY: "🌧️",
+	LIGHTNING: "⚡",
+	SNOWING: "❄️",
+	FOGGY: "🌫️",
+	UNKNOWN: "🌙",
+};
+
+const ambienceLabelByTimeOfDay: Record<GameAmbienceDTO["timeOfDay"], string> = {
+	SUNRISE: "Sunrise",
+	DAY: "Day",
+	SUNSET: "Sunset",
+	NIGHT: "Night",
+	UNKNOWN: "Ambience",
+};
+
+const normalizeAmbience = (input: GameAmbienceDTO | null): GameAmbienceDTO | null => {
+	if (!input) {
+		return null;
+	}
+
+	if (input.weather === "SUNNY" && input.timeOfDay === "NIGHT") {
+		return {
+			...input,
+			description: "Clear night",
+		};
+	}
+
+	return input;
+};
+
+const isClearNight = (ambience: GameAmbienceDTO): boolean =>
+	ambience.weather === "SUNNY" && ambience.timeOfDay === "NIGHT";
+
+const getAmbienceIcon = (ambience: GameAmbienceDTO): string =>
+	isClearNight(ambience) ? "🌙" : ambienceEmojiByWeather[ambience.weather];
+
+const getAmbienceLabel = (ambience: GameAmbienceDTO): string => {
+	if (isClearNight(ambience)) {
+		return "Clear night";
+	}
+	if (ambience.weather === "LIGHTNING" && ambience.timeOfDay === "NIGHT") {
+		return "Stormy night";
+	}
+	return ambienceLabelByTimeOfDay[ambience.timeOfDay];
+};
+
 export default function Gameboard() {
 	const router = useRouter();
 	const apiService = useApi();
@@ -96,6 +149,8 @@ export default function Gameboard() {
 	const { value: sessionUserId } = useLocalStorage<string>("userId", "", { storage: "session" });
 	const [state, setState] = useState<GameState>(createInitialGameState);
 	const [boardStatus, setBoardStatus] = useState<string>("Loading board...");
+	const [ambience, setAmbience] = useState<GameAmbienceDTO | null>(null);
+	const [ambienceEffectsEnabled, setAmbienceEffectsEnabled] = useState<boolean>(true);
 	const [gameLog, setGameLog] = useState<string[]>(["Trading ready."]);
 	const [tradeMode, setTradeMode] = useState<TradeMode>("bank");
 	const [playerGiveResources, setPlayerGiveResources] = useState<Resources>(createEmptyTradeResources);
@@ -136,6 +191,33 @@ export default function Gameboard() {
 	const actionPendingRef = useRef<boolean>(false);
 	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
 	const ports = Array.isArray(state.ports) ? state.ports : [];
+
+	const ambienceOverride =
+	process.env.NODE_ENV === "development"
+		? {
+				weather: searchParams.get("weather") as GameAmbienceDTO["weather"] | null,
+				timeOfDay: searchParams.get("timeOfDay") as GameAmbienceDTO["timeOfDay"] | null,
+				description: "Local ambience test",
+			}
+		: null;
+
+	const rawDisplayedAmbience: GameAmbienceDTO | null =
+		ambienceOverride?.weather && ambienceOverride?.timeOfDay
+			? {
+					weather: ambienceOverride.weather,
+					timeOfDay: ambienceOverride.timeOfDay,
+					description: ambienceOverride.description,
+				}
+			: ambience;
+	const displayedAmbience = normalizeAmbience(rawDisplayedAmbience);
+
+	const toggleAmbienceEffects = (): void => {
+		setAmbienceEffectsEnabled((previous) => {
+			const next = !previous;
+			window.localStorage.setItem(AMBIENCE_EFFECTS_STORAGE_KEY, String(next));
+			return next;
+		});
+	};
 
 	const rememberServerGameVersion = (gameDto?: Pick<GameGetDTO, "gameVersion"> | null): void => {
 		const nextVersion = typeof gameDto?.gameVersion === "number" ? gameDto.gameVersion : null;
@@ -215,6 +297,10 @@ export default function Gameboard() {
 	};
 
 	useEffect(() => {
+		setAmbienceEffectsEnabled(localStorage.getItem(AMBIENCE_EFFECTS_STORAGE_KEY) !== "false");
+	}, []);
+
+	useEffect(() => {
 		if (!activeGameId) {
 			return;
 		}
@@ -248,6 +334,42 @@ export default function Gameboard() {
 		const storageKey = `gameLog:${activeGameId}`;
 		sessionStorage.setItem(storageKey, JSON.stringify(gameLog.slice(0, 40)));
 	}, [activeGameId, gameLog]);
+
+	useEffect(() => {
+		if (!activeGameId) {
+			setAmbience(null);
+			return;
+		}
+
+		let cancelled = false;
+
+		const fetchAmbience = async (): Promise<void> => {
+			try {
+				const nextAmbience = await apiService.get<GameAmbienceDTO>(`/games/${activeGameId}/ambience`);
+				if (!cancelled) {
+					setAmbience(nextAmbience);
+				}
+			} catch {
+				if (!cancelled) {
+					setAmbience((previousAmbience) => previousAmbience ?? {
+						weather: "UNKNOWN",
+						timeOfDay: "UNKNOWN",
+						description: "Weather ambience unavailable",
+					});
+				}
+			}
+		};
+
+		void fetchAmbience();
+		const ambiencePoll = window.setInterval(() => {
+			void fetchAmbience();
+		}, AMBIENCE_POLL_INTERVAL_MS);
+
+		return () => {
+			cancelled = true;
+			window.clearInterval(ambiencePoll);
+		};
+	}, [activeGameId, apiService]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -2870,8 +2992,21 @@ export default function Gameboard() {
 					handleBuildCityAction={handleBuildCityAction}
 					handleEndTurn={handleEndTurn}
 					mustMoveRobberBeforeEndTurn={mustMoveRobberFromServer}
+					ambience={displayedAmbience}
+					weatherEffectsEnabled={ambienceEffectsEnabled}
 				/>
 			<aside className={styles.rightPanel}>
+				{displayedAmbience ? (
+					<section className={styles.ambiencePanel} aria-label={displayedAmbience.description}>
+						<div className={styles.ambienceSummary}>
+							<span className={styles.ambienceEmoji}>{getAmbienceIcon(displayedAmbience)}</span>
+							<span className={styles.ambienceText}>{getAmbienceLabel(displayedAmbience)}</span>
+						</div>
+						<button type="button" className={styles.ambienceToggleButton} onClick={toggleAmbienceEffects}>
+							Effects: {ambienceEffectsEnabled ? "On" : "Off"}
+						</button>
+					</section>
+				) : null}
 				<section className={styles.sidebarCard}>
 					<h2 className={styles.panelTitle}>Players</h2>
 					<ul className={styles.playerList}>
