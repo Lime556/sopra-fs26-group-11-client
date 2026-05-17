@@ -90,6 +90,8 @@ export interface GameGetDTO {
 	gamePhase?: string | null;
 	diceValue?: number | null;
 	diceRolledAt?: string | null;
+	tradeRequestedAt?: string | null;
+	latestTradeRequest?: string | null;
 	robberTileIndex?: number | null;
 	developmentDeck?: DevelopmentDeckDTO | null;
 	players?: PlayerGetDTO[];
