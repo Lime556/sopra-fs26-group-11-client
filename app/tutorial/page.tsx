@@ -120,6 +120,8 @@ export default function TutorialPage() {
         handleToggleDevCardPlayMode={noop}
         handlePlayDevelopmentCard={noop}
         handleRollDice={noop}
+        diceWonResources={null}
+        initialPlacementWonResources={null}
         handleBuildRoadAction={noop}
         handleBuildSettlementAction={noop}
         handleBuildCityAction={noop}
