@@ -123,18 +123,17 @@ export default function Gameboard() {
 	const [robberMoveInFlight, setRobberMoveInFlight] = useState<boolean>(false);
 	const [discardModalOpen, setDiscardModalOpen] = useState<boolean>(false);
 	const [discardChoices, setDiscardChoices] = useState<Record<string, number>>({});
-	const syncedChatMessagesRef = useRef<Set<string>>(new Set());
+	const syncedChatMessageCountRef = useRef<number>(0);
 	const syncedEventLogsRef = useRef<Set<string>>(new Set());
 	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
 	const botActionInFlightRef = useRef(false);
 	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const lastDiceRolledAtRef = useRef<string | null>(null);
+	const lastDiceRolledAtRef = useRef<string | null | undefined>(undefined);
 	const lastTradeRequestedAtRef = useRef<string | null>(null);
 	const lastTradeRequestIdRef = useRef<string | null>(null);
 	const currentGameVersionRef = useRef<number | null>(null);
 	const actionPendingRef = useRef<boolean>(false);
-	const syncGameStateRef = useRef<((gameId: number) => Promise<"ok" | "unauthorized" | "notfound" | "error">) | null>(null);
 	const applyGameEventRef = useRef<(event: GameEventDTO) => void>(() => {});
 	const ports = Array.isArray(state.ports) ? state.ports : [];
 
@@ -253,7 +252,7 @@ export default function Gameboard() {
 	useEffect(() => {
 		let cancelled = false;
 
-		syncedChatMessagesRef.current = new Set();
+		syncedChatMessageCountRef.current = 0;
 		syncedEventLogsRef.current = new Set();
 		roadCacheRef.current = new Map();
 
@@ -314,7 +313,16 @@ export default function Gameboard() {
 					if (responseVersion !== null) {
 						lastSeenGameVersion = responseVersion;
 					}
-					lastSeenChatMessageCount = serverChatMessages.length;
+
+					const nextDiceRolledAt = gameDto?.diceRolledAt ?? null;
+					const nextDiceValue = typeof gameDto?.diceValue === "number" ? gameDto.diceValue : null;
+					const shouldShowDicePopup =
+						lastDiceRolledAtRef.current !== undefined
+						&& nextDiceRolledAt !== null
+						&& nextDiceRolledAt !== lastDiceRolledAtRef.current
+						&& nextDiceValue !== null;
+					lastDiceRolledAtRef.current = nextDiceRolledAt;
+
 					if (gameDto?.bankResources) {
 						setBankResourcesState(gameDto.bankResources as Resources);
 					}
@@ -351,18 +359,35 @@ export default function Gameboard() {
 						diceResult: gameDto?.diceValue ?? previousState.diceResult,
 					}));
 
+					if (shouldShowDicePopup && nextDiceValue !== null) {
+						showDiceResultPopup(nextDiceValue);
+					}
+
+					const nextTradeRequestedAt = gameDto?.tradeRequestedAt ?? null;
+					if (nextTradeRequestedAt !== null && nextTradeRequestedAt !== lastTradeRequestedAtRef.current) {
+						lastTradeRequestedAtRef.current = nextTradeRequestedAt;
+						if (gameDto?.latestTradeRequest) {
+							try {
+								const payload = JSON.parse(gameDto.latestTradeRequest) as GameEventDTO;
+								applyGameEventRef.current(payload);
+							} catch {
+								// Ignore malformed trade snapshots; eventLog still contains the raw entry.
+							}
+						}
+					}
+
 					setWinnerPlayerName(gameDto?.winner?.name ?? null);
 					setIsGameFinished(Boolean(gameDto?.gameFinished) || Boolean(gameDto?.finishedAt));
 
 					if (serverChatMessages.length > 0) {
+						const seenChatCount = syncedChatMessageCountRef.current;
+						const unseen = serverChatMessages.slice(seenChatCount);
+						syncedChatMessageCountRef.current = serverChatMessages.length;
 						setGameLog((previous) => {
-							const known = syncedChatMessagesRef.current;
-							const unseen = serverChatMessages.filter((message: string) => !known.has(message));
 							if (unseen.length === 0) {
 								return previous;
 							}
 
-							unseen.forEach((message: string) => known.add(message));
 							return [...unseen.reverse(), ...previous].slice(0, 40);
 						});
 					}
@@ -372,7 +397,6 @@ export default function Gameboard() {
 						: [];
 
 					if (serverEventLogs.length > 0) {
-						const parsedTradeEvents: GameEventDTO[] = [];
 						setGameLog((previous) => {
 							const known = syncedEventLogsRef.current;
 							const unseen = serverEventLogs.filter((entry: string) => !known.has(entry));
@@ -385,7 +409,6 @@ export default function Gameboard() {
 								known.add(entry);
 								const structuredEntry = parseStructuredEventLogEntry(entry);
 								if (structuredEntry && structuredEntry.payload && (structuredEntry.payload.type === "PLAYER_TRADE" || (structuredEntry.payload.type as string) === "PLAYER_TRADE_FINALIZE")) {
-									parsedTradeEvents.push(structuredEntry.payload);
 									return;
 								}
 
@@ -397,10 +420,6 @@ export default function Gameboard() {
 							}
 
 							return [...plainEntries.reverse(), ...previous].slice(0, 40);
-						});
-
-						parsedTradeEvents.forEach((event) => {
-							applyGameEventRef.current(event);
 						});
 					}
 
@@ -426,118 +445,12 @@ export default function Gameboard() {
 		};
 
 		let lastSeenGameVersion: number | null = null;
-		let lastSeenChatMessageCount: number | null = null;
 		let versionPollInFlight = false;
 		let syncInFlight = false;
 		let heartbeatInFlight = false;
 
-		const pollGameSync = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
-			try {
-				if (syncInFlight) {
-					return "ok";
-				}
-		
-				syncInFlight = true;
-		
-				const syncDto = await apiService.get<{
-					gameVersion?: number | null;
-					currentTurnIndex?: number | null;
-					turnPhase?: string | null;
-					gamePhase?: string | null;
-					diceValue?: number | null;
-					diceRolledAt?: string | null;
-					tradeRequestedAt?: string | null;
-					latestTradeRequest?: string | null;
-					chatMessageCount?: number | null;
-					currentPlayerId?: number | null;
-					gameFinished?: boolean | null;
-					robberMovedAfterSevenRoll?: boolean | null;
-				}>(`/games/${gameId}/sync`);
-		
-				if (cancelled) {
-					return "ok";
-				}
-		
-				const nextVersion = typeof syncDto.gameVersion === "number" ? syncDto.gameVersion : 0;
-				const nextChatMessageCount = typeof syncDto.chatMessageCount === "number" ? syncDto.chatMessageCount : null;
-				const currentVersion = currentGameVersionRef.current;
-				const previousVersion = lastSeenGameVersion;
-				const previousChatMessageCount = lastSeenChatMessageCount;
-				if (currentVersion !== null && nextVersion < currentVersion) {
-					return "ok";
-				}
-
-				const nextDiceRolledAt = syncDto.diceRolledAt ?? null;
-				const nextDiceValue = typeof syncDto.diceValue === "number" ? syncDto.diceValue : null;
-
-				if (
-					nextDiceRolledAt !== null
-					&& nextDiceRolledAt !== lastDiceRolledAtRef.current
-					&& nextDiceValue !== null
-				) {
-					lastDiceRolledAtRef.current = nextDiceRolledAt;
-
-					setState((previousState) => ({
-						...previousState,
-						diceResult: nextDiceValue,
-						turnPhase: syncDto.turnPhase ?? previousState.turnPhase,
-						gamePhase: syncDto.gamePhase ?? previousState.gamePhase,
-						currentPlayerId: syncDto.currentPlayerId ?? previousState.currentPlayerId,
-						robberMovedAfterSevenRoll:
-							syncDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
-					}));
-					showDiceResultPopup(nextDiceValue);
-				}
-
-				// Lightweight Trade Request detection (matches Dice Roll mechanism)
-				const nextTradeRequestedAt = syncDto.tradeRequestedAt ?? null;
-				if (nextTradeRequestedAt !== null && nextTradeRequestedAt !== lastTradeRequestedAtRef.current) {
-					lastTradeRequestedAtRef.current = nextTradeRequestedAt;
-					if (syncDto.latestTradeRequest) {
-						try {
-							const payload = JSON.parse(syncDto.latestTradeRequest) as GameEventDTO;
-
-							// Trigger the event handler to update responses (Accept/Deny) or finalize the UI
-							applyGameEventRef.current(payload);
-						} catch (e) {
-							console.error("Failed to parse trade request from sync", e);
-						}
-					}
-				}
-		
-				if (previousVersion === null) {
-					lastSeenGameVersion = nextVersion;
-					lastSeenChatMessageCount = nextChatMessageCount;
-					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
-					return "ok";
-				}
-		
-				if (nextVersion !== previousVersion || nextChatMessageCount !== previousChatMessageCount) {
-					const syncStatus = await syncGameState(gameId);
-					if (syncStatus === "ok") {
-						lastSeenGameVersion = nextVersion;
-						lastSeenChatMessageCount = nextChatMessageCount;
-						currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
-					}
-					return syncStatus;
-				}
-		
-				return "ok";
-			} catch (error) {
-				const status = (error as Partial<ApplicationError>)?.status;
-				if (status === 401) {
-					return "unauthorized";
-				}
-				if (status === 404) {
-					return "notfound";
-				}
-				return "error";
-			} finally {
-				syncInFlight = false;
-			}
-		};
-
 		const pollGameVersion = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+			let startedSync = false;
 			try {
 				if (versionPollInFlight || syncInFlight) {
 					return "ok";
@@ -548,7 +461,6 @@ export default function Gameboard() {
 				const versionDto = await apiService.get<{
 					gameId?: number | null;
 					gameVersion?: number | null;
-					chatMessageCount?: number | null;
 				}>(`/games/${gameId}/version`);
 
 				if (cancelled) {
@@ -556,7 +468,6 @@ export default function Gameboard() {
 				}
 
 				const nextVersion = typeof versionDto.gameVersion === "number" ? versionDto.gameVersion : 0;
-				const nextChatMessageCount = typeof versionDto.chatMessageCount === "number" ? versionDto.chatMessageCount : null;
 				const currentVersion = currentGameVersionRef.current;
 				if (currentVersion !== null && nextVersion < currentVersion) {
 					return "ok";
@@ -564,16 +475,22 @@ export default function Gameboard() {
 
 				if (lastSeenGameVersion === null) {
 					lastSeenGameVersion = nextVersion;
-					lastSeenChatMessageCount = nextChatMessageCount;
 					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
 					return "ok";
 				}
 
-				if (nextVersion === lastSeenGameVersion && nextChatMessageCount === lastSeenChatMessageCount) {
+				if (nextVersion === lastSeenGameVersion) {
 					return "ok";
 				}
 
-				return await pollGameSync(gameId);
+				syncInFlight = true;
+				startedSync = true;
+				const syncStatus = await syncGameState(gameId);
+				if (syncStatus === "ok") {
+					lastSeenGameVersion = nextVersion;
+					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
+				}
+				return syncStatus;
 			} catch (error) {
 				const status = (error as Partial<ApplicationError>)?.status;
 				if (status === 401) {
@@ -584,6 +501,9 @@ export default function Gameboard() {
 				}
 				return "error";
 			} finally {
+				if (startedSync) {
+					syncInFlight = false;
+				}
 				versionPollInFlight = false;
 			}
 		};
@@ -1822,6 +1742,7 @@ export default function Gameboard() {
 			rememberServerGameVersion(gameDto);
 		
 			if (typeof gameDto.diceValue === "number") {
+				lastDiceRolledAtRef.current = gameDto.diceRolledAt ?? lastDiceRolledAtRef.current;
 				setState((previousState) => ({
 					...previousState,
 					diceResult: gameDto.diceValue ?? previousState.diceResult,
