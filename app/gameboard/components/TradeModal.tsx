@@ -12,6 +12,7 @@ interface TradeModalProps {
 	bankReceiveResources: Resources;
 	bankResources: Resources;
 	currentPlayer: Player | null;
+	targetPlayerId: number | null;
 	ports: PortVisual[];
 	hexById: Map<number, HexTile>;
 	onClose: () => void;
@@ -33,6 +34,7 @@ export function TradeModal({
 	bankReceiveResources,
 	bankResources,
 	currentPlayer,
+	targetPlayerId,
 	ports,
 	hexById,
 	onClose,
@@ -188,7 +190,9 @@ export function TradeModal({
 				<div className={styles.tradeBanner}>
 					{tradeMode === "bank"
 						? "Adjust each resource amount. Your current port bonuses will be applied automatically."
-						: "Choose what you offer and what you want. The request will be broadcast to every other player."}
+						: targetPlayerId
+							? "Adjust your counteroffer. This will be sent specifically to the original requester."
+							: "Choose what you offer and what you want. The request will be broadcast to every other player."}
 				</div>
 
 				<div className={styles.tradeModeTabs}>
@@ -199,13 +203,15 @@ export function TradeModal({
 					>
 						Trade with Players
 					</button>
-					<button
-						type="button"
-						className={`${styles.tradeModeButton} ${tradeMode === "bank" ? styles.tradeModeButtonActive : ""}`}
-						onClick={() => onSetTradeMode("bank")}
-					>
-						Trade with Bank
-					</button>
+					{targetPlayerId === null && (
+						<button
+							type="button"
+							className={`${styles.tradeModeButton} ${tradeMode === "bank" ? styles.tradeModeButtonActive : ""}`}
+							onClick={() => onSetTradeMode("bank")}
+						>
+							Trade with Bank
+						</button>
+					)}
 				</div>
 
 				{tradeMode === "player" ? (
@@ -220,7 +226,7 @@ export function TradeModal({
 						</p>
 
 						<button type="button" className={styles.tradeActionButton} onClick={onPlayerTrade} disabled={!canExecutePlayerTrade}>
-							Broadcast Trade Request
+							{targetPlayerId ? "Send Counteroffer" : "Broadcast Trade Request"}
 						</button>
 					</div>
 				) : (

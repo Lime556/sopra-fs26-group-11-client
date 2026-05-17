@@ -13,7 +13,7 @@ import { ApplicationError } from "@/types/error";
 import { BoardColumn } from "./components/BoardColumn";
 import { EndGameOverlay } from "./components/EndGameOverlay";
 import { TradeModal } from "./components/TradeModal";
-import { TradeRequestPopup } from "./components/TradeRequestPopup";
+import { TradeRequestPopup, type CounterOfferData } from "./components/TradeRequestPopup";
 import { MonopolyResourceSelectorPopup } from "./components/MonopolyResourceSelectorPopup";
 import { YearOfPlentyResourceSelectorPopup } from "./components/YearOfPlentyResourceSelectorPopup";
 import { TradeRequestSummaryPopup } from "./components/TradeRequestSummaryPopup";
@@ -127,6 +127,7 @@ const findMatchingServerPlayer = (
 };
 
 type TradeResponseStatus = "PENDING" | "ACCEPTED" | "DENIED";
+type TradeResponseStatus = "PENDING" | "ACCEPTED" | "DENIED" | "COUNTEROFFER";
 
 const createTradeRequestId = (): string => {
 	return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -203,7 +204,12 @@ export default function Gameboard() {
 	const [showTradePopup, setShowTradePopup] = useState<boolean>(false);
 	const [activeTradeRequest, setActiveTradeRequest] = useState<GameEventDTO | null>(null);
 	const [activeOutgoingTradeRequest, setActiveOutgoingTradeRequest] = useState<GameEventDTO | null>(null);
+	const [showTradeSummaryPopup, setShowTradeSummaryPopup] = useState<boolean>(false);
 	const [activeOutgoingTradeResponses, setActiveOutgoingTradeResponses] = useState<Record<number, TradeResponseStatus>>({});
+	const [myCounterOfferData, setMyCounterOfferData] = useState<CounterOfferData | null>(null);
+	const [myCounterOfferStatus, setMyCounterOfferStatus] = useState<"PENDING" | "DENIED" | null>(null);
+	const [activeOutgoingTradeCounteroffers, setActiveOutgoingTradeCounteroffers] = useState<Record<number, CounterOfferData>>({});
+	const [tradeTargetPlayerId, setTradeTargetPlayerId] = useState<number | null>(null);
 	const [chatMessage, setChatMessage] = useState<string>("");
 	const [winnerPlayerName, setWinnerPlayerName] = useState<string | null>(null);
 	const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
@@ -996,9 +1002,11 @@ export default function Gameboard() {
 					playerId: player.id,
 					playerName: player.name,
 					status: activeOutgoingTradeResponses[player.id] ?? "PENDING",
+					counterOffer: activeOutgoingTradeCounteroffers[player.id]?.giveResources,
+					counterRequest: activeOutgoingTradeCounteroffers[player.id]?.receiveResources,
 				}))
 			: [],
-		[activeOutgoingTradeRequest, activeOutgoingTradeResponses, state.players]
+		[activeOutgoingTradeRequest, activeOutgoingTradeResponses, activeOutgoingTradeCounteroffers, state.players]
 	);
 	const dicePopupWonEntries = diceWonResources
 		? resourceTypes.filter((resource) => (diceWonResources[resource] ?? 0) > 0)
@@ -1801,12 +1809,20 @@ export default function Gameboard() {
 		if (event.type === "PLAYER_TRADE") {
 			if (event.tradeAction === "REQUEST") {
 				if (typeof localPlayerId === "number" && event.sourcePlayerId === localPlayerId) {
-					setActiveOutgoingTradeRequest(event);
-					setActiveOutgoingTradeResponses((previous) => {
-						if (Object.keys(previous).length > 0) {
-							return previous;
-						}
+					// If this is a targeted request I sent, it's a counteroffer.
+					if (event.targetPlayerId) {
+						setMyCounterOfferStatus("PENDING");
+						setMyCounterOfferData({
+							giveResources: event.giveResources as Resources,
+							receiveResources: event.receiveResources as Resources,
+							tradeRequestId: event.tradeRequestId ?? "",
+						});
+						return;
+					}
 
+					setActiveOutgoingTradeRequest(event);
+					setActiveOutgoingTradeCounteroffers({});
+					setActiveOutgoingTradeResponses((previous) => {
 						return state.players
 							.filter((player) => player.id !== event.sourcePlayerId)
 							.reduce<Record<number, TradeResponseStatus>>((accumulator, player) => {
@@ -1815,6 +1831,31 @@ export default function Gameboard() {
 							}, {});
 					});
 					return;
+				}
+
+				// Ignore targeted requests if I am not the target.
+				// This prevents observers from seeing private counter-offers as new popups.
+				if (event.targetPlayerId !== null && event.targetPlayerId !== undefined && event.targetPlayerId !== localPlayerId) {
+					return;
+				}
+
+				// Detect counter-offer: Targeted request while I have an outgoing broadcast
+				if (event.targetPlayerId === localPlayerId && activeOutgoingTradeRequest) {
+					setActiveOutgoingTradeResponses((prev) => ({
+						...prev,
+						[event.sourcePlayerId as number]: "COUNTEROFFER",
+					}));
+					if (event.giveResources && event.receiveResources) {
+						setActiveOutgoingTradeCounteroffers((prev) => ({
+							...prev,
+							[event.sourcePlayerId as number]: { 
+								giveResources: event.giveResources as Resources, 
+								receiveResources: event.receiveResources as Resources,
+								tradeRequestId: event.tradeRequestId ?? "",
+							},
+						}));
+					}
+					return; // This was a counteroffer to my outgoing trade, do not show a new popup.
 				}
 
 				// Only update trade request if it's a new request ID (version-based update)
@@ -1830,16 +1871,27 @@ export default function Gameboard() {
 			}
 
 			if (event.tradeAction === "DENY") {
-				if (typeof localPlayerId === "number" && event.sourcePlayerId === localPlayerId && typeof event.targetPlayerId === "number") {
-					setActiveOutgoingTradeResponses((previous) => ({
-						...previous,
-						[event.targetPlayerId as number]: "DENIED",
-					}));
-				}
-
-				if (typeof localPlayerId === "number" && event.targetPlayerId === localPlayerId) {
-					lastTradeRequestIdRef.current = null;
-					setActiveTradeRequest(null);
+				if (typeof localPlayerId === "number" && typeof event.targetPlayerId === "number" && typeof event.sourcePlayerId === "number") {
+					if (event.sourcePlayerId === localPlayerId) {
+						// My trade request (broadcast or counteroffer) was denied
+						setActiveOutgoingTradeResponses((previous) => ({
+							...previous,
+							[event.targetPlayerId as number]: "DENIED",
+						}));
+						if (myCounterOfferStatus === "PENDING") {
+							setMyCounterOfferStatus("DENIED");
+						}
+					} else if (event.targetPlayerId === localPlayerId) {
+						// I denied someone's request (e.g. I denied a counteroffer)
+						setActiveOutgoingTradeResponses((previous) => ({
+							...previous,
+							[event.sourcePlayerId as number]: "DENIED",
+						}));
+						if (activeTradeRequest && event.sourcePlayerId === activeTradeRequest.sourcePlayerId) {
+							setActiveTradeRequest(null);
+							setTradeTargetPlayerId(null);
+						}
+					}
 				}
 
 				if (event.message) {
@@ -1856,8 +1908,11 @@ export default function Gameboard() {
 			}
 
 			if (typeof localPlayerId === "number" && event.targetPlayerId === localPlayerId) {
-				lastTradeRequestIdRef.current = null;
 				setActiveTradeRequest(null);
+				setShowTradePopup(false);
+				setMyCounterOfferStatus(null);
+				setMyCounterOfferData(null);
+				setTradeTargetPlayerId(null);
 			}
 
 			if (event.message) {
@@ -1868,14 +1923,18 @@ export default function Gameboard() {
 
 		// Clear outgoing trade request and responses when the trade is finalized
 		if ((event.type as string) === "PLAYER_TRADE_FINALIZE") {
-			if (
-				typeof localPlayerId === "number"
-				&& typeof event.sourcePlayerId === "number"
-				&& event.sourcePlayerId === localPlayerId
-			) {
-				setActiveOutgoingTradeRequest(null);
-				setActiveOutgoingTradeResponses({});
-			}
+	
+			setActiveOutgoingTradeRequest(null);
+			setActiveOutgoingTradeResponses({});
+			setActiveOutgoingTradeCounteroffers({});
+			setMyCounterOfferStatus(null);
+			setMyCounterOfferData(null);
+			setShowTradeSummaryPopup(false); 
+			setActiveTradeRequest(null);
+			setTradeTargetPlayerId(null);
+
+			setShowTradePopup(false);
+			return;
 		}
 
 		if (
@@ -2148,7 +2207,8 @@ export default function Gameboard() {
 	};
 
 	const handlePlayerTrade = () => {
-		if (!isMyTurn || !myPlayer || !activeGameId) {
+		const isTargetedToCurrentPlayer = tradeTargetPlayerId !== null && tradeTargetPlayerId === state.currentPlayerId;
+		if (!(isMyTurn || isTargetedToCurrentPlayer) || !myPlayer || !activeGameId) {
 			addToLog("No active player for trading.");
 			return;
 		}
@@ -2174,14 +2234,7 @@ export default function Gameboard() {
 			addToLog(`${myPlayer.name} lacks ${missingFromCurrentPlayer} for this trade.`);
 			return;
 		}
-
-		const pendingResponses = state.players
-			.filter((player) => player.id !== myPlayer.id)
-			.reduce<Record<number, TradeResponseStatus>>((accumulator, player) => {
-				accumulator[player.id] = "PENDING";
-				return accumulator;
-			}, {});
-
+		
 		const tradeRequest: GameEventDTO = {
 			type: "PLAYER_TRADE",
 			sourcePlayerId: myPlayer.id,
@@ -2189,32 +2242,59 @@ export default function Gameboard() {
 			tradeRequestId,
 			giveResources: playerGiveResources,
 			receiveResources: playerReceiveResources,
-			message: `${myPlayer.name} requested ${formatBundle(playerGiveResources)} for ${formatBundle(playerReceiveResources)} from all players.`,
+			message: tradeTargetPlayerId
+				? `${myPlayer.name} counter-offered ${formatBundle(playerGiveResources)} for ${formatBundle(playerReceiveResources)} to ${state.players.find(p => p.id === tradeTargetPlayerId)?.name ?? "a player"}.`
+				: `${myPlayer.name} requested ${formatBundle(playerGiveResources)} for ${formatBundle(playerReceiveResources)} from all players.`,
 		};
+
+		if (tradeTargetPlayerId) {
+			tradeRequest.targetPlayerId = tradeTargetPlayerId;
+		}
+
+		const pendingResponses = tradeTargetPlayerId
+			? {} // No pending responses for a targeted counteroffer from my perspective
+			: state.players
+				.filter((player) => player.id !== myPlayer.id)
+				.reduce<Record<number, TradeResponseStatus>>((accumulator, player) => {
+					accumulator[player.id] = "PENDING";
+					return accumulator;
+				}, {});
+
 		const logMessage = tradeRequest.message ?? `${myPlayer.name} requested a trade from all players.`;
-		void apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/player-trade/request`, withExpectedGameVersion({
+		const payload: Record<string, unknown> = {
 			sourcePlayerId: myPlayer.id,
 			tradeRequestId,
 			giveResources: playerGiveResources,
 			receiveResources: playerReceiveResources,
 			message: logMessage,
-		})).then((gameDto) => {
+		};
+
+		if (tradeTargetPlayerId) {
+			payload.targetPlayerId = tradeTargetPlayerId;
+		}
+
+		void apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/player-trade/request`, withExpectedGameVersion(payload)).then((gameDto) => {
 			rememberServerGameVersion(gameDto);
+			if (!tradeTargetPlayerId) { // Only set outgoing request if it's a broadcast
+				setActiveOutgoingTradeRequest(tradeRequest);
+				setActiveOutgoingTradeResponses(pendingResponses);
+				setShowTradeSummaryPopup(true);
+			}
 			addToLog(logMessage);
-			setActiveOutgoingTradeRequest(tradeRequest);
-			setActiveOutgoingTradeResponses(pendingResponses);
 			setShowTradePopup(false);
 		}).catch(() => {
 			addToLog("Could not send trade request. Please try again.");
 		});
 	};
 
-	const handleFinalizePlayerTrade = async (targetPlayerId: number) => {
+	const handleFinalizePlayerTrade = async (targetPlayerId: number, isCounter?: boolean) => {
 		if (!myPlayer || !activeOutgoingTradeRequest || !activeGameId) {
 			return;
 		}
 
-		if (activeOutgoingTradeResponses[targetPlayerId] !== "ACCEPTED") {
+		const status = activeOutgoingTradeResponses[targetPlayerId];
+		const hasCounter = !!activeOutgoingTradeCounteroffers[targetPlayerId];
+		if (status !== "ACCEPTED" && status !== "COUNTEROFFER" && !(status === "DENIED" && hasCounter)) {
 			addToLog("Select a player who accepted the trade request.");
 			return;
 		}
@@ -2225,21 +2305,68 @@ export default function Gameboard() {
 			return;
 		}
 
+		const counter = activeOutgoingTradeCounteroffers[targetPlayerId];
+		if (isCounter && !counter) {
+			addToLog("Counteroffer data no longer available.");
+			return;
+		}
+
+		const giveResources = isCounter ? counter.receiveResources : activeOutgoingTradeRequest.giveResources;
+		const receiveResources = isCounter ? counter.giveResources : activeOutgoingTradeRequest.receiveResources;
+
 		const logMessage = `${myPlayer.name} finalized the trade with ${targetPlayer.name}.`;
 		try {
 			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/player-trade/finalize`, withExpectedGameVersion({
 				sourcePlayerId: myPlayer.id,
 				targetPlayerId,
-				giveResources: activeOutgoingTradeRequest.giveResources,
-				receiveResources: activeOutgoingTradeRequest.receiveResources,
+				giveResources,
+				receiveResources,
 				message: logMessage,
 			}));
 			rememberServerGameVersion(gameDto);
 			setActiveOutgoingTradeRequest(null);
 			setActiveOutgoingTradeResponses({});
+			setActiveOutgoingTradeCounteroffers({});
+			setMyCounterOfferStatus(null);
+			setMyCounterOfferData(null);
+			setShowTradeSummaryPopup(false);
+			setShowTradePopup(false);
+			setActiveTradeRequest(null);
 			addToLog(logMessage);
 		} catch {
 			addToLog("Could not complete the trade.");
+		}
+	};
+
+	const handleDenyCounteroffer = async (targetPlayerId: number) => {
+		if (!activeGameId || !myPlayer || !activeOutgoingTradeRequest) {
+			return;
+		}
+
+		const counter = activeOutgoingTradeCounteroffers[targetPlayerId];
+		if (!counter) return;
+
+		const targetPlayer = state.players.find(p => p.id === targetPlayerId);
+		const logMessage = `${myPlayer.name} denied the counteroffer from ${targetPlayer?.name ?? "a player"}.`;
+
+		try {
+			await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/player-trade/respond`, withExpectedGameVersion({
+				sourcePlayerId: targetPlayerId,
+				targetPlayerId: myPlayer.id,
+				tradeAction: "DENY",
+				tradeRequestId: counter.tradeRequestId,
+				giveResources: counter.giveResources,
+				receiveResources: counter.receiveResources,
+				message: logMessage,
+			}));
+
+			setActiveOutgoingTradeResponses((prev) => ({
+				...prev,
+				[targetPlayerId]: "DENIED",
+			}));
+			addToLog(logMessage);
+		} catch {
+			addToLog("Could not deny the counteroffer.");
 		}
 	};
 
@@ -2260,12 +2387,35 @@ export default function Gameboard() {
 				message: logMessage,
 			}));
 			rememberServerGameVersion(gameDto);
-			lastTradeRequestIdRef.current = null;
 			setActiveTradeRequest(null);
+			setTradeTargetPlayerId(null);
 			addToLog(logMessage);
 		} catch {
 			addToLog("Could not accept the trade request.");
 		}
+	};
+
+	const handleCounteroffer = () => {
+		if (!activeTradeRequest) return;
+
+		// Pre-populate the standard trade modal with the swapped resources of the original offer
+		setTradeMode("player");
+		setTradeTargetPlayerId(activeTradeRequest.sourcePlayerId ?? null);
+		
+		setBankGiveResources(createEmptyTradeResources());
+		setBankReceiveResources(createEmptyTradeResources());
+		setPlayerGiveResources({ ...createEmptyTradeResources(), ...(activeTradeRequest.receiveResources ?? {}) });
+		setPlayerReceiveResources({ ...createEmptyTradeResources(), ...(activeTradeRequest.giveResources ?? {}) });
+
+		// Open the editing modal; the original popup is hidden via the isVisible check below
+		setShowTradePopup(true);
+	};
+
+	const handleCloseTradePopup = () => {
+		setActiveTradeRequest(null);
+		setMyCounterOfferStatus(null);
+		setMyCounterOfferData(null);
+		setTradeTargetPlayerId(null);
 	};
 
 	const handleDenyTradeRequest = async () => {
@@ -2291,8 +2441,7 @@ export default function Gameboard() {
 				message: logMessage,
 			}));
 			rememberServerGameVersion(gameDto);
-			lastTradeRequestIdRef.current = null;
-			setActiveTradeRequest(null);
+			handleCloseTradePopup();
 			addToLog(logMessage);
 		} catch {
 			addToLog("Could not deny the trade request.");
@@ -2776,6 +2925,9 @@ export default function Gameboard() {
 			setDiceWonResources(null);
 			setInitialPlacementWonResources(null);
 			lastTradeRequestIdRef.current = null;
+			setMyCounterOfferStatus(null);
+			setMyCounterOfferData(null);
+			setShowTradeSummaryPopup(false); // Close summary popup on turn end
 			setActiveTradeRequest(null);
 			const serverPlayersFromResponse = Array.isArray(gameDto.players) ? gameDto.players : (state.players as unknown as Parameters<typeof mapResourcesFromServer>[0][]);
 			let nextPlayerId = state.currentPlayerId;
@@ -2844,6 +2996,7 @@ export default function Gameboard() {
 		setPlayerReceiveResources(createEmptyTradeResources());
 		setBankGiveResources(createEmptyTradeResources());
 		setBankReceiveResources(createEmptyTradeResources());
+		setTradeTargetPlayerId(null);
 
 		setShowTradePopup(true);
 		addToLog(`${myPlayer.name} opened trade requests.`);
@@ -2884,6 +3037,7 @@ export default function Gameboard() {
 				ports={ports}
 				hexById={hexById}
 				currentPlayer={myPlayer}
+				targetPlayerId={tradeTargetPlayerId}
 				onClose={() => setShowTradePopup(false)}
 				onSetTradeMode={setTradeMode}
 				onAdjustPlayerGiveResource={(resource, delta) => {
@@ -2915,29 +3069,31 @@ export default function Gameboard() {
 			/>
 
 			<TradeRequestSummaryPopup
-				isVisible={activeOutgoingTradeRequest !== null && activeOutgoingTradeRequest.sourcePlayerId === myPlayer?.id}
+				isVisible={showTradeSummaryPopup && activeOutgoingTradeRequest !== null && activeOutgoingTradeRequest.sourcePlayerId === myPlayer?.id}
 				tradeRequest={activeOutgoingTradeRequest}
 				currentPlayer={myPlayer}
 				sourcePlayer={activeOutgoingTradeSourcePlayer}
 				responses={activeOutgoingTradeResponseEntries}
 				onFinalizeTrade={handleFinalizePlayerTrade}
+				onDenyCounteroffer={handleDenyCounteroffer}
 				onClose={() => {
-					setActiveOutgoingTradeRequest(null);
-					setActiveOutgoingTradeResponses({});
+					setShowTradeSummaryPopup(false);
+					// Do NOT clear activeOutgoingTradeRequest here, as counteroffers might still come in.
+					// It will be cleared on finalize or end turn.
 				}}
 			/>
 
 			<TradeRequestPopup
-				isVisible={activeTradeRequest !== null}
+				isVisible={activeTradeRequest !== null && !showTradePopup}
 				tradeRequest={activeTradeRequest}
 				currentPlayer={myPlayer}
 				sourcePlayer={activeTradeRequestSourcePlayer}
 				onAccept={handleAcceptTradeRequest}
+				onCounteroffer={handleCounteroffer}
+				counterOfferData={myCounterOfferData}
+				counterOfferStatus={myCounterOfferStatus}
 				onDeny={handleDenyTradeRequest}
-				onClose={() => {
-					lastTradeRequestIdRef.current = null;
-					setActiveTradeRequest(null);
-				}}
+				onClose={handleCloseTradePopup}
 			/>
 
 			{showDicePopup && dicePopupValue !== null ? (
