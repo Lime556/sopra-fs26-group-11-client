@@ -5,7 +5,9 @@ import styles from "@/styles/gameboard.module.css";
 export interface TradeRequestSummaryEntry {
 	playerId: number;
 	playerName: string;
-	status: "PENDING" | "ACCEPTED" | "DENIED";
+	status: "PENDING" | "ACCEPTED" | "DENIED" | "COUNTEROFFER";
+	counterOffer?: Resources;
+	counterRequest?: Resources;
 }
 
 interface TradeRequestSummaryPopupProps {
@@ -14,7 +16,8 @@ interface TradeRequestSummaryPopupProps {
 	currentPlayer: Player | null;
 	sourcePlayer: Player | null;
 	responses: TradeRequestSummaryEntry[];
-	onFinalizeTrade: (targetPlayerId: number) => void;
+	onFinalizeTrade: (targetPlayerId: number, isCounter?: boolean) => void;
+	onDenyCounteroffer: (targetPlayerId: number) => void;
 	onClose: () => void;
 }
 
@@ -41,6 +44,7 @@ export function TradeRequestSummaryPopup({
 	sourcePlayer,
 	responses,
 	onFinalizeTrade,
+	onDenyCounteroffer,
 	onClose,
 }: TradeRequestSummaryPopupProps) {
 	if (!isVisible || !tradeRequest || !sourcePlayer || currentPlayer?.id !== sourcePlayer.id) {
@@ -49,12 +53,17 @@ export function TradeRequestSummaryPopup({
 
 	const giveResources = tradeRequest.giveResources ?? createZeroResources();
 	const receiveResources = tradeRequest.receiveResources ?? createZeroResources();
-	const acceptedResponses = responses.filter((response) => response.status === "ACCEPTED");
+	const actionableResponses = responses.filter((response) => 
+		response.status === "ACCEPTED" || 
+		response.status === "COUNTEROFFER" || 
+		(response.status === "DENIED" && !!response.counterOffer && !!response.counterRequest)
+	);
 
-	const statusLabelByResponse: Record<TradeRequestSummaryEntry["status"], string> = {
+	const statusLabelByResponse: Record<string, string> = {
 		PENDING: "Pending",
 		ACCEPTED: "Accepted",
 		DENIED: "Denied",
+		COUNTEROFFER: "Counteroffer",
 	};
 
 	return (
@@ -107,27 +116,76 @@ export function TradeRequestSummaryPopup({
 
 				<div className={styles.tradeResponseList}>
 					{responses.map((response) => {
-						const isAccepted = response.status === "ACCEPTED";
+						const hasCounterData = !!response.counterOffer && !!response.counterRequest;
+						const isCounterStatus = response.status === "COUNTEROFFER";
+						// A response is actionable if it's ACCEPTED, or if it's a COUNTEROFFER,
+						// or if it was a DENIED counteroffer (meaning the original trade is still an option).
+						const isActionable = response.status === "ACCEPTED" || isCounterStatus || (response.status === "DENIED" && hasCounterData);						const statusColor = isCounterStatus ? "#eab308" : undefined;
+
 						return (
 							<div key={`response-${response.playerId}`} className={styles.tradeResponseRow}>
-								<div className={styles.tradeResponsePlayerName}>{response.playerName}</div>
-								<span className={styles.tradeResponseStatus} data-status={response.status}>
-									{statusLabelByResponse[response.status]}
-								</span>
-								<button
-									type="button"
-									className={styles.tradeResponseActionButton}
-									onClick={() => onFinalizeTrade(response.playerId)}
-									disabled={!isAccepted}
-								>
-									Trade with {response.playerName}
-								</button>
+								<div className={styles.tradeResponseInfo} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+									<div className={styles.tradeResponsePlayerName}>{response.playerName}</div>
+									<span 
+										className={styles.tradeResponseStatus} 
+										data-status={response.status}
+										style={statusColor ? { color: statusColor, borderColor: statusColor } : undefined}
+									>
+										{statusLabelByResponse[response.status]}
+									</span>
+									{hasCounterData && response.counterOffer && response.counterRequest && (
+										<div style={{ marginTop: "8px", padding: "8px", backgroundColor: "#fefce8", borderRadius: "4px", border: "1px solid #fef08a" }}>
+											<div style={{ fontSize: "0.75rem", fontWeight: "bold", color: "#854d0e", marginBottom: "4px" }}>PLAYER COUNTEROFFER:</div>
+											<div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+												<div style={{ fontSize: "0.8rem" }}>
+													<strong>Gives:</strong> {resourceTypes.filter(r => (response.counterOffer?.[r] ?? 0) > 0).map(r => `${resourceEmojiByType[r]} ${response.counterOffer?.[r]}`).join(", ") || "nothing"}
+												</div>
+												<div style={{ fontSize: "0.8rem" }}>
+													<strong>Wants:</strong> {resourceTypes.filter(r => (response.counterRequest?.[r] ?? 0) > 0).map(r => `${resourceEmojiByType[r]} ${response.counterRequest?.[r]}`).join(", ") || "nothing"}
+												</div>
+											</div>
+										</div>
+									)}
+								</div>
+								<div style={{ display: "flex", gap: "8px", flexDirection: "column", alignItems: "flex-end" }}>
+									<div style={{ display: "flex", gap: "8px" }}>
+										{isActionable && (
+											<button
+												type="button"
+												className={styles.tradeResponseActionButton}
+												onClick={() => onFinalizeTrade(response.playerId, false)}
+											>
+												{isCounterStatus ? "Trade (Original)" : `Trade with ${response.playerName}`}
+											</button>
+										)}
+										{isCounterStatus && (
+											<button
+												type="button"
+												className={styles.tradeResponseActionButton}
+												onClick={() => onFinalizeTrade(response.playerId, true)}
+												style={{ backgroundColor: "#eab308", border: "1px solid #ca8a04" }}
+											>
+												Accept Counter
+											</button>
+										)}
+									</div>
+									{isCounterStatus && (
+										<button
+											type="button"
+											className={styles.tradeDeclineButton}
+											style={{ padding: "8px 12px", minWidth: "60px" }}
+											onClick={() => onDenyCounteroffer(response.playerId)}
+										>
+											Deny
+										</button>
+									)}
+								</div>
 							</div>
 						);
 					})}
 				</div>
 
-				{acceptedResponses.length === 0 ? (
+				{actionableResponses.length === 0 ? (
 					<div className={styles.tradeResponseEmptyState}>No players have accepted yet.</div>
 				) : null}
 			</div>
