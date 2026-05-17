@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 //import { Client } from "@stomp/stompjs";
@@ -66,6 +66,7 @@ const MAX_ROADS = 15;
 const MAX_SETTLEMENTS = 5;
 const MAX_CITIES = 4;
 
+type BotAiFeedback = "fallback" | "consultant";
 
 const developmentCardDisplayName: Record<string, string> = {
 	knight: "Knight",
@@ -196,6 +197,7 @@ export default function Gameboard() {
 	const [ambience, setAmbience] = useState<GameAmbienceDTO | null>(null);
 	const [ambienceEffectsEnabled, setAmbienceEffectsEnabled] = useState<boolean>(true);
 	const [botAiEnabled, setBotAiEnabled] = useState<boolean>(false);
+	const [botAiFeedback, setBotAiFeedback] = useState<BotAiFeedback | null>(null);
 	const [gameLog, setGameLog] = useState<string[]>(["Trading ready."]);
 	const [tradeMode, setTradeMode] = useState<TradeMode>("bank");
 	const [playerGiveResources, setPlayerGiveResources] = useState<Resources>(createEmptyTradeResources);
@@ -238,6 +240,7 @@ export default function Gameboard() {
 	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const stolenResourcePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const botAiFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const lastDiceRolledAtRef = useRef<string | null | undefined>(undefined);
 	const lastTradeRequestedAtRef = useRef<string | null>(null);
 	const lastTradeRequestIdRef = useRef<string | null>(null);
@@ -286,6 +289,27 @@ export default function Gameboard() {
 			return next;
 		});
 	};
+
+	const showBotAiFeedback = useCallback((feedback: BotAiFeedback): void => {
+		setBotAiFeedback(feedback);
+		if (botAiFeedbackTimeoutRef.current !== null) {
+			globalThis.clearTimeout(botAiFeedbackTimeoutRef.current);
+		}
+		botAiFeedbackTimeoutRef.current = globalThis.setTimeout(() => {
+			setBotAiFeedback(null);
+			botAiFeedbackTimeoutRef.current = null;
+		}, 3000);
+	}, []);
+
+	const showBotAiFeedbackFromEvent = useCallback((event: GameEventDTO | null): void => {
+		if (event?.botAiFallbackUsed && event.botAiRequested) {
+			showBotAiFeedback("fallback");
+			return;
+		}
+		if (event?.botAiConsultantUsed) {
+			showBotAiFeedback("consultant");
+		}
+	}, [showBotAiFeedback]);
 
 	const rememberServerGameVersion = (gameDto?: Pick<GameGetDTO, "gameVersion"> | null): void => {
 		const nextVersion = typeof gameDto?.gameVersion === "number" ? gameDto.gameVersion : null;
@@ -623,6 +647,7 @@ export default function Gameboard() {
 							unseen.forEach((entry: string) => {
 								known.add(entry);
 								const structuredEntry = parseStructuredEventLogEntry(entry);
+								showBotAiFeedbackFromEvent(structuredEntry?.payload ?? null);
 								if (structuredEntry && structuredEntry.payload && (structuredEntry.payload.type === "PLAYER_TRADE" || (structuredEntry.payload.type as string) === "PLAYER_TRADE_FINALIZE")) {
 									return;
 								}
@@ -939,8 +964,12 @@ export default function Gameboard() {
 				globalThis.clearTimeout(stolenResourcePopupTimeoutRef.current);
 				stolenResourcePopupTimeoutRef.current = null;
 			}
+			if (botAiFeedbackTimeoutRef.current !== null) {
+				globalThis.clearTimeout(botAiFeedbackTimeoutRef.current);
+				botAiFeedbackTimeoutRef.current = null;
+			}
 		};
-	}, [apiService, router, searchParams]);
+	}, [apiService, router, searchParams, showBotAiFeedbackFromEvent]);
 
 	const hexById = useMemo(() => {
 		const map = new Map<number, HexTile>();
@@ -997,6 +1026,14 @@ export default function Gameboard() {
 			}
 			botActionInFlightRef.current = true;
 			void apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/bot/fallback`, { useAi: botAiEnabled })
+				.then((gameDto) => {
+					rememberServerGameVersion(gameDto);
+					const latestBotAiEvent = [...(gameDto.eventLog ?? [])]
+						.reverse()
+						.map((entry) => parseStructuredEventLogEntry(entry)?.payload ?? null)
+						.find((event) => Boolean(event?.botAiFallbackUsed || event?.botAiConsultantUsed)) ?? null;
+					showBotAiFeedbackFromEvent(latestBotAiEvent);
+				})
 				.catch((error) => {
 					console.error("Failed to execute bot fallback action", error);
 				})
@@ -1006,7 +1043,7 @@ export default function Gameboard() {
 		}, 500);
 
 		return () => window.clearTimeout(timeout);
-	}, [activeGameId, apiService, botAiEnabled, currentBotActionKey, currentPlayer?.bot, isGameFinished]);
+	}, [activeGameId, apiService, botAiEnabled, currentBotActionKey, currentPlayer?.bot, isGameFinished, showBotAiFeedbackFromEvent]);
 
 	const activeOutgoingTradeResponseEntries = useMemo(
 		() => activeOutgoingTradeRequest
@@ -3352,13 +3389,30 @@ export default function Gameboard() {
 						</button>
 					</section>
 				) : null}
-				<section className={styles.botAiPanel} aria-label="Bot AI settings">
+				<section
+					className={`${styles.botAiPanel} ${
+						botAiFeedback === "fallback"
+							? styles.botAiPanelFallback
+							: botAiFeedback === "consultant"
+								? styles.botAiPanelConsultant
+								: ""
+					}`}
+					aria-label="Bot AI settings"
+				>
 					<div className={styles.botAiSummary}>
 						<span className={styles.botAiLabel}>Bot AI</span>
-						<span className={styles.botAiDescription}>{botAiEnabled ? "Hugging Face enabled" : "Deterministic fallback"}</span>
+						<span className={styles.botAiDescription}>
+							{botAiFeedback === "fallback"
+								? "Server fallback used"
+								: botAiFeedback === "consultant"
+									? "AI consultant used"
+									: botAiEnabled
+										? "Hugging Face enabled"
+										: "Deterministic fallback"}
+						</span>
 					</div>
 					<button type="button" className={styles.botAiToggleButton} onClick={toggleBotAi}>
-						{botAiEnabled ? "AI On" : "AI Off"}
+						{botAiEnabled ? "On" : "Off"}
 					</button>
 				</section>
 				<section className={styles.sidebarCard}>

@@ -91,6 +91,18 @@
   font-weight: 800;
 }
 
+.botAiPanelFallback {
+  border-color: #b91c1c;
+  background: linear-gradient(180deg, rgba(254, 226, 226, 0.98), rgba(248, 113, 113, 0.84));
+  animation: botAiFallbackPulse 0.45s ease-in-out infinite alternate;
+}
+
+.botAiPanelConsultant {
+  border-color: #15803d;
+  background: linear-gradient(180deg, rgba(220, 252, 231, 0.98), rgba(74, 222, 128, 0.72));
+  animation: botAiConsultantPulse 0.55s ease-in-out infinite alternate;
+}
+
 .botAiSummary {
   display: flex;
   flex-direction: column;
@@ -124,6 +136,24 @@
 
 .botAiToggleButton:hover {
   background: rgba(255, 249, 234, 0.98);
+}
+
+@keyframes botAiFallbackPulse {
+  from {
+    box-shadow: 0 0 0 rgba(185, 28, 28, 0);
+  }
+  to {
+    box-shadow: 0 0 16px rgba(185, 28, 28, 0.55);
+  }
+}
+
+@keyframes botAiConsultantPulse {
+  from {
+    box-shadow: 0 0 0 rgba(21, 128, 61, 0);
+  }
+  to {
+    box-shadow: 0 0 16px rgba(21, 128, 61, 0.45);
+  }
 }
 
 .playerList {
