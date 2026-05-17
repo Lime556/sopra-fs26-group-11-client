@@ -49,6 +49,7 @@ import {
 } from "./roads";
 import {
 	type BoardGetDTO,
+	type GameAmbienceDTO,
 	type GameChatMessageDTO,
 	type GameEventDTO,
 	type GameGetDTO,
@@ -88,6 +89,24 @@ const createTradeRequestId = (): string => {
 	return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const ambienceEmojiByWeather: Record<GameAmbienceDTO["weather"], string> = {
+	SUNNY: "☀️",
+	CLOUDY: "🌤️",
+	RAINY: "🌧️",
+	LIGHTNING: "⚡",
+	SNOWING: "❄️",
+	FOGGY: "🌫️",
+	UNKNOWN: "🌙",
+};
+
+const ambienceLabelByTimeOfDay: Record<GameAmbienceDTO["timeOfDay"], string> = {
+	SUNRISE: "Sunrise",
+	DAY: "Day",
+	SUNSET: "Sunset",
+	NIGHT: "Night",
+	UNKNOWN: "Ambience",
+};
+
 export default function Gameboard() {
 	const router = useRouter();
 	const apiService = useApi();
@@ -96,6 +115,7 @@ export default function Gameboard() {
 	const { value: sessionUserId } = useLocalStorage<string>("userId", "", { storage: "session" });
 	const [state, setState] = useState<GameState>(createInitialGameState);
 	const [boardStatus, setBoardStatus] = useState<string>("Loading board...");
+	const [ambience, setAmbience] = useState<GameAmbienceDTO | null>(null);
 	const [gameLog, setGameLog] = useState<string[]>(["Trading ready."]);
 	const [tradeMode, setTradeMode] = useState<TradeMode>("bank");
 	const [playerGiveResources, setPlayerGiveResources] = useState<Resources>(createEmptyTradeResources);
@@ -248,6 +268,34 @@ export default function Gameboard() {
 		const storageKey = `gameLog:${activeGameId}`;
 		sessionStorage.setItem(storageKey, JSON.stringify(gameLog.slice(0, 40)));
 	}, [activeGameId, gameLog]);
+
+	useEffect(() => {
+		if (!activeGameId) {
+			setAmbience(null);
+			return;
+		}
+
+		let cancelled = false;
+		void apiService.get<GameAmbienceDTO>(`/games/${activeGameId}/ambience`)
+			.then((nextAmbience) => {
+				if (!cancelled) {
+					setAmbience(nextAmbience);
+				}
+			})
+			.catch(() => {
+				if (!cancelled) {
+					setAmbience({
+						weather: "UNKNOWN",
+						timeOfDay: "UNKNOWN",
+						description: "Weather ambience unavailable",
+					});
+				}
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	}, [activeGameId, apiService]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -2872,6 +2920,16 @@ export default function Gameboard() {
 					mustMoveRobberBeforeEndTurn={mustMoveRobberFromServer}
 				/>
 			<aside className={styles.rightPanel}>
+				{ambience ? (
+					<section className={styles.ambiencePanel} aria-label={ambience.description}>
+						<span className={styles.ambienceEmoji}>{ambienceEmojiByWeather[ambience.weather]}</span>
+						<span className={styles.ambienceText}>
+							{ambience.weather === "LIGHTNING" && ambience.timeOfDay === "NIGHT"
+								? "Stormy night"
+								: ambienceLabelByTimeOfDay[ambience.timeOfDay]}
+						</span>
+					</section>
+				) : null}
 				<section className={styles.sidebarCard}>
 					<h2 className={styles.panelTitle}>Players</h2>
 					<ul className={styles.playerList}>

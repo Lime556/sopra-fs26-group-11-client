@@ -116,6 +116,28 @@ export interface GameStateDTO {
     gameFinished: boolean;
 }
 
+export type WeatherCategory =
+	| "SUNNY"
+	| "CLOUDY"
+	| "RAINY"
+	| "LIGHTNING"
+	| "SNOWING"
+	| "FOGGY"
+	| "UNKNOWN";
+
+export type TimeOfDayMood =
+	| "SUNRISE"
+	| "DAY"
+	| "SUNSET"
+	| "NIGHT"
+	| "UNKNOWN";
+
+export interface GameAmbienceDTO {
+	weather: WeatherCategory;
+	timeOfDay: TimeOfDayMood;
+	description: string;
+}
+
 export interface PlayerGetDTO {
 	id: number;
 	userId?: number | null;
