@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 //import { Client } from "@stomp/stompjs";
@@ -66,6 +66,7 @@ const MAX_ROADS = 15;
 const MAX_SETTLEMENTS = 5;
 const MAX_CITIES = 4;
 
+type BotAiFeedback = "fallback" | "consultant";
 
 const developmentCardDisplayName: Record<string, string> = {
 	knight: "Knight",
@@ -140,6 +141,7 @@ const createTradeRequestId = (): string => {
 
 const AMBIENCE_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const AMBIENCE_EFFECTS_STORAGE_KEY = "ambienceEffectsEnabled";
+const BOT_AI_STORAGE_KEY = "botAiEnabled";
 
 const ambienceEmojiByWeather: Record<GameAmbienceDTO["weather"], string> = {
 	SUNNY: "☀️",
@@ -200,6 +202,8 @@ export default function Gameboard() {
 	const [boardStatus, setBoardStatus] = useState<string>("Loading board...");
 	const [ambience, setAmbience] = useState<GameAmbienceDTO | null>(null);
 	const [ambienceEffectsEnabled, setAmbienceEffectsEnabled] = useState<boolean>(true);
+	const [botAiEnabled, setBotAiEnabled] = useState<boolean>(false);
+	const [botAiFeedback, setBotAiFeedback] = useState<BotAiFeedback | null>(null);
 	const [gameLog, setGameLog] = useState<string[]>(["Trading ready."]);
 	const [tradeMode, setTradeMode] = useState<TradeMode>("bank");
 	const [playerGiveResources, setPlayerGiveResources] = useState<Resources>(createEmptyTradeResources);
@@ -222,7 +226,7 @@ export default function Gameboard() {
 	const [dicePopupValue, setDicePopupValue] = useState<number | null>(null);
 	const [diceWonResources, setDiceWonResources] = useState<Resources | null>(null);
 	const [initialPlacementWonResources, setInitialPlacementWonResources] = useState<Resources | null>(null);
-	const [stolenResourcePopup, setStolenResourcePopup] = useState<{ resource: ResourceType; targetName: string | null } | null>(null);
+	const [stolenResourcePopup, setStolenResourcePopup] = useState<{ resource: ResourceType; sourceName: string | null; targetName: string | null } | null>(null);
 	const [showMonopolyResourceSelector, setShowMonopolyResourceSelector] = useState<boolean>(false);
 	const [showYearOfPlentyResourceSelector, setShowYearOfPlentyResourceSelector] = useState<boolean>(false);
 	const [activeGameId, setActiveGameId] = useState<number | null>(null);
@@ -242,6 +246,7 @@ export default function Gameboard() {
 	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const stolenResourcePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const botAiFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const lastDiceRolledAtRef = useRef<string | null | undefined>(undefined);
 	const lastTradeRequestedAtRef = useRef<string | null>(null);
 	const lastTradeRequestIdRef = useRef<string | null>(null);
@@ -282,6 +287,35 @@ export default function Gameboard() {
 			return next;
 		});
 	};
+
+	const toggleBotAi = (): void => {
+		setBotAiEnabled((previous) => {
+			const next = !previous;
+			window.localStorage.setItem(BOT_AI_STORAGE_KEY, String(next));
+			return next;
+		});
+	};
+
+	const showBotAiFeedback = useCallback((feedback: BotAiFeedback): void => {
+		setBotAiFeedback(feedback);
+		if (botAiFeedbackTimeoutRef.current !== null) {
+			globalThis.clearTimeout(botAiFeedbackTimeoutRef.current);
+		}
+		botAiFeedbackTimeoutRef.current = globalThis.setTimeout(() => {
+			setBotAiFeedback(null);
+			botAiFeedbackTimeoutRef.current = null;
+		}, 3000);
+	}, []);
+
+	const showBotAiFeedbackFromEvent = useCallback((event: GameEventDTO | null): void => {
+		if (event?.botAiFallbackUsed && event.botAiRequested) {
+			showBotAiFeedback("fallback");
+			return;
+		}
+		if (event?.botAiConsultantUsed) {
+			showBotAiFeedback("consultant");
+		}
+	}, [showBotAiFeedback]);
 
 	const rememberServerGameVersion = (gameDto?: Pick<GameGetDTO, "gameVersion"> | null): void => {
 		const nextVersion = typeof gameDto?.gameVersion === "number" ? gameDto.gameVersion : null;
@@ -347,6 +381,38 @@ export default function Gameboard() {
 			};
 		});
 
+	const applyGameDtoToState = (gameDto: GameGetDTO): void => {
+		const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
+		if (gameDto.bankResources) {
+			setBankResourcesState(gameDto.bankResources as Resources);
+		}
+		setState((previousState) => {
+			const nextPlayers =
+				serverPlayers.length > 0
+					? mapServerPlayersToStatePlayers(serverPlayers, previousState.players)
+					: previousState.players;
+			const nextCurrentPlayerId =
+				typeof gameDto.currentTurnIndex === "number" && serverPlayers.length > 0
+					? serverPlayers[((gameDto.currentTurnIndex % serverPlayers.length) + serverPlayers.length) % serverPlayers.length].id
+					: previousState.currentPlayerId;
+
+			return {
+				...previousState,
+				players: nextPlayers,
+				currentPlayerId: nextCurrentPlayerId,
+				turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
+				gamePhase: gameDto.gamePhase ?? previousState.gamePhase,
+				diceResult: gameDto.diceValue ?? previousState.diceResult,
+				robberHexId: gameDto.robberTileIndex ?? previousState.robberHexId,
+				robberMovedAfterSevenRoll:
+					gameDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
+				developmentDeck: gameDto.developmentDeck ?? previousState.developmentDeck,
+			};
+		});
+		setWinnerPlayerName(gameDto?.winner?.name ?? null);
+		setIsGameFinished(Boolean(gameDto?.gameFinished) || Boolean(gameDto?.finishedAt));
+	};
+
 
 	const showDiceResultPopup = (diceValue: number) => {
 		setDicePopupValue(diceValue);
@@ -360,8 +426,8 @@ export default function Gameboard() {
 		}, 2600);
 	};
 
-	const showStolenResourcePopup = (resource: ResourceType, targetName: string | null) => {
-		setStolenResourcePopup({ resource, targetName });
+	const showStolenResourcePopup = (resource: ResourceType, targetName: string | null, sourceName: string | null = null) => {
+		setStolenResourcePopup({ resource, sourceName, targetName });
 		if (stolenResourcePopupTimeoutRef.current !== null) {
 			globalThis.clearTimeout(stolenResourcePopupTimeoutRef.current);
 		}
@@ -373,6 +439,10 @@ export default function Gameboard() {
 
 	useEffect(() => {
 		setAmbienceEffectsEnabled(localStorage.getItem(AMBIENCE_EFFECTS_STORAGE_KEY) !== "false");
+	}, []);
+
+	useEffect(() => {
+		setBotAiEnabled(localStorage.getItem(BOT_AI_STORAGE_KEY) === "true");
 	}, []);
 
 	useEffect(() => {
@@ -500,7 +570,7 @@ export default function Gameboard() {
 			return legacyGameId;
 		};
 
-		const syncGameState = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+		const syncGameState = async (gameId: number, options?: { quiet?: boolean }): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
 			try {
 				const gameDto = await apiService.get<GameGetDTO>(`/games/${gameId}`);
 				const responseVersion = typeof gameDto?.gameVersion === "number" ? gameDto.gameVersion : null;
@@ -648,6 +718,13 @@ export default function Gameboard() {
 							unseen.forEach((entry: string) => {
 								known.add(entry);
 								const structuredEntry = parseStructuredEventLogEntry(entry);
+								showBotAiFeedbackFromEvent(structuredEntry?.payload ?? null);
+								if (structuredEntry) {
+									const robberSteal = parseRobberStealResult(structuredEntry);
+									if (robberSteal) {
+										showStolenResourcePopup(robberSteal.resource, robberSteal.targetName, robberSteal.sourceName);
+									}
+								}
 								if (structuredEntry && structuredEntry.payload && (structuredEntry.payload.type === "PLAYER_TRADE" || (structuredEntry.payload.type as string) === "PLAYER_TRADE_FINALIZE")) {
 									return;
 								}
@@ -676,12 +753,23 @@ export default function Gameboard() {
 					return "notfound";
 				}
 
-				if (!cancelled) {
+				if (!cancelled && !options?.quiet) {
 					setBoardStatus("Could not load board data from server.");
 				}
 
 				return "error";
 			}
+		};
+
+		const syncGameStateWithRetry = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+			for (let attempt = 0; attempt < 3; attempt += 1) {
+				const status = await syncGameState(gameId, { quiet: attempt < 2 });
+				if (status !== "error") {
+					return status;
+				}
+				await new Promise((resolve) => window.setTimeout(resolve, 180));
+			}
+			return syncGameState(gameId);
 		};
 
 		let lastSeenGameVersion: number | null = null;
@@ -738,8 +826,6 @@ export default function Gameboard() {
 					&& nextDiceRolledAt !== lastDiceRolledAtRef.current
 					&& nextDiceValue !== null
 				) {
-					lastDiceRolledAtRef.current = nextDiceRolledAt;
-
 					setState((previousState) => ({
 						...previousState,
 						diceResult: nextDiceValue,
@@ -749,7 +835,6 @@ export default function Gameboard() {
 						robberMovedAfterSevenRoll:
 							syncDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
 					}));
-					showDiceResultPopup(nextDiceValue);
 				}
 
 				// Lightweight Trade Request detection (matches Dice Roll mechanism)
@@ -983,7 +1068,7 @@ export default function Gameboard() {
 				setActiveGameId(gameId);
 			}
 
-			let syncStatus = await syncGameState(gameId);
+			let syncStatus = await syncGameStateWithRetry(gameId);
 			if (syncStatus === "unauthorized") {
 				if (!cancelled) {
 					setBoardStatus("Session expired. Please log in again.");
@@ -1002,7 +1087,7 @@ export default function Gameboard() {
 					}
 					return;
 				}
-				syncStatus = await syncGameState(newGameId);
+				syncStatus = await syncGameStateWithRetry(newGameId);
 				if (syncStatus !== "ok") {
 					if (!cancelled) {
 						setBoardStatus("Could not load board data from server.");
@@ -1090,8 +1175,12 @@ export default function Gameboard() {
 				globalThis.clearTimeout(stolenResourcePopupTimeoutRef.current);
 				stolenResourcePopupTimeoutRef.current = null;
 			}
+			if (botAiFeedbackTimeoutRef.current !== null) {
+				globalThis.clearTimeout(botAiFeedbackTimeoutRef.current);
+				botAiFeedbackTimeoutRef.current = null;
+			}
 		};
-	}, [apiService, router, searchParams]);
+	}, [apiService, router, searchParams, showBotAiFeedbackFromEvent]);
 
 	const hexById = useMemo(() => {
 		const map = new Map<number, HexTile>();
@@ -1123,6 +1212,7 @@ export default function Gameboard() {
 	const currentBotActionKey = currentPlayer?.bot
 		? JSON.stringify({
 			id: currentPlayer.id,
+			aiEnabled: botAiEnabled,
 			turnPhase: state.turnPhase,
 			gamePhase: state.gamePhase,
 			diceResult: state.diceResult,
@@ -1146,7 +1236,16 @@ export default function Gameboard() {
 				return;
 			}
 			botActionInFlightRef.current = true;
-			void apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/bot/fallback`, {})
+			void apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/bot/fallback`, { useAi: botAiEnabled })
+				.then((gameDto) => {
+					rememberServerGameVersion(gameDto);
+					applyGameDtoToState(gameDto);
+					const latestBotAiEvent = [...(gameDto.eventLog ?? [])]
+						.reverse()
+						.map((entry) => parseStructuredEventLogEntry(entry)?.payload ?? null)
+						.find((event) => Boolean(event?.botAiFallbackUsed || event?.botAiConsultantUsed)) ?? null;
+					showBotAiFeedbackFromEvent(latestBotAiEvent);
+				})
 				.catch((error) => {
 					console.error("Failed to execute bot fallback action", error);
 				})
@@ -1156,7 +1255,7 @@ export default function Gameboard() {
 		}, 500);
 
 		return () => window.clearTimeout(timeout);
-	}, [activeGameId, apiService, currentBotActionKey, currentPlayer?.bot, isGameFinished]);
+	}, [activeGameId, apiService, botAiEnabled, currentBotActionKey, currentPlayer?.bot, isGameFinished, showBotAiFeedbackFromEvent]);
 
 	const activeOutgoingTradeResponseEntries = useMemo(
 		() => activeOutgoingTradeRequest
@@ -1315,6 +1414,25 @@ export default function Gameboard() {
 		}
 
 		return { player, action, result, payload };
+	};
+
+	const parseRobberStealResult = (entry: { player: string; action: string; result: string }): { resource: ResourceType; sourceName: string; targetName: string | null } | null => {
+		if (entry.action !== "ROBBER_MOVE") {
+			return null;
+		}
+
+		const normalizedResult = entry.result.toLowerCase();
+		const resource = resourceTypes.find((candidate) => normalizedResult.includes(`1 ${candidate}`));
+		if (!resource) {
+			return null;
+		}
+
+		const fromMatch = entry.result.match(/\bfrom\s+(.+)$/i);
+		return {
+			resource,
+			sourceName: entry.player,
+			targetName: fromMatch?.[1]?.trim() || null,
+		};
 	};
 
 	const formatEventLogEntry = (entry: string): string => {
@@ -2749,7 +2867,7 @@ export default function Gameboard() {
 		
 			if (targetPlayer) {
 				if (stolenResource) {
-					showStolenResourcePopup(stolenResource, targetPlayer.name);
+					showStolenResourcePopup(stolenResource, targetPlayer.name, myPlayer.name);
 					addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId} and stole ${stolenResource} from ${targetPlayer.name}.`);
 				} else {
 					addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId} and stole from ${targetPlayer.name}.`);
@@ -2989,6 +3107,8 @@ export default function Gameboard() {
 			}
 
 			try {
+				const wasSecondSetupRound = state.gamePhase === "SETUP_SECOND_ROUND";
+				const resourcesBeforeSetupRoad = myPlayer.resources;
 				const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/build-road`, withExpectedGameVersion({
 					playerId: myPlayer.id,
 					edgeId,
@@ -2996,8 +3116,12 @@ export default function Gameboard() {
 				rememberServerGameVersion(gameDto);
 				const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
 				const serverCurrentPlayer = serverPlayers.find((player) => player.id === myPlayer.id) ?? null;
-				if (serverCurrentPlayer) {
-					setInitialPlacementWonResources(mapResourcesFromServer(serverCurrentPlayer));
+				if (wasSecondSetupRound && serverCurrentPlayer) {
+					setInitialPlacementWonResources(
+						calculateWonResources(resourcesBeforeSetupRoad, mapResourcesFromServer(serverCurrentPlayer))
+					);
+				} else {
+					setInitialPlacementWonResources(null);
 				}
 
 				setState((previousState) => ({
@@ -3263,9 +3387,14 @@ export default function Gameboard() {
 					<div className={styles.dicePopupOverlay}>
 						<div className={styles.dicePopupCard} role="status" aria-live="polite">
 							<div className={styles.dicePopupTitle}>Resource Stolen</div>
+							{stolenResourcePopup.sourceName ? (
+								<div className={styles.stolenResourcePopupTarget}>
+									{stolenResourcePopup.sourceName} stole
+								</div>
+							) : null}
 							<div className={styles.stolenResourcePopupValue}>
 								<span aria-hidden="true">{resourceEmojiByType[stolenResourcePopup.resource]}</span>
-								<span>{stolenResourcePopup.resource}</span>
+								<span>1 {stolenResourcePopup.resource}</span>
 							</div>
 							{stolenResourcePopup.targetName ? (
 								<div className={styles.stolenResourcePopupTarget}>
@@ -3477,6 +3606,32 @@ export default function Gameboard() {
 						</button>
 					</section>
 				) : null}
+				<section
+					className={`${styles.botAiPanel} ${
+						botAiFeedback === "fallback"
+							? styles.botAiPanelFallback
+							: botAiFeedback === "consultant"
+								? styles.botAiPanelConsultant
+								: ""
+					}`}
+					aria-label="Bot AI settings"
+				>
+					<div className={styles.botAiSummary}>
+						<span className={styles.botAiLabel}>Bot AI</span>
+						<span className={styles.botAiDescription}>
+							{botAiFeedback === "fallback"
+								? "Server fallback used"
+								: botAiFeedback === "consultant"
+									? "AI consultant used"
+									: botAiEnabled
+										? "Hugging Face enabled"
+										: "Deterministic fallback"}
+						</span>
+					</div>
+					<button type="button" className={styles.botAiToggleButton} onClick={toggleBotAi}>
+						{botAiEnabled ? "On" : "Off"}
+					</button>
+				</section>
 				<section className={styles.sidebarCard}>
 					<h2 className={styles.panelTitle}>Players</h2>
 					<ul className={styles.playerList}>

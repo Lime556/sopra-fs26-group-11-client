@@ -1,7 +1,7 @@
 /* ── Page root ── */
 .page {
   min-height: 100vh;
-  font-family: 'Segoe UI Emoji', sans-serif;
+  font-family: var(--app-font-family);
   background:
     linear-gradient(
       135deg,
@@ -34,7 +34,7 @@
 }
 
 .headerTitle {
-  font-family: 'Segoe UI Emoji', sans-serif;
+  font-family: var(--app-font-family);
   font-size: 30px;
   line-height: 36px;
   color: #ffffff;
@@ -42,7 +42,7 @@
 }
 
 .headerWelcome {
-  font-family: 'Segoe UI Emoji', sans-serif;
+  font-family: var(--app-font-family);
   font-size: 16px;
   line-height: 24px;
   color: #FEF9C2;
@@ -58,7 +58,7 @@
   background: #E7000B;
   border: none;
   border-radius: 10px;
-  font-family: 'Segoe UI Emoji', sans-serif;
+  font-family: var(--app-font-family);
   font-size: 16px;
   color: #ffffff;
   cursor: pointer;
@@ -100,7 +100,7 @@
   padding: 0 16px;
   border: none;
   border-radius: 10px;
-  font-family: 'Segoe UI Emoji', sans-serif;
+  font-family: var(--app-font-family);
   font-size: 16px;
   color: #ffffff;
   background: transparent;
@@ -141,7 +141,7 @@
 }
 
 .contentTitle {
-  font-family: 'Segoe UI Emoji', sans-serif;
+  font-family: var(--app-font-family);
   font-size: 24px;
   line-height: 32px;
   color: #1E2939;
@@ -157,7 +157,7 @@
   background: #E17100;
   border: none;
   border-radius: 10px;
-  font-family: 'Segoe UI Emoji', sans-serif;
+  font-family: var(--app-font-family);
   font-size: 16px;
   color: #ffffff;
   cursor: pointer;
@@ -169,14 +169,14 @@
 
 /* ── Status / error text ── */
 .statusText {
-  font-family: 'Segoe UI Emoji', sans-serif;
+  font-family: var(--app-font-family);
   font-size: 14px;
   color: #ffffff;
   margin: 0;
 }
 
 .errorText {
-  font-family: 'Segoe UI Emoji', sans-serif;
+  font-family: var(--app-font-family);
   font-size: 14px;
   color: #ffe0e0;
   margin: 0;
@@ -222,7 +222,7 @@
 }
 
 .lobbyName {
-  font-family: 'Segoe UI Emoji', sans-serif;
+  font-family: var(--app-font-family);
   font-size: 18px;
   line-height: 28px;
   color: #1E2939;
@@ -239,7 +239,7 @@
 }
 
 .lobbyHost {
-  font-family: 'Segoe UI Emoji', sans-serif;
+  font-family: var(--app-font-family);
   font-size: 14px;
   line-height: 20px;
   color: #4A5565;
@@ -258,7 +258,7 @@
   flex-direction: row;
   align-items: center;
   gap: 8px;
-  font-family: 'Segoe UI Emoji', sans-serif;
+  font-family: var(--app-font-family);
   font-size: 14px;
   color: #4A5565;
 }
@@ -279,7 +279,7 @@
   background: #00A63E;
   border: none;
   border-radius: 10px;
-  font-family: 'Segoe UI Emoji', sans-serif;
+  font-family: var(--app-font-family);
   font-size: 14px;
   color: #ffffff;
   cursor: pointer;

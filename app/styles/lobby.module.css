@@ -65,14 +65,14 @@
     line-height: 1.05;
     font-weight: 700;
     color: #ffffff;
-    font-family: "Segoe UI", sans-serif;
+    font-family: var(--app-font-family);
   }
   
   .headerSubtitle {
     margin: 8px 0 0;
     font-size: 20px;
     color: #fff6d6;
-    font-family: "Segoe UI", sans-serif;
+    font-family: var(--app-font-family);
   }
 
   .headerUsernameButton {
@@ -81,7 +81,7 @@
     color: #ffffff;
     font-size: 20px;
     font-weight: 700;
-    font-family: "Segoe UI", sans-serif;
+    font-family: var(--app-font-family);
     cursor: pointer;
     margin-left: 6px;
     padding: 0;
@@ -609,7 +609,7 @@
     margin: 2px 0 0;
     font-size: 13px;
     color: #667085;
-    font-family: monospace;
+    font-family: var(--app-font-family);
   }
   
   .requestItem {
@@ -755,7 +755,7 @@
     margin: 4px 0 0;
     font-size: 14px;
     color: #667085;
-    font-family: monospace;
+    font-family: var(--app-font-family);
   }
   
   .profileStatus {

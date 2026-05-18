@@ -37,6 +37,7 @@ export default function RootLayout({
               colorPrimary: "#22426b", // selected input field boarder will have this color as well
               borderRadius: 10,
               //colorText: "#ffffff",
+              fontFamily: "Arial, Helvetica, sans-serif",
               fontSize: 16,
 
               // Alias Token

@@ -26,21 +26,21 @@
 }
 
 .card h1 {
-  font-family: 'Segoe UI Emoji';
+  font-family: var(--app-font-family);
   font-size: 36px;
   color: #fff;
   text-align: center;
 }
 
 .card p {
-  font-family: 'Segoe UI Emoji';
+  font-family: var(--app-font-family);
   font-size: 16px;
   color: #FEF9C2;
   text-align: center;
 }
 
 .form-item label {
-  font-family: 'Segoe UI Emoji';
+  font-family: var(--app-font-family);
   font-size: 14px;
   color: #ffffff;
 }
@@ -94,7 +94,7 @@
   border: none !important;
   min-height: 48px;
   font-size: 16px;
-  font-family: 'Segoe UI Emoji';
+  font-family: var(--app-font-family);
 }
 
 .login-register-button:hover {
