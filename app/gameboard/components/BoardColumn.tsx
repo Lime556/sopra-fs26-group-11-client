@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Castle, Home, Minus } from "lucide-react";
 import Image from "next/image";
 import styles from "@/styles/gameboard.module.css";
@@ -148,11 +149,61 @@ export function BoardColumn({
 		weatherEffectsEnabled ? "" : styles.ambienceEffectsDisabled,
 	].join(" ");
 
+	const boardViewBox = useMemo(() => {
+		if (state.hexes.length === 0) {
+			return "0 0 1000 800";
+		}
+
+		let minX = Number.POSITIVE_INFINITY;
+		let minY = Number.POSITIVE_INFINITY;
+		let maxX = Number.NEGATIVE_INFINITY;
+		let maxY = Number.NEGATIVE_INFINITY;
+
+		for (const hex of state.hexes) {
+			const { cx, cy } = toPixel(hex);
+			minX = Math.min(minX, cx - hexSize);
+			maxX = Math.max(maxX, cx + hexSize);
+			minY = Math.min(minY, cy - hexSize);
+			maxY = Math.max(maxY, cy + hexSize);
+		}
+
+		const portVisualPadding = 52;
+		const portDistance = 45;
+		for (const port of ports) {
+			const connectedHex = hexById.get(port.hexId);
+			if (!connectedHex) {
+				continue;
+			}
+
+			const { cx, cy } = toPixel(connectedHex);
+			const { portX, portY, corner1, corner2 } = calculatePortPosition(
+				cx,
+				cy,
+				port.corners[0],
+				port.corners[1],
+				portDistance
+			);
+
+			minX = Math.min(minX, portX - portVisualPadding, corner1.x - 12, corner2.x - 12);
+			maxX = Math.max(maxX, portX + portVisualPadding, corner1.x + 12, corner2.x + 12);
+			minY = Math.min(minY, portY - portVisualPadding, corner1.y - 12, corner2.y - 12);
+			maxY = Math.max(maxY, portY + portVisualPadding, corner1.y + 12, corner2.y + 12);
+		}
+
+		const padding = 28;
+		const x = minX - padding;
+		const y = minY - padding;
+		const width = Math.max(1, maxX - minX + padding * 2);
+		const height = Math.max(1, maxY - minY + padding * 2);
+
+		return `${x} ${y} ${width} ${height}`;
+	}, [hexById, ports, state.hexes]);
+
 	return (
 		<div className={styles.boardColumn}>
 			<main className={styles.boardViewport}>
 				{boardStatus ? <div className={styles.boardStatus}>{boardStatus}</div> : null}
-				<svg viewBox="0 0 1000 800" className={styles.board} role="img" aria-label="Settlers of Catan board">
+				<svg viewBox={boardViewBox} preserveAspectRatio="xMidYMid meet" className={styles.board} role="img" aria-label="Settlers of Catan board">
 					<defs>
 						{state.hexes.map((hex) => {
 							const { cx, cy } = toPixel(hex);
