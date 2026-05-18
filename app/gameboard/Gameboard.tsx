@@ -1823,12 +1823,6 @@ export default function Gameboard() {
 		}
 
 		setPlacementMode(null);
-
-		void apiService.post<GameChatMessageDTO>(`/games/${activeGameId}/chat`, {
-			playerId: myPlayer.id,
-			playerName: myPlayer.name,
-			text: "built a settlement.",
-		});
 	};
 
 	const handleCityCornerClick = async (hexId: number, corner: number) => {
@@ -1867,12 +1861,6 @@ export default function Gameboard() {
 		}
 
 		setPlacementMode(null);
-
-		void apiService.post<GameChatMessageDTO>(`/games/${activeGameId}/chat`, {
-			playerId: myPlayer.id,
-			playerName: myPlayer.name,
-			text: "built a city.",
-		});
 	};
 
 	const applyGameEvent = (event: GameEventDTO) => {
@@ -3060,13 +3048,6 @@ export default function Gameboard() {
 		}
 
 		setPlacementMode(freeRoadBuildsRemaining > 1 ? "road" : null);
-		const message = "built a road.";
-
-		void apiService.post<GameChatMessageDTO>(`/games/${activeGameId}/chat`, {
-			playerId: myPlayer.id,
-			playerName: myPlayer.name,
-			text: message,
-		});
 	};
 
 	const handleEndTurn = async () => {
