@@ -775,11 +775,14 @@
   border-radius: 8px;
   background: #ece7da;
   min-height: 96px;
+  max-height: 260px;
   padding: 0.5rem;
   font-size: 0.75rem;
   color: #433120;
   display: grid;
+  align-content: start;
   gap: 0.35rem;
+  overflow-y: auto;
 }
 
 .logChatEntry {

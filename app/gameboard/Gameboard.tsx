@@ -95,6 +95,12 @@ const calculateWonResources = (before: Resources, after: Resources): Resources =
 const findGainedResource = (before: Resources, after: Resources): ResourceType | null =>
 	resourceTypes.find((resource) => after[resource] > before[resource]) ?? null;
 
+const sumResourceCount = (bundle?: Partial<Resources> | null): number =>
+	resourceTypes.reduce((sum, resource) => sum + Math.max(0, bundle?.[resource] ?? 0), 0);
+
+const formatResourceCount = (count: number): string =>
+	`${count} resource${count === 1 ? "" : "s"}`;
+
 const findLocalStatePlayer = (players: Player[], sessionUserId: string, sessionUsername: string): Player | null => {
 	const parsedSessionUserId = Number.parseInt(sessionUserId ?? "", 10);
 	const hasSessionUserId = Number.isFinite(parsedSessionUserId);
@@ -415,6 +421,7 @@ export default function Gameboard() {
 		const storageKey = `gameLog:${activeGameId}`;
 		const stored = sessionStorage.getItem(storageKey);
 		if (!stored) {
+			syncedChatMessageCountRef.current = 0;
 			return;
 		}
 
@@ -422,14 +429,39 @@ export default function Gameboard() {
 			const parsed = JSON.parse(stored) as unknown;
 			if (Array.isArray(parsed)) {
 				const restoredEntries = parsed
-					.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
-					.slice(0, 40);
+					.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
 				if (restoredEntries.length > 0) {
 					setGameLog(restoredEntries);
 				}
+				syncedChatMessageCountRef.current = 0;
+				return;
 			}
+
+			if (
+				typeof parsed === "object"
+				&& parsed !== null
+				&& "entries" in parsed
+				&& Array.isArray((parsed as { entries: unknown }).entries)
+			) {
+				const payload = parsed as { entries: unknown[]; syncedChatMessageCount?: unknown };
+				const restoredEntries = payload.entries
+					.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+
+				if (restoredEntries.length > 0) {
+					setGameLog(restoredEntries);
+				}
+
+				syncedChatMessageCountRef.current =
+					typeof payload.syncedChatMessageCount === "number" && Number.isFinite(payload.syncedChatMessageCount)
+						? Math.max(0, payload.syncedChatMessageCount)
+						: 0;
+				return;
+			}
+
+			syncedChatMessageCountRef.current = 0;
 		} catch {
 			// Ignore corrupted local log cache.
+			syncedChatMessageCountRef.current = 0;
 		}
 	}, [activeGameId]);
 
@@ -439,7 +471,13 @@ export default function Gameboard() {
 		}
 
 		const storageKey = `gameLog:${activeGameId}`;
-		sessionStorage.setItem(storageKey, JSON.stringify(gameLog.slice(0, 40)));
+		sessionStorage.setItem(
+			storageKey,
+			JSON.stringify({
+				entries: gameLog,
+				syncedChatMessageCount: syncedChatMessageCountRef.current,
+			})
+		);
 	}, [activeGameId, gameLog]);
 
 	useEffect(() => {
@@ -539,9 +577,14 @@ export default function Gameboard() {
 					const serverChatMessages = Array.isArray(gameDto?.chatMessages)
 						? gameDto.chatMessages.filter((entry: unknown): entry is string => typeof entry === "string" && entry.trim().length > 0)
 						: [];
+					const serverEventLogs = Array.isArray(gameDto?.eventLog)
+						? gameDto.eventLog.filter((entry: unknown): entry is string => typeof entry === "string" && entry.trim().length > 0)
+						: [];
 					if (responseVersion !== null) {
 						lastSeenGameVersion = responseVersion;
 					}
+					lastSeenChatMessageCount = serverChatMessages.length;
+					lastSeenEventLogCount = serverEventLogs.length;
 
 					const nextDiceRolledAt = gameDto?.diceRolledAt ?? null;
 					const nextDiceValue = typeof gameDto?.diceValue === "number" ? gameDto.diceValue : null;
@@ -627,13 +670,9 @@ export default function Gameboard() {
 								return previous;
 							}
 
-							return [...unseen.reverse(), ...previous].slice(0, 40);
+							return [...unseen.reverse(), ...previous];
 						});
 					}
-
-					const serverEventLogs = Array.isArray(gameDto?.eventLog)
-						? gameDto.eventLog.filter((entry: unknown): entry is string => typeof entry === "string" && entry.trim().length > 0)
-						: [];
 
 					if (serverEventLogs.length > 0) {
 						setGameLog((previous) => {
@@ -659,7 +698,7 @@ export default function Gameboard() {
 								return previous;
 							}
 
-							return [...plainEntries.reverse(), ...previous].slice(0, 40);
+							return [...plainEntries.reverse(), ...previous];
 						});
 					}
 
@@ -685,12 +724,128 @@ export default function Gameboard() {
 		};
 
 		let lastSeenGameVersion: number | null = null;
+		let lastSeenChatMessageCount: number | null = null;
+		let lastSeenEventLogCount: number | null = null;
 		let versionPollInFlight = false;
 		let syncInFlight = false;
 		let heartbeatInFlight = false;
 
+		const pollGameSync = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+			try {
+				if (syncInFlight) {
+					return "ok";
+				}
+		
+				syncInFlight = true;
+		
+				const syncDto = await apiService.get<{
+					gameVersion?: number | null;
+					currentTurnIndex?: number | null;
+					turnPhase?: string | null;
+					gamePhase?: string | null;
+					diceValue?: number | null;
+					diceRolledAt?: string | null;
+					tradeRequestedAt?: string | null;
+					latestTradeRequest?: string | null;
+					chatMessageCount?: number | null;
+					eventLogCount?: number | null;
+					currentPlayerId?: number | null;
+					gameFinished?: boolean | null;
+					robberMovedAfterSevenRoll?: boolean | null;
+				}>(`/games/${gameId}/sync`);
+		
+				if (cancelled) {
+					return "ok";
+				}
+		
+				const nextVersion = typeof syncDto.gameVersion === "number" ? syncDto.gameVersion : 0;
+				const nextChatMessageCount = typeof syncDto.chatMessageCount === "number" ? syncDto.chatMessageCount : null;
+				const nextEventLogCount = typeof syncDto.eventLogCount === "number" ? syncDto.eventLogCount : null;
+				const currentVersion = currentGameVersionRef.current;
+				const previousVersion = lastSeenGameVersion;
+				const previousChatMessageCount = lastSeenChatMessageCount;
+				const previousEventLogCount = lastSeenEventLogCount;
+				if (currentVersion !== null && nextVersion < currentVersion) {
+					return "ok";
+				}
+
+				const nextDiceRolledAt = syncDto.diceRolledAt ?? null;
+				const nextDiceValue = typeof syncDto.diceValue === "number" ? syncDto.diceValue : null;
+
+				if (
+					nextDiceRolledAt !== null
+					&& nextDiceRolledAt !== lastDiceRolledAtRef.current
+					&& nextDiceValue !== null
+				) {
+					lastDiceRolledAtRef.current = nextDiceRolledAt;
+
+					setState((previousState) => ({
+						...previousState,
+						diceResult: nextDiceValue,
+						turnPhase: syncDto.turnPhase ?? previousState.turnPhase,
+						gamePhase: syncDto.gamePhase ?? previousState.gamePhase,
+						currentPlayerId: syncDto.currentPlayerId ?? previousState.currentPlayerId,
+						robberMovedAfterSevenRoll:
+							syncDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
+					}));
+					showDiceResultPopup(nextDiceValue);
+				}
+
+				// Lightweight Trade Request detection (matches Dice Roll mechanism)
+				const nextTradeRequestedAt = syncDto.tradeRequestedAt ?? null;
+				if (nextTradeRequestedAt !== null && nextTradeRequestedAt !== lastTradeRequestedAtRef.current) {
+					lastTradeRequestedAtRef.current = nextTradeRequestedAt;
+					if (syncDto.latestTradeRequest) {
+						try {
+							const payload = JSON.parse(syncDto.latestTradeRequest) as GameEventDTO;
+
+							// Trigger the event handler to update responses (Accept/Deny) or finalize the UI
+							applyGameEventRef.current(payload);
+						} catch (e) {
+							console.error("Failed to parse trade request from sync", e);
+						}
+					}
+				}
+		
+				if (previousVersion === null) {
+					lastSeenGameVersion = nextVersion;
+					lastSeenChatMessageCount = nextChatMessageCount;
+					lastSeenEventLogCount = nextEventLogCount;
+					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
+					return "ok";
+				}
+		
+				if (
+					nextVersion !== previousVersion
+					|| nextChatMessageCount !== previousChatMessageCount
+					|| nextEventLogCount !== previousEventLogCount
+				) {
+					const syncStatus = await syncGameState(gameId);
+					if (syncStatus === "ok") {
+						lastSeenGameVersion = nextVersion;
+						lastSeenChatMessageCount = nextChatMessageCount;
+						lastSeenEventLogCount = nextEventLogCount;
+						currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
+					}
+					return syncStatus;
+				}
+		
+				return "ok";
+			} catch (error) {
+				const status = (error as Partial<ApplicationError>)?.status;
+				if (status === 401) {
+					return "unauthorized";
+				}
+				if (status === 404) {
+					return "notfound";
+				}
+				return "error";
+			} finally {
+				syncInFlight = false;
+			}
+		};
+
 		const pollGameVersion = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
-			let startedSync = false;
 			try {
 				if (versionPollInFlight || syncInFlight) {
 					return "ok";
@@ -701,6 +856,8 @@ export default function Gameboard() {
 				const versionDto = await apiService.get<{
 					gameId?: number | null;
 					gameVersion?: number | null;
+					chatMessageCount?: number | null;
+					eventLogCount?: number | null;
 				}>(`/games/${gameId}/version`);
 
 				if (cancelled) {
@@ -708,6 +865,8 @@ export default function Gameboard() {
 				}
 
 				const nextVersion = typeof versionDto.gameVersion === "number" ? versionDto.gameVersion : 0;
+				const nextChatMessageCount = typeof versionDto.chatMessageCount === "number" ? versionDto.chatMessageCount : null;
+				const nextEventLogCount = typeof versionDto.eventLogCount === "number" ? versionDto.eventLogCount : null;
 				const currentVersion = currentGameVersionRef.current;
 				if (currentVersion !== null && nextVersion < currentVersion) {
 					return "ok";
@@ -715,19 +874,25 @@ export default function Gameboard() {
 
 				if (lastSeenGameVersion === null) {
 					lastSeenGameVersion = nextVersion;
+					lastSeenChatMessageCount = nextChatMessageCount;
+					lastSeenEventLogCount = nextEventLogCount;
 					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
 					return "ok";
 				}
 
-				if (nextVersion === lastSeenGameVersion) {
+				if (
+					nextVersion === lastSeenGameVersion
+					&& nextChatMessageCount === lastSeenChatMessageCount
+					&& nextEventLogCount === lastSeenEventLogCount
+				) {
 					return "ok";
 				}
 
-				syncInFlight = true;
-				startedSync = true;
-				const syncStatus = await syncGameState(gameId);
+				const syncStatus = await pollGameSync(gameId);
 				if (syncStatus === "ok") {
 					lastSeenGameVersion = nextVersion;
+					lastSeenChatMessageCount = nextChatMessageCount;
+					lastSeenEventLogCount = nextEventLogCount;
 					currentGameVersionRef.current = currentVersion === null ? nextVersion : Math.max(currentVersion, nextVersion);
 				}
 				return syncStatus;
@@ -741,9 +906,6 @@ export default function Gameboard() {
 				}
 				return "error";
 			} finally {
-				if (startedSync) {
-					syncInFlight = false;
-				}
 				versionPollInFlight = false;
 			}
 		};
@@ -1147,7 +1309,7 @@ export default function Gameboard() {
 			if (previous[0] === message) {
 				return previous;
 			}
-			return [message, ...previous].slice(0, 12);
+			return [message, ...previous];
 		});
 	};
 
@@ -2162,13 +2324,6 @@ export default function Gameboard() {
 		const sumBundle = (bundle: Resources): number =>
 			resourceTypes.reduce((sum, resource) => sum + Math.max(0, bundle[resource] ?? 0), 0);
 
-		const formatBundle = (bundle: Resources): string => {
-			const parts = resourceTypes
-				.filter((resource) => (bundle[resource] ?? 0) > 0)
-				.map((resource) => `${bundle[resource]} ${resource}`);
-			return parts.length > 0 ? parts.join(" + ") : "nothing";
-		};
-
 		const myCornerKeys = new Set<string>();
 		for (const settlement of myPlayer.settlementsOnCorners ?? []) {
 			const hex = hexById.get(settlement.hexId);
@@ -2243,7 +2398,7 @@ export default function Gameboard() {
 			return;
 		}
 
-		const logMessage = `${myPlayer.name} trades ${formatBundle(bankGiveResources)} for ${formatBundle(bankReceiveResources)} with bank.`;
+		const logMessage = `${myPlayer.name} traded with bank: gave ${formatResourceCount(giveTotal)} and received ${formatResourceCount(receiveTotal)}.`;
 		try {
 			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/bank-trade`, withExpectedGameVersion({
 				sourcePlayerId: myPlayer.id,
@@ -2268,8 +2423,7 @@ export default function Gameboard() {
 		}
 		const tradeRequestId = createTradeRequestId();
 
-		const sumBundle = (bundle: Resources): number =>
-			resourceTypes.reduce((sum, resource) => sum + Math.max(0, bundle[resource] ?? 0), 0);
+		const sumBundle = (bundle: Resources): number => sumResourceCount(bundle);
 
 		const formatBundle = (bundle: Resources): string => {
 			const parts = resourceTypes
@@ -2368,7 +2522,9 @@ export default function Gameboard() {
 		const giveResources = isCounter ? counter.receiveResources : activeOutgoingTradeRequest.giveResources;
 		const receiveResources = isCounter ? counter.giveResources : activeOutgoingTradeRequest.receiveResources;
 
-		const logMessage = `${myPlayer.name} finalized the trade with ${targetPlayer.name}.`;
+		const tradedAwayTotal = sumResourceCount(giveResources);
+		const receivedTotal = sumResourceCount(receiveResources);
+		const logMessage = `${myPlayer.name} traded with ${targetPlayer.name}: gave ${formatResourceCount(tradedAwayTotal)} and received ${formatResourceCount(receivedTotal)}.`;
 		try {
 			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/player-trade/finalize`, withExpectedGameVersion({
 				sourcePlayerId: myPlayer.id,
