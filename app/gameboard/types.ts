@@ -199,6 +199,9 @@ export interface GameEventDTO {
 	message?: string;
 	secondResource?: ResourceType;
 	expectedGameVersion?: number;
+	botAiRequested?: boolean;
+	botAiFallbackUsed?: boolean;
+	botAiConsultantUsed?: boolean;
 }
 
 export interface GameChatMessageDTO {

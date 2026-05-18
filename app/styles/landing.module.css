@@ -31,7 +31,7 @@
 }
 
 .title {
-  font-family: "Segoe UI Emoji";
+  font-family: var(--app-font-family);
   font-size: 58px;
   color: #ffd700;
   text-shadow:
@@ -40,7 +40,7 @@
 }
 
 .subtitle {
-  font-family: "Segoe UI Emoji";
+  font-family: var(--app-font-family);
   font-size: 30px;
   color: #fef9c2;
   text-shadow:
