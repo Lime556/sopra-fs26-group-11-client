@@ -529,7 +529,7 @@ export function BoardColumn({
 
 					{initialPlacementWonResources ? (
 						<div className={styles.diceWonResources} role="status" aria-live="polite">
-							<span className={styles.diceWonResourcesLabel}>Ressources won from inital Placement</span>
+							<span className={styles.diceWonResourcesLabel}>Resources won from initial placement</span>
 							{initialPlacementWonResourceEntries.length > 0 ? (
 								<div className={styles.diceWonResourceChips}>
 									{initialPlacementWonResourceEntries.map((resource) => (

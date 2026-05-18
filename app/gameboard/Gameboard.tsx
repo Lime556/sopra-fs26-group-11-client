@@ -226,7 +226,7 @@ export default function Gameboard() {
 	const [dicePopupValue, setDicePopupValue] = useState<number | null>(null);
 	const [diceWonResources, setDiceWonResources] = useState<Resources | null>(null);
 	const [initialPlacementWonResources, setInitialPlacementWonResources] = useState<Resources | null>(null);
-	const [stolenResourcePopup, setStolenResourcePopup] = useState<{ resource: ResourceType; targetName: string | null } | null>(null);
+	const [stolenResourcePopup, setStolenResourcePopup] = useState<{ resource: ResourceType; sourceName: string | null; targetName: string | null } | null>(null);
 	const [showMonopolyResourceSelector, setShowMonopolyResourceSelector] = useState<boolean>(false);
 	const [showYearOfPlentyResourceSelector, setShowYearOfPlentyResourceSelector] = useState<boolean>(false);
 	const [activeGameId, setActiveGameId] = useState<number | null>(null);
@@ -381,6 +381,38 @@ export default function Gameboard() {
 			};
 		});
 
+	const applyGameDtoToState = (gameDto: GameGetDTO): void => {
+		const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
+		if (gameDto.bankResources) {
+			setBankResourcesState(gameDto.bankResources as Resources);
+		}
+		setState((previousState) => {
+			const nextPlayers =
+				serverPlayers.length > 0
+					? mapServerPlayersToStatePlayers(serverPlayers, previousState.players)
+					: previousState.players;
+			const nextCurrentPlayerId =
+				typeof gameDto.currentTurnIndex === "number" && serverPlayers.length > 0
+					? serverPlayers[((gameDto.currentTurnIndex % serverPlayers.length) + serverPlayers.length) % serverPlayers.length].id
+					: previousState.currentPlayerId;
+
+			return {
+				...previousState,
+				players: nextPlayers,
+				currentPlayerId: nextCurrentPlayerId,
+				turnPhase: gameDto.turnPhase ?? previousState.turnPhase,
+				gamePhase: gameDto.gamePhase ?? previousState.gamePhase,
+				diceResult: gameDto.diceValue ?? previousState.diceResult,
+				robberHexId: gameDto.robberTileIndex ?? previousState.robberHexId,
+				robberMovedAfterSevenRoll:
+					gameDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
+				developmentDeck: gameDto.developmentDeck ?? previousState.developmentDeck,
+			};
+		});
+		setWinnerPlayerName(gameDto?.winner?.name ?? null);
+		setIsGameFinished(Boolean(gameDto?.gameFinished) || Boolean(gameDto?.finishedAt));
+	};
+
 
 	const showDiceResultPopup = (diceValue: number) => {
 		setDicePopupValue(diceValue);
@@ -394,8 +426,8 @@ export default function Gameboard() {
 		}, 2600);
 	};
 
-	const showStolenResourcePopup = (resource: ResourceType, targetName: string | null) => {
-		setStolenResourcePopup({ resource, targetName });
+	const showStolenResourcePopup = (resource: ResourceType, targetName: string | null, sourceName: string | null = null) => {
+		setStolenResourcePopup({ resource, sourceName, targetName });
 		if (stolenResourcePopupTimeoutRef.current !== null) {
 			globalThis.clearTimeout(stolenResourcePopupTimeoutRef.current);
 		}
@@ -538,7 +570,7 @@ export default function Gameboard() {
 			return legacyGameId;
 		};
 
-		const syncGameState = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+		const syncGameState = async (gameId: number, options?: { quiet?: boolean }): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
 			try {
 				const gameDto = await apiService.get<GameGetDTO>(`/games/${gameId}`);
 				const responseVersion = typeof gameDto?.gameVersion === "number" ? gameDto.gameVersion : null;
@@ -687,6 +719,12 @@ export default function Gameboard() {
 								known.add(entry);
 								const structuredEntry = parseStructuredEventLogEntry(entry);
 								showBotAiFeedbackFromEvent(structuredEntry?.payload ?? null);
+								if (structuredEntry) {
+									const robberSteal = parseRobberStealResult(structuredEntry);
+									if (robberSteal) {
+										showStolenResourcePopup(robberSteal.resource, robberSteal.targetName, robberSteal.sourceName);
+									}
+								}
 								if (structuredEntry && structuredEntry.payload && (structuredEntry.payload.type === "PLAYER_TRADE" || (structuredEntry.payload.type as string) === "PLAYER_TRADE_FINALIZE")) {
 									return;
 								}
@@ -715,12 +753,23 @@ export default function Gameboard() {
 					return "notfound";
 				}
 
-				if (!cancelled) {
+				if (!cancelled && !options?.quiet) {
 					setBoardStatus("Could not load board data from server.");
 				}
 
 				return "error";
 			}
+		};
+
+		const syncGameStateWithRetry = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+			for (let attempt = 0; attempt < 3; attempt += 1) {
+				const status = await syncGameState(gameId, { quiet: attempt < 2 });
+				if (status !== "error") {
+					return status;
+				}
+				await new Promise((resolve) => window.setTimeout(resolve, 180));
+			}
+			return syncGameState(gameId);
 		};
 
 		let lastSeenGameVersion: number | null = null;
@@ -777,8 +826,6 @@ export default function Gameboard() {
 					&& nextDiceRolledAt !== lastDiceRolledAtRef.current
 					&& nextDiceValue !== null
 				) {
-					lastDiceRolledAtRef.current = nextDiceRolledAt;
-
 					setState((previousState) => ({
 						...previousState,
 						diceResult: nextDiceValue,
@@ -788,7 +835,6 @@ export default function Gameboard() {
 						robberMovedAfterSevenRoll:
 							syncDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
 					}));
-					showDiceResultPopup(nextDiceValue);
 				}
 
 				// Lightweight Trade Request detection (matches Dice Roll mechanism)
@@ -1022,7 +1068,7 @@ export default function Gameboard() {
 				setActiveGameId(gameId);
 			}
 
-			let syncStatus = await syncGameState(gameId);
+			let syncStatus = await syncGameStateWithRetry(gameId);
 			if (syncStatus === "unauthorized") {
 				if (!cancelled) {
 					setBoardStatus("Session expired. Please log in again.");
@@ -1041,7 +1087,7 @@ export default function Gameboard() {
 					}
 					return;
 				}
-				syncStatus = await syncGameState(newGameId);
+				syncStatus = await syncGameStateWithRetry(newGameId);
 				if (syncStatus !== "ok") {
 					if (!cancelled) {
 						setBoardStatus("Could not load board data from server.");
@@ -1193,6 +1239,7 @@ export default function Gameboard() {
 			void apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/bot/fallback`, { useAi: botAiEnabled })
 				.then((gameDto) => {
 					rememberServerGameVersion(gameDto);
+					applyGameDtoToState(gameDto);
 					const latestBotAiEvent = [...(gameDto.eventLog ?? [])]
 						.reverse()
 						.map((entry) => parseStructuredEventLogEntry(entry)?.payload ?? null)
@@ -1367,6 +1414,25 @@ export default function Gameboard() {
 		}
 
 		return { player, action, result, payload };
+	};
+
+	const parseRobberStealResult = (entry: { player: string; action: string; result: string }): { resource: ResourceType; sourceName: string; targetName: string | null } | null => {
+		if (entry.action !== "ROBBER_MOVE") {
+			return null;
+		}
+
+		const normalizedResult = entry.result.toLowerCase();
+		const resource = resourceTypes.find((candidate) => normalizedResult.includes(`1 ${candidate}`));
+		if (!resource) {
+			return null;
+		}
+
+		const fromMatch = entry.result.match(/\bfrom\s+(.+)$/i);
+		return {
+			resource,
+			sourceName: entry.player,
+			targetName: fromMatch?.[1]?.trim() || null,
+		};
 	};
 
 	const formatEventLogEntry = (entry: string): string => {
@@ -2813,7 +2879,7 @@ export default function Gameboard() {
 		
 			if (targetPlayer) {
 				if (stolenResource) {
-					showStolenResourcePopup(stolenResource, targetPlayer.name);
+					showStolenResourcePopup(stolenResource, targetPlayer.name, myPlayer.name);
 					addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId} and stole ${stolenResource} from ${targetPlayer.name}.`);
 				} else {
 					addToLog(`${myPlayer.name} moved the robber to hex ${pendingRobberHexId} and stole from ${targetPlayer.name}.`);
@@ -3053,6 +3119,8 @@ export default function Gameboard() {
 			}
 
 			try {
+				const wasSecondSetupRound = state.gamePhase === "SETUP_SECOND_ROUND";
+				const resourcesBeforeSetupRoad = myPlayer.resources;
 				const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/build-road`, withExpectedGameVersion({
 					playerId: myPlayer.id,
 					edgeId,
@@ -3060,8 +3128,12 @@ export default function Gameboard() {
 				rememberServerGameVersion(gameDto);
 				const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
 				const serverCurrentPlayer = serverPlayers.find((player) => player.id === myPlayer.id) ?? null;
-				if (serverCurrentPlayer) {
-					setInitialPlacementWonResources(mapResourcesFromServer(serverCurrentPlayer));
+				if (wasSecondSetupRound && serverCurrentPlayer) {
+					setInitialPlacementWonResources(
+						calculateWonResources(resourcesBeforeSetupRoad, mapResourcesFromServer(serverCurrentPlayer))
+					);
+				} else {
+					setInitialPlacementWonResources(null);
 				}
 
 				setState((previousState) => ({
@@ -3334,9 +3406,14 @@ export default function Gameboard() {
 					<div className={styles.dicePopupOverlay}>
 						<div className={styles.dicePopupCard} role="status" aria-live="polite">
 							<div className={styles.dicePopupTitle}>Resource Stolen</div>
+							{stolenResourcePopup.sourceName ? (
+								<div className={styles.stolenResourcePopupTarget}>
+									{stolenResourcePopup.sourceName} stole
+								</div>
+							) : null}
 							<div className={styles.stolenResourcePopupValue}>
 								<span aria-hidden="true">{resourceEmojiByType[stolenResourcePopup.resource]}</span>
-								<span>{stolenResourcePopup.resource}</span>
+								<span>1 {stolenResourcePopup.resource}</span>
 							</div>
 							{stolenResourcePopup.targetName ? (
 								<div className={styles.stolenResourcePopupTarget}>
