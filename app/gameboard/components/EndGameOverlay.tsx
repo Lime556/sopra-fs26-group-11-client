@@ -13,7 +13,7 @@ interface PlayerGameStats {
 
 interface EndGameOverlayProps {
 	isVisible: boolean;
-	winnerDisplayName: string;
+	winnerDisplayName: string | null;
 	leaderboardPlayers: Player[];
 	perPlayerGameStats: Map<number, PlayerGameStats>;
 	gameSummaryStats: PlayerGameStats;
@@ -45,9 +45,13 @@ export function EndGameOverlay({
 		<div className={styles.endGameOverlay}>
 			<div className={styles.endGameCard}>
 				<h1 className={styles.endGameTitle}>Game Finished</h1>
-				<p className={styles.endGameWinnerLine}>
-					Winner: <strong>{winnerDisplayName}</strong>
-				</p>
+				{winnerDisplayName ? (
+					<p className={styles.endGameWinnerLine}>
+						Winner: <strong>{winnerDisplayName}</strong>
+					</p>
+				) : (
+					<p className={styles.endGameWinnerLine}>No winner. All players left the game.</p>
+				)}
 
 				<div className={styles.endGameSection}>
 					<h2 className={styles.endGameSectionTitle}>Leaderboard</h2>
