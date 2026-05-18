@@ -94,6 +94,12 @@ const calculateWonResources = (before: Resources, after: Resources): Resources =
 const findGainedResource = (before: Resources, after: Resources): ResourceType | null =>
 	resourceTypes.find((resource) => after[resource] > before[resource]) ?? null;
 
+const sumResourceCount = (bundle?: Partial<Resources> | null): number =>
+	resourceTypes.reduce((sum, resource) => sum + Math.max(0, bundle?.[resource] ?? 0), 0);
+
+const formatResourceCount = (count: number): string =>
+	`${count} resource${count === 1 ? "" : "s"}`;
+
 const findLocalStatePlayer = (players: Player[], sessionUserId: string, sessionUsername: string): Player | null => {
 	const parsedSessionUserId = Number.parseInt(sessionUserId ?? "", 10);
 	const hasSessionUserId = Number.isFinite(parsedSessionUserId);
@@ -2266,13 +2272,6 @@ export default function Gameboard() {
 		const sumBundle = (bundle: Resources): number =>
 			resourceTypes.reduce((sum, resource) => sum + Math.max(0, bundle[resource] ?? 0), 0);
 
-		const formatBundle = (bundle: Resources): string => {
-			const parts = resourceTypes
-				.filter((resource) => (bundle[resource] ?? 0) > 0)
-				.map((resource) => `${bundle[resource]} ${resource}`);
-			return parts.length > 0 ? parts.join(" + ") : "nothing";
-		};
-
 		const myCornerKeys = new Set<string>();
 		for (const settlement of myPlayer.settlementsOnCorners ?? []) {
 			const hex = hexById.get(settlement.hexId);
@@ -2347,7 +2346,7 @@ export default function Gameboard() {
 			return;
 		}
 
-		const logMessage = `${myPlayer.name} trades ${formatBundle(bankGiveResources)} for ${formatBundle(bankReceiveResources)} with bank.`;
+		const logMessage = `${myPlayer.name} traded with bank: gave ${formatResourceCount(giveTotal)} and received ${formatResourceCount(receiveTotal)}.`;
 		try {
 			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/bank-trade`, withExpectedGameVersion({
 				sourcePlayerId: myPlayer.id,
@@ -2372,8 +2371,7 @@ export default function Gameboard() {
 		}
 		const tradeRequestId = createTradeRequestId();
 
-		const sumBundle = (bundle: Resources): number =>
-			resourceTypes.reduce((sum, resource) => sum + Math.max(0, bundle[resource] ?? 0), 0);
+		const sumBundle = (bundle: Resources): number => sumResourceCount(bundle);
 
 		const formatBundle = (bundle: Resources): string => {
 			const parts = resourceTypes
@@ -2472,7 +2470,9 @@ export default function Gameboard() {
 		const giveResources = isCounter ? counter.receiveResources : activeOutgoingTradeRequest.giveResources;
 		const receiveResources = isCounter ? counter.giveResources : activeOutgoingTradeRequest.receiveResources;
 
-		const logMessage = `${myPlayer.name} finalized the trade with ${targetPlayer.name}.`;
+		const tradedAwayTotal = sumResourceCount(giveResources);
+		const receivedTotal = sumResourceCount(receiveResources);
+		const logMessage = `${myPlayer.name} traded with ${targetPlayer.name}: gave ${formatResourceCount(tradedAwayTotal)} and received ${formatResourceCount(receivedTotal)}.`;
 		try {
 			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/player-trade/finalize`, withExpectedGameVersion({
 				sourcePlayerId: myPlayer.id,
