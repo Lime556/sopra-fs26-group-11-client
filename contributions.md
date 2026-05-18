@@ -176,7 +176,7 @@ reason).
 
 ---
 
-## Contributions Week 6 - [11.05.] to [17.05]
+## Contributions Week 6 - [11.05.] to [18.05]
 
 | **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
@@ -190,8 +190,11 @@ reason).
 | | 17.05. | https://github.com/Lime556/sopra-fs26-group-11-client/commit/fd3fec1a4ecaef7e20dadf489834f41780ac2133 | making counteroffers for trading. #165, #166, #170, #41 | counteroffering and making different trades if one is not possible makes the game more interesting. |
 | **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
-| **Ziske11** | 17.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/pull/151/changes/5f99de8bb00360fbb0f35539eb06a4e2d6919478 | Added Won ressources popup after rolling a dice, or other player rolled dice, or initial settlement | to have a better overview over the entire Gameplay. |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **Ziske11** | 17.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/3837ee56e23c65d16dcfbbba34e26ba3cfc7b92f | corrected server side Bot AI functionality and added Test | Add Test to test Bot functionality |
+|                    | 17.5.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/6c58a948d18885fa018e7aaa5b803672a641a341 | Added AI API Bot consultant implementation | The Bot now gets "consultant feedback" from the AI Huggingface API, to make the bot smarter. Only usable Locally at the moment, didn't implement the API Token yet for security reasons |
+|             | 17.5.   |  https://github.com/Lime556/sopra-fs26-group-11-server/commit/929e3195cbefb1b722b40bd11dd47d50f3c5dab0 |  Corrected Bot Flow, setup progression, AI fallback validation, and other Bot related bugs  | to make the bot work better, less use of AI tokens, smarter Bot |
+|                    | 17.5.   |  https://github.com/Lime556/sopra-fs26-group-11-client/pull/158/changes/5ced1d57807314dcf912675470b07d6e830cd16c |  User Interface and Client logic for the bot flow  | now you can use the bot in the client, turn the AI API consultant feature ON/OFF. |
+|                    | 18.5.   |  https://github.com/Lime556/sopra-fs26-group-11-server/commit/929e3195cbefb1b722b40bd11dd47d50f3c5dab0 |  Corrected Bot Flow, setup progression, AI fallback validation, and other Bot related bugs  | to make the bot work better, less use of AI tokens, smarter Bot |
 | **Lime556** | [12.05.] | https://github.com/Lime556/sopra-fs26-group-11-server/commit/28d69739b4b16f5086e69a7a39a4a8fc14a877eb | Fix stale game sync with versioned action endpoints (#323) | Added backend-side versioned game action handling so stale client actions are rejected instead of corrupting or overwriting newer game state. |
 |                    | [12.05.] | https://github.com/Lime556/sopra-fs26-group-11-server/commit/b7247186c87066eabacf8b1e41a6a716bc8400ac | Fix stale game sync with versioned actions (#323) | Hardened backend game synchronization by making gameplay mutations follow the versioned action flow. |
 |                    | [12.05.] | https://github.com/Lime556/sopra-fs26-group-11-client/commit/d5e498e34f9fadd2a5f5e3619b5a7a9e2ca9330b | Fix stale game sync with versioned action endpoints (#130) | Connected the frontend to authoritative versioned action responses so the UI only advances after confirmed backend state updates. |
