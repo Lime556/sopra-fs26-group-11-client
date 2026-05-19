@@ -66,4 +66,4 @@ export const boardCoordinatesById: Record<number, { x: number; y: number }> = {
 	19: { x: 3, y: 4 },
 };
 
-export const fallbackPlayerColors = ["#d13f34", "#2e7ccf", "#3f9e56", "#e0a120"];
+export const fallbackPlayerColors = ["#b4233a", "#2e7ccf", "#e0a120", "#166534"];

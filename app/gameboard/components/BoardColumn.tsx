@@ -4,8 +4,8 @@ import Image from "next/image";
 import styles from "@/styles/gameboard.module.css";
 import { findDesertHexId, getPortColor, getPortIcon, getPortLabel } from "../mappers";
 import { calculateHexPoints, calculatePortPosition, getCornerPoint, toPixel } from "../geometry";
-import { hexSize, resourceEmojiByType, resourceTypes, tileImageByType } from "../constants";
-import { GameAmbienceDTO, GameState, HexTile, PortVisual, Resources } from "../types";
+import { hexSize, tileImageByType } from "../constants";
+import { GameAmbienceDTO, GameState, HexTile, PortVisual } from "../types";
 
 const MAX_ROADS = 15;
 const MAX_SETTLEMENTS = 5;
@@ -42,11 +42,10 @@ interface BoardColumnProps {
 	handleBuyDevelopmentCard: () => void;
 	developmentCards: string[];
 	isDevCardPlayMode: boolean;
+	showDevelopmentCardsPreview: boolean;
 	handleToggleDevCardPlayMode: () => void;
 	handlePlayDevelopmentCard: (card: string) => void;
 	handleRollDice: () => void;
-	diceWonResources: Resources | null;
-	initialPlacementWonResources: Resources | null;
 	handleBuildRoadAction: () => void;
 	handleBuildSettlementAction: () => void;
 	handleBuildCityAction: () => void;
@@ -97,11 +96,10 @@ export function BoardColumn({
 	handleBuyDevelopmentCard,
 	developmentCards,
 	isDevCardPlayMode,
+	showDevelopmentCardsPreview,
 	handleToggleDevCardPlayMode,
 	handlePlayDevelopmentCard,
 	handleRollDice,
-	diceWonResources,
-	initialPlacementWonResources,
 	handleBuildRoadAction,
 	handleBuildSettlementAction,
 	handleBuildCityAction,
@@ -129,12 +127,6 @@ export function BoardColumn({
 	const hasMaxRoads = myRoadCount >= MAX_ROADS;
 	const hasMaxSettlements = mySettlementCount >= MAX_SETTLEMENTS;
 	const hasMaxCities = myCityCount >= MAX_CITIES;
-	const wonResourceEntries = diceWonResources
-		? resourceTypes.filter((resource) => (diceWonResources[resource] ?? 0) > 0)
-		: [];
-	const initialPlacementWonResourceEntries = initialPlacementWonResources
-		? resourceTypes.filter((resource) => (initialPlacementWonResources[resource] ?? 0) > 0)
-		: [];
 
 	const canEndTurn =
 		 (canUseActionPhase && !mustMoveRobberBeforeEndTurn)
@@ -563,43 +555,7 @@ export function BoardColumn({
 						<span>Roll Dice</span>
 					</button>
 
-					{diceWonResources ? (
-						<div className={styles.diceWonResources} role="status" aria-live="polite">
-							<span className={styles.diceWonResourcesLabel}>Resources won</span>
-							{wonResourceEntries.length > 0 ? (
-								<div className={styles.diceWonResourceChips}>
-									{wonResourceEntries.map((resource) => (
-										<span key={resource} className={styles.diceWonResourceChip}>
-											<span aria-hidden="true">{resourceEmojiByType[resource]}</span>
-											<span>+{diceWonResources[resource]}</span>
-										</span>
-									))}
-								</div>
-							) : (
-								<span className={styles.diceWonResourcesEmpty}>No resources won</span>
-							)}
-						</div>
-					) : null}
-
-					{initialPlacementWonResources ? (
-						<div className={styles.diceWonResources} role="status" aria-live="polite">
-							<span className={styles.diceWonResourcesLabel}>Resources won from initial placement</span>
-							{initialPlacementWonResourceEntries.length > 0 ? (
-								<div className={styles.diceWonResourceChips}>
-									{initialPlacementWonResourceEntries.map((resource) => (
-										<span key={resource} className={styles.diceWonResourceChip}>
-											<span aria-hidden="true">{resourceEmojiByType[resource]}</span>
-											<span>+{initialPlacementWonResources[resource]}</span>
-										</span>
-									))}
-								</div>
-							) : (
-								<span className={styles.diceWonResourcesEmpty}>No resources won</span>
-							)}
-						</div>
-					) : null}
-
-					<div className={styles.actionGrid} data-tutorial="action-grid">
+					<div className={styles.actionGrid}>
 						<button
 							type="button"
 							className={`${styles.actionSquareButton} ${!canUseActionPhase ? styles.buttonDisabled : styles.knightButton}`}
@@ -693,7 +649,7 @@ export function BoardColumn({
 						</button>
 					</div>
 
-					{developmentCards.length > 0 ? (
+					{(isDevCardPlayMode || showDevelopmentCardsPreview) && developmentCards.length > 0 ? (
 						<div className={styles.devCardActionPanel}>
 							<div className={styles.devCardActionTitle}>Development Cards</div>
 							<div className={styles.devCardActionList}>
@@ -703,16 +659,7 @@ export function BoardColumn({
 										<button
 											type="button"
 											key={`action-dev-card-${card}-${index}`}
-											className={playable ? styles.devCardActionButtonPlayable : styles.devCardActionButtonLocked}
-											style={{
-												background: 'none',
-												border: 'none',
-												padding: 0,
-												boxShadow: 'none',
-												width: '8%',
-												height: 'auto',
-												cursor: playable ? 'pointer' : 'default'
-											}}
+											className={`${styles.devCardActionButton} ${playable ? styles.devCardActionButtonPlayable : styles.devCardActionButtonLocked}`}
 											onClick={() => {
 												if (playable) {
 													handlePlayDevelopmentCard(card);
@@ -725,7 +672,7 @@ export function BoardColumn({
 												alt={card.replaceAll("_", " ")}
 												width={100}
 												height={140}
-												style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'contain' }}
+												className={styles.devCardActionImage}
 											/>
 										</button>
 									);

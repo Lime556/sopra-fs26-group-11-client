@@ -113,7 +113,7 @@ const tutorialPlayer: Player = {
   id: 1,
   userId: null,
   name: "Tutorial Player",
-  color: "#d13f34",
+  color: "#b4233a",
   resources: {
     wood: 1,
     brick: 0,
@@ -206,11 +206,10 @@ export default function TutorialPage() {
         handleBuyDevelopmentCard={noop}
         developmentCards={[]}
         isDevCardPlayMode={false}
+        showDevelopmentCardsPreview={false}
         handleToggleDevCardPlayMode={noop}
         handlePlayDevelopmentCard={noop}
         handleRollDice={noop}
-        diceWonResources={null}
-        initialPlacementWonResources={null}
         handleBuildRoadAction={noop}
         handleBuildSettlementAction={noop}
         handleBuildCityAction={noop}
