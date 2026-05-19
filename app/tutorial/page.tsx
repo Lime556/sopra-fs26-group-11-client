@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import styles from "@/styles/gameboard.module.css";
 import { BoardColumn } from "../gameboard/components/BoardColumn";
 import { boardCoordinatesById } from "../gameboard/constants";
 import { findDesertHexId, createInitialGameState } from "../gameboard/mappers";
-import { type GameState, type HexTile, type Player } from "../gameboard/types";
+import { type GameState, type HexTile, type PortVisual, type Player } from "../gameboard/types";
+import { createCanonicalEdgeKey, getCornerPoint, toPixel } from "../gameboard/geometry";
 import { LogOut, Send } from "lucide-react";
 import { TutorialOverlay } from "../tutorial/TutorialOverlay";
 
@@ -51,36 +52,93 @@ const tutorialHexes: HexTile[] = Object.keys(boardCoordinatesById)
     y: boardCoordinatesById[id].y,
   }));
 
+const tutorialPorts: PortVisual[] = [
+  {
+    id: 1,
+    type: "3:1",
+    hexId: 16,
+    corners: [0, 5],
+  },
+  {
+    id: 2,
+    type: "wood",
+    hexId: 2,
+    corners: [4, 3],
+  },
+  {
+    id: 3,
+    type: "brick",
+    hexId: 3,
+    corners: [4, 5],
+  },
+  {
+    id: 4,
+    type: "3:1",
+    hexId: 4,
+    corners: [3, 4],
+  },
+  {
+    id: 5,
+    type: "wool",
+    hexId: 7,
+    corners: [4, 5],
+  },
+  {
+    id: 6,
+    type: "wheat",
+    hexId: 12,
+    corners: [5, 0],
+  },
+  {
+    id: 7,
+    type: "3:1",
+    hexId: 13,
+    corners: [2, 3],
+  },
+  {
+    id: 8,
+    type: "ore",
+    hexId: 19,
+    corners: [0, 1],
+  },
+  {
+    id: 9,
+    type: "3:1",
+    hexId: 18,
+    corners: [1, 2],
+  },
+];
+
 const tutorialPlayer: Player = {
   id: 1,
   userId: null,
   name: "Tutorial Player",
   color: "#d13f34",
   resources: {
-    wood: 3,
-    brick: 2,
-    wool: 2,
-    wheat: 2,
+    wood: 1,
+    brick: 0,
+    wool: 1,
+    wheat: 0,
     ore: 1,
   },
-  victoryPoints: 1,
+  victoryPoints: 2,
   developmentCards: [],
   knightsPlayed: 0,
   developmentCardVictoryPoints: 0,
   freeRoadBuildsRemaining: 0,
   settlementsOnCorners: [{ hexId: 6, corner: 2 }],
-  citiesOnCorners: [],
-  roadsOnEdges: [{ hexId: 6, edge: 1 }],
+  citiesOnCorners: [{ hexId: 15, corner: 5 }],
+  roadsOnEdges: [{ hexId: 6, edge: 1 }, { hexId: 15, edge : 4 }],
 };
 
 const tutorialState: GameState = {
   ...createInitialGameState(),
   hexes: tutorialHexes,
-  ports: [],
+  ports: tutorialPorts,
   players: [tutorialPlayer],
   currentPlayerId: tutorialPlayer.id,
   robberHexId: findDesertHexId(tutorialHexes),
-  turnPhase: "ROLL_DICE",
+  turnPhase: "ACTION",
   gamePhase: "ACTIVE",
 };
 
@@ -92,15 +150,46 @@ export default function TutorialPage() {
     // Tutorial board is static in this mode.
   };
 
+  const hexById = new Map(tutorialState.hexes.map((hex) => [hex.id, hex]));
+
+  const renderedRoadSegments = useMemo(() => {
+    return tutorialState.players.flatMap((player) => {
+      const uniqueRoads = new Map<string, { x1: number; y1: number; x2: number; y2: number }>();
+
+      player.roadsOnEdges.forEach((road) => {
+        const hex = hexById.get(road.hexId);
+        if (!hex) {
+          return;
+        }
+
+        const edgeKey = createCanonicalEdgeKey(hex, road.edge);
+        if (uniqueRoads.has(edgeKey)) {
+          return;
+        }
+
+        const { cx, cy } = toPixel(hex);
+        const p1 = getCornerPoint(cx, cy, road.edge);
+        const p2 = getCornerPoint(cx, cy, (road.edge + 1) % 6);
+        uniqueRoads.set(edgeKey, { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y });
+      });
+
+      return Array.from(uniqueRoads.entries()).map(([edgeKey, line]) => ({
+        key: `road-${player.id}-${edgeKey}`,
+        color: player.color,
+        ...line,
+      }));
+    });
+  }, [hexById]);
+
   return (
     <div className={styles.layout}>
     <div data-tutorial="board">
       <BoardColumn
         boardStatus="Tutorial mode enabled"
         state={tutorialState}
-        ports={[]}
-        hexById={new Map(tutorialState.hexes.map((hex) => [hex.id, hex]))}
-        renderedRoadSegments={[]}
+        ports={tutorialPorts}
+        hexById={hexById}
+        renderedRoadSegments={renderedRoadSegments}
         isRoadPlacementMode={false}
         isSettlementPlacementMode={false}
         isCityPlacementMode={false}
@@ -117,16 +206,17 @@ export default function TutorialPage() {
         handleBuyDevelopmentCard={noop}
         developmentCards={[]}
         isDevCardPlayMode={false}
-	        handleToggleDevCardPlayMode={noop}
-	        handlePlayDevelopmentCard={noop}
-	        handleRollDice={noop}
-	        diceWonResources={null}
-	        initialPlacementWonResources={null}
-	        handleBuildRoadAction={noop}
+        handleToggleDevCardPlayMode={noop}
+        handlePlayDevelopmentCard={noop}
+        handleRollDice={noop}
+        diceWonResources={null}
+        initialPlacementWonResources={null}
+        handleBuildRoadAction={noop}
         handleBuildSettlementAction={noop}
         handleBuildCityAction={noop}
         handleEndTurn={noop}
         mustMoveRobberBeforeEndTurn={false}
+        tutorialMode={true}
       />
       </div>
 
@@ -160,7 +250,7 @@ export default function TutorialPage() {
                 </div>
                 <div className={`${styles.playerStatCell} ${styles.roadCell}`}>
                   <span className={styles.playerStatIcon}>🛤️</span>
-                  <span className={styles.playerStatValue}>{tutorialPlayer.roadsOnEdges.length}</span>
+                  <span className={styles.playerStatValue}>{tutorialPlayer.roadsOnEdges.length/2}</span>
                 </div>
               </div>
             </li>
