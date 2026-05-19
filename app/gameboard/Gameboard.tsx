@@ -232,6 +232,8 @@ export default function Gameboard() {
 	const [activeGameId, setActiveGameId] = useState<number | null>(null);
 	const [placementMode, setPlacementMode] = useState<"road" | "settlement" | "city" | "knight" | null>(null);
 	const [isDevCardPlayMode, setIsDevCardPlayMode] = useState<boolean>(false);
+	const [showDevelopmentCardsPreview, setShowDevelopmentCardsPreview] = useState<boolean>(false);
+	const developmentCardsPreviewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const [robberTargetModalOpen, setRobberTargetModalOpen] = useState<boolean>(false);
 	const [pendingRobberHexId, setPendingRobberHexId] = useState<number | null>(null);
 	const [robberTargets, setRobberTargets] = useState<Player[]>([]);
@@ -1274,12 +1276,23 @@ export default function Gameboard() {
 	const dicePopupWonEntries = diceWonResources
 		? resourceTypes.filter((resource) => (diceWonResources[resource] ?? 0) > 0)
 		: [];
+	const initialPlacementWonResourceEntries = initialPlacementWonResources
+		? resourceTypes.filter((resource) => (initialPlacementWonResources[resource] ?? 0) > 0)
+		: [];
 
 	useEffect(() => {
 		if (!isMyTurn || state.turnPhase !== "ACTION") {
 			setIsDevCardPlayMode(false);
 		}
 	}, [isMyTurn, state.turnPhase]);
+
+	useEffect(() => {
+		return () => {
+			if (developmentCardsPreviewTimeoutRef.current) {
+				clearTimeout(developmentCardsPreviewTimeoutRef.current);
+			}
+		};
+	}, []);
 
 	const leaderboardPlayers = useMemo(
 		() =>
@@ -2966,6 +2979,15 @@ export default function Gameboard() {
 				sourcePlayerId: myPlayer.id,
 			}));
 			rememberServerGameVersion(gameDto);
+			applyGameDtoToState(gameDto);
+			setShowDevelopmentCardsPreview(true);
+			if (developmentCardsPreviewTimeoutRef.current) {
+				clearTimeout(developmentCardsPreviewTimeoutRef.current);
+			}
+			developmentCardsPreviewTimeoutRef.current = setTimeout(() => {
+				setShowDevelopmentCardsPreview(false);
+				developmentCardsPreviewTimeoutRef.current = null;
+			}, 5000);
 			addToLog(`${myPlayer.name} buys a development card.`); // The backend will deduct resources from the player and add them to the bank. // The syncGameState will then update the player's resources and bank's resources.
 		} catch {
 			addToLog("Could not buy development card. Please try again.");
@@ -3286,6 +3308,7 @@ export default function Gameboard() {
 				leaderboardPlayers={leaderboardPlayers}
 				perPlayerGameStats={perPlayerGameStats}
 				gameSummaryStats={gameSummaryStats}
+				currentPlayerId={myPlayer?.id ?? null}
 				onBackToMain={() => router.push("/lobby")}
 			/>
 
@@ -3581,12 +3604,11 @@ export default function Gameboard() {
 					handleBuyDevelopmentCard={handleBuyDevelopmentCard}
 					developmentCards={myPlayer?.developmentCards ?? []}
 					isDevCardPlayMode={isDevCardPlayMode}
-						handleToggleDevCardPlayMode={handleToggleDevCardPlayMode}
-						handlePlayDevelopmentCard={handlePlayDevelopmentCard}
-						handleRollDice={handleRollDice}
-						diceWonResources={diceWonResources}
-						initialPlacementWonResources={initialPlacementWonResources}
-						handleBuildRoadAction={handleBuildRoadAction}
+					showDevelopmentCardsPreview={showDevelopmentCardsPreview}
+					handleToggleDevCardPlayMode={handleToggleDevCardPlayMode}
+					handlePlayDevelopmentCard={handlePlayDevelopmentCard}
+					handleRollDice={handleRollDice}
+					handleBuildRoadAction={handleBuildRoadAction}
 					handleBuildSettlementAction={handleBuildSettlementAction}
 					handleBuildCityAction={handleBuildCityAction}
 					handleEndTurn={handleEndTurn}
@@ -3695,6 +3717,40 @@ export default function Gameboard() {
 							<div className={styles.currentPlayerLine}>
 								Remaining: Roads {MAX_ROADS - myPlayer.roadsOnEdges.length} | Settlements {MAX_SETTLEMENTS - myPlayer.settlementsOnCorners.length} | Cities {MAX_CITIES - myPlayer.citiesOnCorners.length}
 							</div>
+							{diceWonResources ? (
+								<div className={styles.diceWonResources} role="status" aria-live="polite">
+									<span className={styles.diceWonResourcesLabel}>Resources won</span>
+									{dicePopupWonEntries.length > 0 ? (
+										<div className={styles.diceWonResourceChips}>
+											{dicePopupWonEntries.map((resource) => (
+												<span key={`sidebar-dice-won-${resource}`} className={styles.diceWonResourceChip}>
+													<span aria-hidden="true">{resourceEmojiByType[resource]}</span>
+													<span>+{diceWonResources[resource]}</span>
+												</span>
+											))}
+										</div>
+									) : (
+										<span className={styles.diceWonResourcesEmpty}>No resources won</span>
+									)}
+								</div>
+							) : null}
+							{initialPlacementWonResources ? (
+								<div className={styles.diceWonResources} role="status" aria-live="polite">
+									<span className={styles.diceWonResourcesLabel}>Resources won from initial placement</span>
+									{initialPlacementWonResourceEntries.length > 0 ? (
+										<div className={styles.diceWonResourceChips}>
+											{initialPlacementWonResourceEntries.map((resource) => (
+												<span key={`sidebar-initial-won-${resource}`} className={styles.diceWonResourceChip}>
+													<span aria-hidden="true">{resourceEmojiByType[resource]}</span>
+													<span>+{initialPlacementWonResources[resource]}</span>
+												</span>
+											))}
+										</div>
+									) : (
+										<span className={styles.diceWonResourcesEmpty}>No resources won</span>
+									)}
+								</div>
+							) : null}
 						</>
 					) : (
 						<div className={styles.currentPlayerLine}>No personal resource data available</div>

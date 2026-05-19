@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { CSSProperties, Fragment } from "react";
 import styles from "@/styles/gameboard.module.css";
 import { Player } from "../types";
 
@@ -17,6 +17,7 @@ interface EndGameOverlayProps {
 	leaderboardPlayers: Player[];
 	perPlayerGameStats: Map<number, PlayerGameStats>;
 	gameSummaryStats: PlayerGameStats;
+	currentPlayerId: number | null;
 	onBackToMain: () => void;
 }
 
@@ -35,26 +36,71 @@ export function EndGameOverlay({
 	leaderboardPlayers,
 	perPlayerGameStats,
 	gameSummaryStats,
+	currentPlayerId,
 	onBackToMain,
 }: EndGameOverlayProps) {
 	if (!isVisible) {
 		return null;
 	}
 
+	const winnerPlayer = winnerDisplayName
+		? leaderboardPlayers.find((player) => player.name === winnerDisplayName) ?? null
+		: null;
+	const currentPlayer = currentPlayerId !== null
+		? leaderboardPlayers.find((player) => player.id === currentPlayerId) ?? null
+		: null;
+	const currentPlayerWon = Boolean(currentPlayer && winnerPlayer && currentPlayer.id === winnerPlayer.id);
+	const currentPlayerLost = Boolean(currentPlayer && winnerPlayer && currentPlayer.id !== winnerPlayer.id);
+	const resultTitle = currentPlayerWon
+		? "You Won"
+		: currentPlayerLost
+			? "You Lost"
+			: winnerPlayer
+				? `${winnerPlayer.name} Won`
+				: "Game Ended";
+	const resultClassName = currentPlayerWon
+		? styles.endGameResultWon
+		: currentPlayerLost
+			? styles.endGameResultLost
+			: styles.endGameResultSpectator;
+
 	return (
 		<div className={styles.endGameOverlay}>
+			<div className={styles.confettiLayer} aria-hidden="true">
+				{Array.from({ length: 72 }, (_, index) => {
+					const style = {
+						"--confetti-x": `${(index * 17 + 5) % 100}`,
+						"--confetti-duration": `${4.2 + (index % 11) * 0.23}s`,
+						"--confetti-delay": `${-((index * 0.31) % 5.8)}s`,
+						"--confetti-rotation": `${(index * 47) % 180}deg`,
+					} as CSSProperties;
+
+					return <span key={`confetti-${index}`} className={styles.confettiPiece} style={style} />;
+				})}
+			</div>
 			<div className={styles.endGameCard}>
-				<h1 className={styles.endGameTitle}>Game Finished</h1>
-				{winnerDisplayName ? (
-					<p className={styles.endGameWinnerLine}>
-						Winner: <strong>{winnerDisplayName}</strong>
-					</p>
-				) : (
-					<p className={styles.endGameWinnerLine}>No winner. All players left the game.</p>
-				)}
+				<div className={`${styles.endGameResultBanner} ${resultClassName}`}>
+					<div className={styles.endGameResultIcon} aria-hidden="true">
+						{currentPlayerWon ? "🏆" : currentPlayerLost ? "💀" : "👑"}
+					</div>
+					<div>
+						<h1 className={styles.endGameTitle}>{resultTitle}</h1>
+						{winnerPlayer ? (
+							<p className={styles.endGameWinnerLine}>
+								{currentPlayerWon
+									? "Victory is yours. The island belongs to you."
+									: currentPlayerLost
+										? `${winnerPlayer.name} reached victory first.`
+										: `${winnerPlayer.name} won this match.`}
+							</p>
+						) : (
+							<p className={styles.endGameWinnerLine}>No winner. All players left the game.</p>
+						)}
+					</div>
+				</div>
 
 				<div className={styles.endGameSection}>
-					<h2 className={styles.endGameSectionTitle}>Leaderboard</h2>
+					<h2 className={styles.endGameSectionTitle}>🏅 Leaderboard</h2>
 					<div className={styles.endGameLeaderboardScroll}>
 						<div className={styles.endGameLeaderboard}>
 							<div className={styles.endGameLeaderboardHeader}>Rank</div>
@@ -68,12 +114,19 @@ export function EndGameOverlay({
 							<div className={styles.endGameLeaderboardHeader}>Buildings</div>
 							{leaderboardPlayers.map((player, index) => {
 								const playerStats = perPlayerGameStats.get(player.id) ?? emptyStats;
-								const rowClass = index % 2 === 1 ? styles.endGameLeaderboardCellAlt : "";
+								const isWinner = winnerPlayer?.id === player.id;
+								const rowClass = [
+									index % 2 === 1 ? styles.endGameLeaderboardCellAlt : "",
+									isWinner ? styles.endGameLeaderboardCellWinner : "",
+								].filter(Boolean).join(" ");
 
 								return (
 									<Fragment key={`leaderboard-row-${player.id}`}>
 										<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>#{index + 1}</div>
-										<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{player.name}</div>
+										<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>
+											<span className={styles.endGamePlayerName}>{player.name}</span>
+											{isWinner ? <span className={styles.endGameWinnerBadge}>Winner</span> : null}
+										</div>
 										<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{player.victoryPoints}</div>
 										<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.cardsPlayedCount}</div>
 										<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.knightsPlayedCount}</div>
@@ -89,7 +142,7 @@ export function EndGameOverlay({
 				</div>
 
 				<div className={styles.endGameSection}>
-					<h2 className={styles.endGameSectionTitle}>Game Stats</h2>
+					<h2 className={styles.endGameSectionTitle}>📊 Game Stats</h2>
 					<div className={styles.endGameStatsGrid}>
 						<div className={styles.endGameStatItem}>
 							<span>Cards Played</span>
