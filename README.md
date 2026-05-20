@@ -16,10 +16,10 @@ The motivation for the project was to bring players together through a seamless 
 
 ## High-level components
 
-- **Gameboard**: Renders the main game UI and handles board interactions — `app/gameboard/Gameboard.tsx`.
-- **Lobby / Matchmaking**: Create or join lobbies and ready-up flow — `app/(protected)/lobby` and `app/components/lobby`.
-- **API client**: Communicates with the backend (REST) — `app/api/apiService.ts` and `app/api/pollingService.ts`.
-- **Hooks & State**: Reusable hooks for API calls and local storage — `app/hooks/useApi.ts`, `app/hooks/useLocalStorage.tsx`.
+- **Gameboard**: Renders the main game UI and handles board interactions — [app/gameboard/Gameboard.tsx](app/gameboard/Gameboard.tsx).
+- **Lobby / Matchmaking**: Create or join lobbies and ready-up flow — [app/(protected)/lobby](app/(protected)/lobby) and [app/components/lobby](app/components/lobby).
+- **API client**: Communicates with the backend (REST) — [app/api/apiService.ts](app/api/apiService.ts) and [app/api/pollingService.ts](app/api/pollingService.ts).
+- **Hooks & State**: Reusable hooks for API calls and local storage — [app/hooks/useApi.ts](app/hooks/useApi.ts), [app/hooks/useLocalStorage.tsx](app/hooks/useLocalStorage.tsx).
 
 These components interact as follows: the UI pages use hooks to call the API service; the Gameboard subscribes to game state updates polling served by the server; lobby components create and manage game sessions before handoff to the Gameboard.
 
