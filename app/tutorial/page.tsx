@@ -182,7 +182,7 @@ export default function TutorialPage() {
   }, [hexById]);
 
   return (
-    <div className={styles.layout}>
+    <div className={`${styles.layout} ${styles.tutorialLayout}`}>
     <div data-tutorial="board">
       <BoardColumn
         boardStatus="Tutorial mode enabled"
