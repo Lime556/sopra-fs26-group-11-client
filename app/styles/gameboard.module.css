@@ -1083,6 +1083,7 @@
 }
 
 .actionSquareButton {
+  position: relative;
   min-height: 66px;
   border: none;
   border-radius: 10px;
@@ -1174,6 +1175,28 @@
 
 .devCardButton {
   background: #2d60c2;
+  position: relative;
+  overflow: hidden;
+}
+
+.devCardCountBadge {
+  position: absolute;
+  top: 0.32rem;
+  right: 0.32rem;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.32rem;
+  border: 2px solid rgba(255, 255, 255, 0.86);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #153f91;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+  z-index: 3;
 }
 
 .tradeBanner {

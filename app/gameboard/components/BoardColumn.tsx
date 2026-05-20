@@ -111,6 +111,7 @@ export function BoardColumn({
 }: BoardColumnProps) {
 	const playableDevelopmentCards = developmentCards.filter((card) => card !== "victory_point");
 	const canUseActionPhase = tutorialMode || (isMyTurn && state.turnPhase === "ACTION" && !isSetupPhase);
+	const canPlayDevelopmentCard = canUseActionPhase && playableDevelopmentCards.length > 0;
 	const canUseSetupPlacement = tutorialMode || (isMyTurn && isSetupPhase);
 
 	const currentPlayer = state.players.find(p => p.id === state.currentPlayerId);
@@ -640,12 +641,17 @@ export function BoardColumn({
 
 						<button
 							type="button"
-							className={`${styles.actionSquareButton} ${!tutorialMode && (!canUseActionPhase || playableDevelopmentCards.length === 0) ? styles.buttonDisabled : styles.devCardButton}`}
+							className={`${styles.actionSquareButton} ${!tutorialMode && !canPlayDevelopmentCard ? styles.buttonDisabled : styles.devCardButton}`}
 							onClick={handleToggleDevCardPlayMode}
-							disabled={!tutorialMode && (!canUseActionPhase || playableDevelopmentCards.length === 0)}
+							disabled={!tutorialMode && !canPlayDevelopmentCard}
 						>
 							<span className={styles.actionEmoji}>🃏</span>
 							<span className={styles.actionLabel}>{isDevCardPlayMode ? "Cancel Dev" : "Play Dev Card"}</span>
+							{canPlayDevelopmentCard && developmentCards.length > 0 ? (
+								<span className={styles.devCardCountBadge} aria-label={`${developmentCards.length} development cards`}>
+									{developmentCards.length}
+								</span>
+							) : null}
 						</button>
 					</div>
 
