@@ -1675,6 +1675,12 @@
   padding: 0.55rem;
 }
 
+.tradeResponseRowSelected {
+  border-color: rgba(31, 123, 63, 0.82);
+  background: #edf8e8;
+  box-shadow: 0 0 0 2px rgba(31, 123, 63, 0.12);
+}
+
 .tradeResponsePlayerName {
   font-size: 0.82rem;
   font-weight: 800;
@@ -1718,6 +1724,10 @@
   cursor: not-allowed;
 }
 
+.tradeResponseActionButton[data-selected="true"] {
+  background: linear-gradient(180deg, #1f7b3f, #15592d);
+}
+
 .tradeResponseEmptyState {
   border: 2px dashed rgba(100, 72, 36, 0.34);
   border-radius: 10px;
@@ -1729,6 +1739,10 @@
   padding: 0.55rem;
   margin-top: 0.55rem;
   text-align: center;
+}
+
+.tradeSummaryActions {
+  margin-top: 0.65rem;
 }
 
 .tradeDeclineButton {

@@ -242,6 +242,7 @@ export default function Gameboard() {
 	const [currentPlayerMustDiscardFromServer, setCurrentPlayerMustDiscardFromServer] = useState<boolean | null>(null);
 	const syncedChatMessageCountRef = useRef<number>(0);
 	const syncedEventLogsRef = useRef<Set<string>>(new Set());
+	const processedTradeEventsRef = useRef<Set<string>>(new Set());
 	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
 	const botActionInFlightRef = useRef(false);
 	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
@@ -499,6 +500,34 @@ export default function Gameboard() {
 	const showNewDiceRollFromGameDtoRef = useRef(showNewDiceRollFromGameDto);
 	showNewDiceRollFromGameDtoRef.current = showNewDiceRollFromGameDto;
 
+	const getTradeEventKey = (event: GameEventDTO): string | null => {
+		if (event.type !== "PLAYER_TRADE" && (event.type as string) !== "PLAYER_TRADE_FINALIZE") {
+			return null;
+		}
+
+		return [
+			event.type,
+			event.tradeAction ?? "FINALIZE",
+			event.tradeRequestId ?? "no-request-id",
+			event.sourcePlayerId ?? "no-source",
+			event.targetPlayerId ?? "no-target",
+			JSON.stringify(event.giveResources ?? {}),
+			JSON.stringify(event.receiveResources ?? {}),
+		].join("|");
+	};
+
+	const applyTradeGameEventOnce = (event: GameEventDTO): void => {
+		const key = getTradeEventKey(event);
+		if (!key) {
+			return;
+		}
+		if (processedTradeEventsRef.current.has(key)) {
+			return;
+		}
+		processedTradeEventsRef.current.add(key);
+		applyGameEventRef.current(event);
+	};
+
 	useEffect(() => {
 		setAmbienceEffectsEnabled(localStorage.getItem(AMBIENCE_EFFECTS_STORAGE_KEY) !== "false");
 	}, []);
@@ -615,6 +644,7 @@ export default function Gameboard() {
 
 		syncedChatMessageCountRef.current = 0;
 		syncedEventLogsRef.current = new Set();
+		processedTradeEventsRef.current = new Set();
 		roadCacheRef.current = new Map();
 
 		const readStoredGameId = (): number | null => {
@@ -726,7 +756,7 @@ export default function Gameboard() {
 						if (gameDto?.latestTradeRequest) {
 							try {
 								const payload = JSON.parse(gameDto.latestTradeRequest) as GameEventDTO;
-								applyGameEventRef.current(payload);
+								applyTradeGameEventOnce(payload);
 							} catch {
 								// Ignore malformed trade snapshots; eventLog still contains the raw entry.
 							}
@@ -769,6 +799,7 @@ export default function Gameboard() {
 									}
 								}
 								if (structuredEntry && structuredEntry.payload && (structuredEntry.payload.type === "PLAYER_TRADE" || (structuredEntry.payload.type as string) === "PLAYER_TRADE_FINALIZE")) {
+									applyTradeGameEventOnce(structuredEntry.payload);
 									return;
 								}
 
@@ -896,7 +927,7 @@ export default function Gameboard() {
 							const payload = JSON.parse(syncDto.latestTradeRequest) as GameEventDTO;
 
 							// Trigger the event handler to update responses (Accept/Deny) or finalize the UI
-							applyGameEventRef.current(payload);
+							applyTradeGameEventOnce(payload);
 						} catch (e) {
 							console.error("Failed to parse trade request from sync", e);
 						}
@@ -2650,6 +2681,29 @@ export default function Gameboard() {
 				setActiveOutgoingTradeRequest(tradeRequest);
 				setActiveOutgoingTradeResponses(pendingResponses);
 				setShowTradeSummaryPopup(true);
+			}
+			(gameDto.eventLog ?? []).forEach((entry) => {
+				const structuredEntry = parseStructuredEventLogEntry(entry);
+				if (
+					structuredEntry?.payload
+					&& structuredEntry.payload.tradeRequestId === tradeRequestId
+					&& (
+						structuredEntry.payload.type === "PLAYER_TRADE"
+						|| (structuredEntry.payload.type as string) === "PLAYER_TRADE_FINALIZE"
+					)
+				) {
+					applyTradeGameEventOnce(structuredEntry.payload);
+				}
+			});
+			if (gameDto.latestTradeRequest) {
+				try {
+					const latestTradeEvent = JSON.parse(gameDto.latestTradeRequest) as GameEventDTO;
+					if (latestTradeEvent.tradeRequestId === tradeRequestId) {
+						applyTradeGameEventOnce(latestTradeEvent);
+					}
+				} catch {
+					// Event log processing above is the primary path for the direct response.
+				}
 			}
 			addToLog(logMessage);
 			setShowTradePopup(false);
