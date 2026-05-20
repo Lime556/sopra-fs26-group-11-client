@@ -51,6 +51,7 @@ interface BoardColumnProps {
 	handleBuildCityAction: () => void;
 	handleEndTurn: () => void;
 	mustMoveRobberBeforeEndTurn: boolean;
+	tutorialMode?: boolean;
 	ambience?: GameAmbienceDTO | null;
 	weatherEffectsEnabled?: boolean;
 }
@@ -106,10 +107,11 @@ export function BoardColumn({
 	mustMoveRobberBeforeEndTurn,
 	ambience,
 	weatherEffectsEnabled = true,
+	tutorialMode = false,
 }: BoardColumnProps) {
 	const playableDevelopmentCards = developmentCards.filter((card) => card !== "victory_point");
-	const canUseActionPhase = isMyTurn && state.turnPhase === "ACTION" && !isSetupPhase;
-	const canUseSetupPlacement = isMyTurn && isSetupPhase;
+	const canUseActionPhase = tutorialMode || (isMyTurn && state.turnPhase === "ACTION" && !isSetupPhase);
+	const canUseSetupPlacement = tutorialMode || (isMyTurn && isSetupPhase);
 
 	const currentPlayer = state.players.find(p => p.id === state.currentPlayerId);
 	const myRoadCount = currentPlayer?.roadsOnEdges.length ?? 0;
@@ -544,15 +546,16 @@ export function BoardColumn({
 				<div className={styles.actionBox}>
 					<button
 						type="button"
-						className={`${styles.rollDiceButton} ${!isMyTurn || state.turnPhase !== "ROLL_DICE" || isSetupPhase ? styles.buttonDisabled : styles.rollDiceButton}`}
+						data-tutorial="roll-dice-button"
+						className={`${styles.rollDiceButton} ${!tutorialMode && (!isMyTurn || state.turnPhase !== "ROLL_DICE" || isSetupPhase) ? styles.buttonDisabled : styles.rollDiceButton}`}
 						onClick={handleRollDice}
-						disabled={!isMyTurn || state.turnPhase !== "ROLL_DICE" || isSetupPhase}
+						disabled={!tutorialMode && (!isMyTurn || state.turnPhase !== "ROLL_DICE" || isSetupPhase)}
 					>
 						<span className={styles.actionEmoji}>🎲</span>
 						<span>Roll Dice</span>
 					</button>
 
-					<div className={styles.actionGrid}>
+					<div className={styles.actionGrid} data-tutorial="action-grid">
 						<button
 							type="button"
 							className={`${styles.actionSquareButton} ${!canUseActionPhase ? styles.buttonDisabled : styles.knightButton}`}
@@ -637,9 +640,9 @@ export function BoardColumn({
 
 						<button
 							type="button"
-							className={`${styles.actionSquareButton} ${(!canUseActionPhase || playableDevelopmentCards.length === 0) ? styles.buttonDisabled : styles.devCardButton}`}
+							className={`${styles.actionSquareButton} ${!tutorialMode && (!canUseActionPhase || playableDevelopmentCards.length === 0) ? styles.buttonDisabled : styles.devCardButton}`}
 							onClick={handleToggleDevCardPlayMode}
-							disabled={!canUseActionPhase || playableDevelopmentCards.length === 0}
+							disabled={!tutorialMode && (!canUseActionPhase || playableDevelopmentCards.length === 0)}
 						>
 							<span className={styles.actionEmoji}>🃏</span>
 							<span className={styles.actionLabel}>{isDevCardPlayMode ? "Cancel Dev" : "Play Dev Card"}</span>
@@ -683,6 +686,7 @@ export function BoardColumn({
 
 					<button
 						type="button"
+						data-tutorial="end-turn-button"
 						className={`${styles.endTurnButton} ${!canEndTurn ? styles.buttonDisabled : styles.endTurnButton}`}
 						onClick={handleEndTurn}
 						disabled={!canEndTurn}

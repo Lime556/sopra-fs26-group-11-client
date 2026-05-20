@@ -1879,8 +1879,9 @@
 
 .tutorialTooltip {
   position: fixed;
-  width: 340px;
-  max-width: calc(100vw - 32px);
+  width: fit-content;
+  min-width: 340px;
+  max-width: 480px;
   background: linear-gradient(
     180deg,
     #f4e7bf 0%,
@@ -1908,6 +1909,7 @@
   margin-top: 0.6rem;
   line-height: 1.5;
   color: #4c341a;
+  white-space: pre-line;
 }
 
 .tutorialControls {
