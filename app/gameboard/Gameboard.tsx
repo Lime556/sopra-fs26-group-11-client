@@ -241,6 +241,7 @@ export default function Gameboard() {
 	const [robberMoveInFlight, setRobberMoveInFlight] = useState<boolean>(false);
 	const [discardModalOpen, setDiscardModalOpen] = useState<boolean>(false);
 	const [discardChoices, setDiscardChoices] = useState<Record<string, number>>({});
+	const [currentPlayerMustDiscardFromServer, setCurrentPlayerMustDiscardFromServer] = useState<boolean | null>(null);
 	const syncedChatMessageCountRef = useRef<number>(0);
 	const syncedEventLogsRef = useRef<Set<string>>(new Set());
 	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
@@ -789,21 +790,22 @@ export default function Gameboard() {
 		
 				syncInFlight = true;
 		
-				const syncDto = await apiService.get<{
-					gameVersion?: number | null;
-					currentTurnIndex?: number | null;
-					turnPhase?: string | null;
-					gamePhase?: string | null;
-					diceValue?: number | null;
-					diceRolledAt?: string | null;
-					tradeRequestedAt?: string | null;
-					latestTradeRequest?: string | null;
-					chatMessageCount?: number | null;
-					eventLogCount?: number | null;
-					currentPlayerId?: number | null;
-					gameFinished?: boolean | null;
-					robberMovedAfterSevenRoll?: boolean | null;
-				}>(`/games/${gameId}/sync`);
+					const syncDto = await apiService.get<{
+						gameVersion?: number | null;
+						currentTurnIndex?: number | null;
+						turnPhase?: string | null;
+						gamePhase?: string | null;
+						diceValue?: number | null;
+						diceRolledAt?: string | null;
+						tradeRequestedAt?: string | null;
+						latestTradeRequest?: string | null;
+						chatMessageCount?: number | null;
+						eventLogCount?: number | null;
+						currentPlayerId?: number | null;
+						currentPlayerMustDiscard?: boolean | null;
+						gameFinished?: boolean | null;
+						robberMovedAfterSevenRoll?: boolean | null;
+					}>(`/games/${gameId}/sync`);
 		
 				if (cancelled) {
 					return "ok";
@@ -820,8 +822,11 @@ export default function Gameboard() {
 					return "ok";
 				}
 
-				const nextDiceRolledAt = syncDto.diceRolledAt ?? null;
-				const nextDiceValue = typeof syncDto.diceValue === "number" ? syncDto.diceValue : null;
+					const nextDiceRolledAt = syncDto.diceRolledAt ?? null;
+					const nextDiceValue = typeof syncDto.diceValue === "number" ? syncDto.diceValue : null;
+					setCurrentPlayerMustDiscardFromServer(
+						typeof syncDto.currentPlayerMustDiscard === "boolean" ? syncDto.currentPlayerMustDiscard : null
+					);
 
 				if (
 					nextDiceRolledAt !== null
@@ -2249,9 +2254,11 @@ export default function Gameboard() {
 
 	useEffect(() => {
 		const mustDiscard =
-			state.turnPhase === "DISCARD"
-			&& myPlayer !== null
-			&& myPlayerResourceTotal > 7;
+			currentPlayerMustDiscardFromServer
+			?? (
+				state.turnPhase === "DISCARD"
+				&& myPlayerResourceTotal > 7
+			);
 	
 		const moveRobber =
 			mustMoveRobberFromServer
@@ -2266,7 +2273,7 @@ export default function Gameboard() {
 		if (!mustDiscard) {
 			setDiscardChoices({});
 		}
-	}, [state.turnPhase, isMyTurn, myPlayer?.id, myPlayerResourceTotal, mustMoveRobberFromServer]);
+	}, [state.turnPhase, isMyTurn, myPlayer?.id, myPlayerResourceTotal, mustMoveRobberFromServer, currentPlayerMustDiscardFromServer]);
 
 	const isDiscardWaitingPopupVisible =
 		state.turnPhase === "DISCARD"
@@ -2345,6 +2352,7 @@ export default function Gameboard() {
 	
 			addToLog("Resources discarded.");
 			setDiscardModalOpen(false);
+			setCurrentPlayerMustDiscardFromServer(false);
 			setDiscardChoices({});
 	
 			if (gameDto.bankResources) {
