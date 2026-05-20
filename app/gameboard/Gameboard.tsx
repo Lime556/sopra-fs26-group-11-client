@@ -225,6 +225,7 @@ export default function Gameboard() {
 	const [showDicePopup, setShowDicePopup] = useState<boolean>(false);
 	const [dicePopupValue, setDicePopupValue] = useState<number | null>(null);
 	const [diceWonResources, setDiceWonResources] = useState<Resources | null>(null);
+	const previousResourcesRef = useRef<Map<number, Resources>>(new Map());
 	const [initialPlacementWonResources, setInitialPlacementWonResources] = useState<Resources | null>(null);
 	const [stolenResourcePopup, setStolenResourcePopup] = useState<{ resource: ResourceType; sourceName: string | null; targetName: string | null } | null>(null);
 	const [showMonopolyResourceSelector, setShowMonopolyResourceSelector] = useState<boolean>(false);
@@ -623,21 +624,40 @@ export default function Gameboard() {
 
 					const nextDiceRolledAt = gameDto?.diceRolledAt ?? null;
 					const nextDiceValue = typeof gameDto?.diceValue === "number" ? gameDto.diceValue : null;
-					const shouldShowDicePopup =
-						lastDiceRolledAtRef.current !== undefined
-						&& nextDiceRolledAt !== null
-						&& nextDiceRolledAt !== lastDiceRolledAtRef.current
-						&& nextDiceValue !== null;
-					lastDiceRolledAtRef.current = nextDiceRolledAt;
 
-					if (shouldShowDicePopup) {
-						const previousLocalPlayer = findLocalStatePlayer(latestStateRef.current.players, sessionUserIdRef.current, sessionUsernameRef.current);
-						const nextLocalPlayer = findMatchingServerPlayer(serverPlayers, previousLocalPlayer, sessionUserIdRef.current, sessionUsernameRef.current);
-						setDiceWonResources(
-							previousLocalPlayer && nextLocalPlayer
-								? calculateWonResources(previousLocalPlayer.resources, mapResourcesFromServer(nextLocalPlayer))
-								: createEmptyTradeResources()
+					const isNewDiceRoll =
+						nextDiceRolledAt !== null &&
+						nextDiceRolledAt !== lastDiceRolledAtRef.current &&
+						nextDiceValue !== null;
+
+					if (isNewDiceRoll) {
+						lastDiceRolledAtRef.current = nextDiceRolledAt;
+
+						const previousLocalPlayer = findLocalStatePlayer(
+							latestStateRef.current.players,
+							sessionUserIdRef.current,
+							sessionUsernameRef.current
 						);
+
+						const nextLocalPlayer = findMatchingServerPlayer(
+							serverPlayers,
+							previousLocalPlayer,
+							sessionUserIdRef.current,
+							sessionUsernameRef.current
+						);
+						if (isNewDiceRoll && previousLocalPlayer && nextLocalPlayer) {
+							const previousResources =
+								previousResourcesRef.current.get(previousLocalPlayer.id) ??
+								previousLocalPlayer.resources;
+
+							const nextResources = mapResourcesFromServer(nextLocalPlayer);
+
+							setDiceWonResources(
+								calculateWonResources(previousResources, nextResources)
+							);
+
+							showDiceResultPopup(nextDiceValue);
+						}
 					}
 
 					if (gameDto?.bankResources) {
@@ -676,9 +696,12 @@ export default function Gameboard() {
 						diceResult: gameDto?.diceValue ?? previousState.diceResult,
 					}));
 
-					if (shouldShowDicePopup && nextDiceValue !== null) {
-						showDiceResultPopup(nextDiceValue);
-					}
+					serverPlayers.forEach((player) => {
+						previousResourcesRef.current.set(
+							player.id,
+							mapResourcesFromServer(player)
+						);
+					});
 
 					const nextTradeRequestedAt = gameDto?.tradeRequestedAt ?? null;
 					if (nextTradeRequestedAt !== null && nextTradeRequestedAt !== lastTradeRequestedAtRef.current) {
@@ -2336,24 +2359,12 @@ export default function Gameboard() {
 				return;
 			}
 			actionPendingRef.current = true;
-			setDiceWonResources(null);
 			setInitialPlacementWonResources(null);
-			const resourcesBeforeRoll = myPlayer?.resources ?? null;
 			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/roll-dice`, withExpectedGameVersion({}));
 			rememberServerGameVersion(gameDto);
-
-			const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
-			const serverCurrentPlayer = myPlayer
-				? serverPlayers.find((player) => player.id === myPlayer.id)
-				: null;
-			if (resourcesBeforeRoll && serverCurrentPlayer) {
-				setDiceWonResources(calculateWonResources(resourcesBeforeRoll, mapResourcesFromServer(serverCurrentPlayer)));
-			} else if (typeof gameDto.diceValue === "number") {
-				setDiceWonResources(createEmptyTradeResources());
-			}
+			const serverPlayers = Array.isArray(gameDto.players)? gameDto.players: [];
 		
 			if (typeof gameDto.diceValue === "number") {
-				lastDiceRolledAtRef.current = gameDto.diceRolledAt ?? lastDiceRolledAtRef.current;
 				setState((previousState) => ({
 					...previousState,
 					players:
@@ -2367,7 +2378,6 @@ export default function Gameboard() {
 					robberMovedAfterSevenRoll:
 						gameDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
 				}));
-				showDiceResultPopup(gameDto.diceValue);
 			}
 		
 			addToLog("Dice rolled.");

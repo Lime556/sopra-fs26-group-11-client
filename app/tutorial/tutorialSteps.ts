@@ -17,7 +17,7 @@ export const tutorialSteps: TutorialStep[] = [
     target: "board",
     title: "The Board",
     description:
-      "This is the Catan board. Hex tiles adjacent to buildings produce resources when their dice number is rolled. The desert tile produces no resources, which where the robber is placed. The robber blocks resource production on the tile it occupies.",
+      "This is the Catan board. Hex tiles adjacent to buildings produce resources when their dice number is rolled. The desert tile produces no resources, which is where the robber is placed at the start of the game. The robber blocks resource production on the tile it occupies.",
   },
   {
     id: "players",
