@@ -231,12 +231,12 @@ reason).
 
 ---
 
-## Contributions Week 7 - [17.05.] to [23.05]
+## Contributions Week 7 - [18.05.] to [23.05]
 
 | **Student**        | **Date** | **Link to Commit** | **Description**                 | **Relevance**                       |
 | ------------------ | -------- | ------------------ | ------------------------------- | ----------------------------------- |
-| **[@githubUser1]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
-|                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
+| **[Ziske11]** | 20.05.   | https://github.com/Lime556/sopra-fs26-group-11-server/commit/238da8a238e6882fa08d0bee657fd969d1432adc | Improved bot robber naming and tuned the bot action strategy toward stronger settlement and city decisions. | This makes bot turns easier to understand in the game log and improves bot gameplay by prioritizing useful expansion over weak roads or unnecessary development cards. |
+|                    | 20.05.   | https://github.com/Lime556/sopra-fs26-group-11-client/commit/4187342265027f01ab12331e57653f1703d5a55c | Delayed bot dice rolls in the client while keeping other bot actions responsive. | This makes bot turns easier for players to follow visually, especially when a bot starts its turn and rolls the dice. |
 | **[@githubUser2]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
