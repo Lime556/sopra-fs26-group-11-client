@@ -1238,6 +1238,7 @@ export default function Gameboard() {
 			return;
 		}
 
+		const botActionDelayMs = state.turnPhase === "ROLL_DICE" ? 3000 : 500;
 		const timeout = window.setTimeout(() => {
 			if (botActionInFlightRef.current) {
 				return;
@@ -1259,10 +1260,10 @@ export default function Gameboard() {
 				.finally(() => {
 					botActionInFlightRef.current = false;
 				});
-		}, 500);
+		}, botActionDelayMs);
 
 		return () => window.clearTimeout(timeout);
-	}, [activeGameId, apiService, botAiEnabled, currentBotActionKey, currentPlayer?.bot, isGameFinished, showBotAiFeedbackFromEvent]);
+	}, [activeGameId, apiService, botAiEnabled, currentBotActionKey, currentPlayer?.bot, isGameFinished, showBotAiFeedbackFromEvent, state.turnPhase]);
 
 	const activeOutgoingTradeResponseEntries = useMemo(
 		() => activeOutgoingTradeRequest

@@ -555,7 +555,7 @@ export function BoardColumn({
 						<span>Roll Dice</span>
 					</button>
 
-					<div className={styles.actionGrid}>
+					<div className={styles.actionGrid} data-tutorial="action-grid">
 						<button
 							type="button"
 							className={`${styles.actionSquareButton} ${!canUseActionPhase ? styles.buttonDisabled : styles.knightButton}`}
