@@ -1,105 +1,102 @@
-# Settlers of Catan — Web Client
+# Settlers of Catan - Web Client
 
 ## Introduction
 
-This repository contains the web client for a multiplayer implementation of Settlers of Catan used in the course project. The client provides the user interface for authentication, lobby management, and the in-browser gameboard used to play matches against other players.
+This repository contains the web client for our SoPra implementation of Settlers of Catan. The client is responsible for everything the player sees and interacts with: login and registration, the lobby overview, joining or creating lobbies, the tutorial, and the actual in-browser game board.
 
-The motivation for the project was to bring players together through a seamless and engaging  online experience, making strategy and competition accessible anytime, anywhere.
-
+Our goal was to make a playable online version of Catan where several players can meet in a lobby and play a full match together. We also added bots, a small social area, game history, and ambience/weather options to make the game feel less empty when testing or playing with fewer people.
 
 ## Technologies
 
-- Next.js (React + TypeScript)
-- CSS Modules
-- Ant Design components
-- Deno tools for linting/formatting (project uses `deno lint` / `deno fmt` via npm scripts)
+- Next.js with React and TypeScript
+- CSS Modules for styling
+- Ant Design for some UI components
+- Deno tools for linting and formatting through npm scripts
 
 ## High-level components
 
-- **Gameboard**: Renders the main game UI and handles board interactions — [app/gameboard/Gameboard.tsx](app/gameboard/Gameboard.tsx).
-- **Lobby / Matchmaking**: Create or join lobbies and ready-up flow — [app/(protected)/lobby](app/(protected)/lobby) and [app/components/lobby](app/components/lobby).
-- **API client**: Communicates with the backend (REST) — [app/api/apiService.ts](app/api/apiService.ts) and [app/api/pollingService.ts](app/api/pollingService.ts).
-- **Hooks & State**: Reusable hooks for API calls and local storage — [app/hooks/useApi.ts](app/hooks/useApi.ts), [app/hooks/useLocalStorage.tsx](app/hooks/useLocalStorage.tsx).
+- **Gameboard**: Renders the main game UI and handles most board interactions, such as rolling, building, trading, and playing development cards. Main file: [app/gameboard/Gameboard.tsx](app/gameboard/Gameboard.tsx).
+- **Lobby and matchmaking**: Lets users create, join, and manage lobbies before a game starts. Main folders: [app/(protected)/lobby](<app/(protected)/lobby>) and [app/components/lobby](app/components/lobby).
+- **API client**: Contains the shared request logic used by the pages and components to communicate with the server. Main files: [app/api/apiService.ts](app/api/apiService.ts) and [app/api/pollingService.ts](app/api/pollingService.ts).
+- **Hooks and shared helpers**: Small reusable utilities for API calls, local storage, environment handling, and other client-side state. Examples: [app/hooks/useApi.ts](app/hooks/useApi.ts), [app/hooks/useLocalStorage.tsx](app/hooks/useLocalStorage.tsx), and [app/utils/domain.ts](app/utils/domain.ts).
 
-These components interact as follows: the UI pages use hooks to call the API service; the Gameboard subscribes to game state updates polling served by the server; lobby components create and manage game sessions before handoff to the Gameboard.
+The general flow is that pages and components call the API service through hooks or helper functions. The lobby creates or joins a game session, and once the match starts the Gameboard polls the backend for updated game state.
 
 ## Launch & Development
 
-Prerequisites: Node.js and npm.
+Prerequisites:
 
-Local development commands:
+- Node.js and npm
+- Deno, if you want to run linting or formatting
+- A running backend server, usually on `http://localhost:8080`
+
+Install dependencies and start the development server:
 
 ```bash
 npm install
-npm run dev        # Starts Next.js dev server on http://localhost:3000
-npm run build      # Build for production
-npm run start      # Start built production server
+npm run dev
 ```
 
-Linting / formatting:
+The client then runs on [http://localhost:3000](http://localhost:3000).
+
+Useful commands:
 
 ```bash
-npm run lint
-npm run fmt
+npm run build      # build the production version
+npm run start      # start the built production server
+npm run lint       # run Deno lint
+npm run fmt        # format the code with Deno
 ```
 
-Notes: The client expects a running backend (see the server README in `../sopra-fs26-group-11-server`) reachable at the configured API base URL (default: `http://localhost:8080`).
+The API URL is selected in [app/utils/domain.ts](app/utils/domain.ts). In development it uses `http://localhost:8080`. In production it uses `NEXT_PUBLIC_PROD_API_URL` if it is set, otherwise it falls back to the deployed server URL.
 
-## Illustrations — Main user flows
-![alt text](<public/Read ME/Lobby screen .png>)
+We currently do not have a separate client-side test suite. Most testing for the game logic is done in the server repository, while the client was checked manually during development.
 
-After login the Player gets in the Lobby overview screen where he can try the Tutorial to get to know the game, create a Lobby or join a already existing one. In the sidebar he can also chose to go to the frieds tab, his personal settings and his gamelog of the last 10 games played.
+For deployment, build the project with `npm run build` and provide the production backend URL through `NEXT_PUBLIC_PROD_API_URL` if the default deployed server should not be used.
 
-![alt text](<public/Read ME/Lobby.png>)
+## Illustrations - Main user flows
 
-In the Lobby the host can add bots to the game and start the game after a sufficient amounts of players have joined.
+![Lobby overview](<public/Read ME/Lobby screen .png>)
 
-![alt text](<public/Read ME/Catan board.png>)
+After login, the player arrives at the lobby overview. From here they can start the tutorial, create a new lobby, or join an existing one. The sidebar also gives access to friends, settings, and the game log of recently played matches.
 
-On the Gameboard there are many things happening. To get a overview:
+![Lobby room](<public/Read ME/Lobby.png>)
 
-**1.**  To have a better ambiente the player can switch on and off the wather. The wather is based on what is outside at the moment.
+Inside a lobby, players can wait until everyone is ready. The host can add bots and start the game once enough players have joined.
 
-**2.** To switch the bots from the Huggingface to the deterministic mode incase the Huggingface does not work anymore.
+![Catan game board](<public/Read ME/Catan board.png>)
 
-**3.** The ressources a player has counted togeather.
+The game board is the main screen during a match. It shows the current board, player resources, development cards, victory points, longest road, largest army, the bank, chat/game log, and the possible actions for the current turn.
 
-**4.** The amount of development cards a player has.
+Important parts of the board:
 
-**5.** The amount of knights a player has played. When having more or equal to 3 the player with the most knights gets 2 victory points.
-
-**6.** The amount of roads built in a system without any interruption. The longest longer or equal to 5 gets 2 victory points.
-
-**7.** The victory points a player has. First to 10 wins. 
-
-**8.** The ressources the player has at the moment.
-
-**9.** The ressources and development cards in the Bank that can be distributed by rolling or trading with it.
-
-**10.** Opens a trading window up where player and bank trades can be initiated.
-
-**11.** The ingame chat combined with the gamelog to better understand what happened in the game.
-
-**12.** A settlement built gives 1 victory point.
-
-**13.** A citty built gives 2 victory points.
-
-**14.** The port gives the player settled next to it a better trading ratio with the bank.
-
-**15.** Game actions a player can make: Rolling the dice to get ressources (once a turn), play a development card, build a road, build a settlement, build a city and play a development card.
-
-**16.** Development cards in the players hand that can be played.
+1. Ambience/weather toggle, based on the current outside weather.
+2. Bot mode toggle, for switching between Hugging Face based bots and deterministic fallback bots.
+3. Total resources per player.
+4. Development card count.
+5. Played knights and largest army progress.
+6. Longest road progress.
+7. Victory points. The first player to reach 10 wins.
+8. The current player's resources.
+9. Bank resources and available development cards.
+10. Trade window for bank and player trades.
+11. In-game chat and game log.
+12. Settlements, worth 1 victory point.
+13. Cities, worth 2 victory points.
+14. Ports, which improve trading ratios.
+15. Available game actions, such as rolling, building, trading, and playing development cards.
+16. Development cards in the player's hand.
 
 ## Roadmap
 
-- For better scalability implement websocket for the polling.
-- Improve accessibility & keyboard navigation for the Gameboard.
-- Add client-side replay/observer mode.
+- Replace polling with WebSockets for smoother updates and better scalability.
+- Improve accessibility and keyboard navigation on the game board.
+- Add a replay or observer mode for finished and ongoing games.
 
 ## Authors & Acknowledgments
 
-Project developed by the `sopra-fs26-group-11` team in the year 2026.
+Developed by the `sopra-fs26-group-11` team for the SoPra course project in 2026.
 
 ## License
 
-This repository is licensed under the Apache License 2.0 — see the server `LICENSE` for the full text.
+This repository is licensed under the Apache License 2.0. The license file is currently kept in the server repository.
