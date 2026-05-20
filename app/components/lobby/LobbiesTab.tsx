@@ -9,6 +9,8 @@ interface LobbyParticipantGetDTO {
   userId: number | null;
   username: string;
   bot: boolean;
+  online?: boolean;
+  lastSeenAt?: string | null;
 }
 
 export interface LobbyItem {
@@ -19,6 +21,7 @@ export interface LobbyItem {
   participants?: LobbyParticipantGetDTO[];
   hostParticipantId: number | null;
   privateLobby: boolean;
+  gameId?: number | null;
 }
 
 interface LobbiesTabProps {
@@ -27,6 +30,7 @@ interface LobbiesTabProps {
   searchLobbyQuery: string;
   searchLobbyResult: LobbyItem | null;
   searchLobbyError: string;
+  currentUserId: number;
   onCreateLobby: () => void;
   onToggleLobbySearch: () => void;
   onSearchLobbyQueryChange: (value: string) => void;
@@ -40,12 +44,43 @@ export default function LobbiesTab({
   searchLobbyQuery,
   searchLobbyResult,
   searchLobbyError,
+  currentUserId,
   onCreateLobby,
   onToggleLobbySearch,
   onSearchLobbyQueryChange,
   onSearchLobby,
   onJoinLobby,
 }: LobbiesTabProps) {
+  const rejoinGraceMs = 5 * 60 * 1000;
+
+  const canJoinLobby = (lobby: LobbyItem): boolean => {
+    if (!lobby.gameId) {
+      return lobby.currentPlayers < lobby.capacity;
+    }
+
+    const currentParticipant = lobby.participants?.find(
+      (participant) => participant.userId === currentUserId
+    );
+    if (!currentParticipant) {
+      return false;
+    }
+
+    if (!currentParticipant.lastSeenAt) {
+      return true;
+    }
+
+    const lastSeenAt = Date.parse(currentParticipant.lastSeenAt);
+    return Number.isFinite(lastSeenAt) && Date.now() - lastSeenAt <= rejoinGraceMs;
+  };
+
+  const getJoinLabel = (lobby: LobbyItem): string => {
+    if (lobby.gameId) {
+      return canJoinLobby(lobby) ? "Rejoin" : "Started";
+    }
+
+    return lobby.currentPlayers >= lobby.capacity ? "Full" : "Join";
+  };
+
   return (
     <div>
       <div className={styles.sectionHeader}>
@@ -100,11 +135,11 @@ export default function LobbiesTab({
                 </div>
                 <button
                   onClick={() => onJoinLobby(searchLobbyResult)}
-                  disabled={searchLobbyResult.currentPlayers >= searchLobbyResult.capacity}
+                  disabled={!canJoinLobby(searchLobbyResult)}
                   className={styles.successButton}
                 >
                   <Play size={14} />
-                  {searchLobbyResult.currentPlayers >= searchLobbyResult.capacity ? "Full" : "Join"}
+                  {getJoinLabel(searchLobbyResult)}
                 </button>
               </div>
             </div>
@@ -141,11 +176,11 @@ export default function LobbiesTab({
 
               <button
                 onClick={() => onJoinLobby(lobby)}
-                disabled={lobby.currentPlayers >= lobby.capacity}
+                disabled={!canJoinLobby(lobby)}
                 className={styles.joinButton}
               >
                 <Play size={18} />
-                {lobby.currentPlayers >= lobby.capacity ? "Full" : "Join"}
+                {getJoinLabel(lobby)}
               </button>
             </div>
           </div>

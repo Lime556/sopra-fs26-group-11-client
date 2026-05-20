@@ -25,6 +25,8 @@ export default function Lobby() {
     userId: number | null;
     username: string;
     bot: boolean;
+    online?: boolean;
+    lastSeenAt?: string | null;
   }
   
   interface LobbyGetDTO {
@@ -128,7 +130,28 @@ export default function Lobby() {
     participants: lobby.participants,
     hostParticipantId: lobby.hostParticipantId,
     privateLobby: lobby.privateLobby,
+    gameId: lobby.gameId,
   }), []);
+
+  const canJoinLobby = useCallback((lobby: LobbyItem): boolean => {
+    if (!lobby.gameId) {
+      return lobby.currentPlayers < lobby.capacity;
+    }
+
+    const currentParticipant = lobby.participants?.find(
+      (participant) => participant.userId === currentUserId
+    );
+    if (!currentParticipant) {
+      return false;
+    }
+
+    if (!currentParticipant.lastSeenAt) {
+      return true;
+    }
+
+    const lastSeenAt = Date.parse(currentParticipant.lastSeenAt);
+    return Number.isFinite(lastSeenAt) && Date.now() - lastSeenAt <= 5 * 60 * 1000;
+  }, [currentUserId]);
 
   const mapFriendFromApi = useCallback((friend: FriendGetDTO): Friend => ({
     id: friend.id,
@@ -261,6 +284,15 @@ export default function Lobby() {
   };
 
   const handleJoinClick = (lobby: LobbyItem) => {
+    if (!canJoinLobby(lobby)) {
+      return;
+    }
+
+    if (lobby.gameId) {
+      joinLobby(lobby.id);
+      return;
+    }
+
     if (lobby.privateLobby) {
       setSelectedLobby(lobby);
       setShowPasswordModal(true);
@@ -603,6 +635,7 @@ export default function Lobby() {
             searchLobbyQuery={searchLobbyQuery}
             searchLobbyResult={searchLobbyResult}
             searchLobbyError={searchLobbyError}
+            currentUserId={currentUserId}
             onCreateLobby={handleCreateLobby}
             onToggleLobbySearch={handleToggleLobbySearch}
             onSearchLobbyQueryChange={setSearchLobbyQuery}

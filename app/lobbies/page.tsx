@@ -24,6 +24,8 @@ interface LobbyParticipantGetDTO {
   userId: number | null;
   username: string;
   bot: boolean;
+  online?: boolean;
+  lastSeenAt?: string | null;
 }
 
 interface LobbyGetDTO {
@@ -34,6 +36,7 @@ interface LobbyGetDTO {
   participants: LobbyParticipantGetDTO[];
   hostParticipantId: number | null;
   privateLobby: boolean;
+  gameId?: number | null;
 }
 
 interface LobbyJoinDTO {
@@ -46,8 +49,9 @@ export default function Lobbies() {
   const apiService = useApi();
 
   const { value: token, clear: clearToken } = useLocalStorage<string>("token", "", { storage: "session" });
-  const { clear: clearUserId } = useLocalStorage<string>("userId", "", { storage: "session" });
+  const { value: userId, clear: clearUserId } = useLocalStorage<string>("userId", "", { storage: "session" });
   const { value: username } = useLocalStorage<string>("username", "", { storage: "session" });
+  const currentUserId = userId ? Number(userId) : 0;
 
   const [lobbies, setLobbies] = useState<LobbyGetDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -158,6 +162,15 @@ export default function Lobbies() {
   };
 
   const handleJoinClick = (lobby: LobbyGetDTO) => {
+    if (!canJoinLobby(lobby)) {
+      return;
+    }
+
+    if (lobby.gameId) {
+      void joinLobby(lobby.id);
+      return;
+    }
+
     if (lobby.privateLobby) {
       setSelectedLobby(lobby);
       setPassword("");
@@ -167,6 +180,34 @@ export default function Lobbies() {
     }
 
     void joinLobby(lobby.id);
+  };
+
+  const canJoinLobby = (lobby: LobbyGetDTO): boolean => {
+    if (!lobby.gameId) {
+      return lobby.currentParticipants < lobby.capacity;
+    }
+
+    const currentParticipant = lobby.participants?.find(
+      (participant) => participant.userId === currentUserId
+    );
+    if (!currentParticipant) {
+      return false;
+    }
+
+    if (!currentParticipant.lastSeenAt) {
+      return true;
+    }
+
+    const lastSeenAt = Date.parse(currentParticipant.lastSeenAt);
+    return Number.isFinite(lastSeenAt) && Date.now() - lastSeenAt <= 5 * 60 * 1000;
+  };
+
+  const getJoinLabel = (lobby: LobbyGetDTO): string => {
+    if (lobby.gameId) {
+      return canJoinLobby(lobby) ? "Rejoin" : "Started";
+    }
+
+    return lobby.currentParticipants >= lobby.capacity ? "Full" : "Join";
   };
 
   const handlePrivateJoinConfirm = async () => {
@@ -254,6 +295,7 @@ export default function Lobbies() {
             <div className={styles.lobbyGrid}>
               {lobbies.map((lobby) => {
                 const isFull = lobby.currentParticipants >= lobby.capacity;
+                const canJoin = canJoinLobby(lobby);
                 return (
                   <div
                     key={lobby.id}
@@ -287,11 +329,11 @@ export default function Lobbies() {
                       </div>
                       <button
                         className={styles.joinButton}
-                        disabled={isFull || joiningLobbyId === lobby.id}
+                        disabled={!canJoin || joiningLobbyId === lobby.id}
                         onClick={() => handleJoinClick(lobby)}
                       >
                         <LoginOutlined />
-                        {isFull ? "Full" : joiningLobbyId === lobby.id ? "Joining..." : "Join"}
+                        {joiningLobbyId === lobby.id ? "Joining..." : getJoinLabel(lobby)}
                       </button>
                     </div>
                   </div>

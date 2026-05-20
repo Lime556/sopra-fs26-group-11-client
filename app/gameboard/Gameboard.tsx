@@ -573,7 +573,7 @@ export default function Gameboard() {
 			return legacyGameId;
 		};
 
-		const syncGameState = async (gameId: number, options?: { quiet?: boolean }): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+		const syncGameState = async (gameId: number, options?: { quiet?: boolean }): Promise<"ok" | "unauthorized" | "forbidden" | "notfound" | "error"> => {
 			try {
 				const gameDto = await apiService.get<GameGetDTO>(`/games/${gameId}`);
 				const responseVersion = typeof gameDto?.gameVersion === "number" ? gameDto.gameVersion : null;
@@ -752,6 +752,9 @@ export default function Gameboard() {
 				if (status === 401) {
 					return "unauthorized";
 				}
+				if (status === 403) {
+					return "forbidden";
+				}
 				if (status === 404) {
 					return "notfound";
 				}
@@ -764,7 +767,7 @@ export default function Gameboard() {
 			}
 		};
 
-		const syncGameStateWithRetry = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+		const syncGameStateWithRetry = async (gameId: number): Promise<"ok" | "unauthorized" | "forbidden" | "notfound" | "error"> => {
 			for (let attempt = 0; attempt < 3; attempt += 1) {
 				const status = await syncGameState(gameId, { quiet: attempt < 2 });
 				if (status !== "error") {
@@ -782,7 +785,7 @@ export default function Gameboard() {
 		let syncInFlight = false;
 		let heartbeatInFlight = false;
 
-		const pollGameSync = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+		const pollGameSync = async (gameId: number): Promise<"ok" | "unauthorized" | "forbidden" | "notfound" | "error"> => {
 			try {
 				if (syncInFlight) {
 					return "ok";
@@ -889,6 +892,9 @@ export default function Gameboard() {
 				if (status === 401) {
 					return "unauthorized";
 				}
+				if (status === 403) {
+					return "forbidden";
+				}
 				if (status === 404) {
 					return "notfound";
 				}
@@ -898,7 +904,7 @@ export default function Gameboard() {
 			}
 		};
 
-		const pollGameVersion = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+		const pollGameVersion = async (gameId: number): Promise<"ok" | "unauthorized" | "forbidden" | "notfound" | "error"> => {
 			try {
 				if (versionPollInFlight || syncInFlight) {
 					return "ok";
@@ -954,6 +960,9 @@ export default function Gameboard() {
 				if (status === 401) {
 					return "unauthorized";
 				}
+				if (status === 403) {
+					return "forbidden";
+				}
 				if (status === 404) {
 					return "notfound";
 				}
@@ -963,7 +972,7 @@ export default function Gameboard() {
 			}
 		};
 
-		const heartbeatGamePresence = async (gameId: number): Promise<"ok" | "unauthorized" | "notfound" | "error"> => {
+		const heartbeatGamePresence = async (gameId: number): Promise<"ok" | "unauthorized" | "forbidden" | "notfound" | "error"> => {
 			try {
 				if (heartbeatInFlight) {
 					return "ok";
@@ -997,6 +1006,9 @@ export default function Gameboard() {
 				const status = (error as Partial<ApplicationError>)?.status;
 				if (status === 401) {
 					return "unauthorized";
+				}
+				if (status === 403) {
+					return "forbidden";
 				}
 				if (status === 404) {
 					return "notfound";
@@ -1084,6 +1096,16 @@ export default function Gameboard() {
 				return;
 			}
 
+			if (syncStatus === "forbidden") {
+				sessionStorage.removeItem("gameId");
+				localStorage.removeItem("gameId");
+				if (!cancelled) {
+					setBoardStatus("You are not part of this game.");
+					router.replace("/lobby");
+				}
+				return;
+			}
+
 			if (syncStatus === "notfound") {
 				sessionStorage.removeItem("gameId");
 				localStorage.removeItem("gameId");
@@ -1095,12 +1117,17 @@ export default function Gameboard() {
 					return;
 				}
 				syncStatus = await syncGameStateWithRetry(newGameId);
-				if (syncStatus !== "ok") {
-					if (!cancelled) {
-						setBoardStatus("Could not load board data from server.");
+					if (syncStatus !== "ok") {
+						if (!cancelled) {
+							setBoardStatus(syncStatus === "forbidden" ? "You are not part of this game." : "Could not load board data from server.");
+							if (syncStatus === "forbidden") {
+								sessionStorage.removeItem("gameId");
+								localStorage.removeItem("gameId");
+								router.replace("/lobby");
+							}
+						}
+						return;
 					}
-					return;
-				}
 				gameId = newGameId;
 				if (!cancelled) {
 					setActiveGameId(newGameId);
@@ -1119,6 +1146,15 @@ export default function Gameboard() {
 					if (status === "unauthorized") {
 						setBoardStatus("Session expired. Please log in again.");
 						router.replace("/login");
+						window.clearInterval(poll);
+						return;
+					}
+
+					if (status === "forbidden") {
+						sessionStorage.removeItem("gameId");
+						localStorage.removeItem("gameId");
+						setBoardStatus("You are not part of this game.");
+						router.replace("/lobby");
 						window.clearInterval(poll);
 						return;
 					}
@@ -1145,6 +1181,15 @@ export default function Gameboard() {
 					if (status === "unauthorized") {
 						setBoardStatus("Session expired. Please log in again.");
 						router.replace("/login");
+						window.clearInterval(presencePoll);
+						return;
+					}
+
+					if (status === "forbidden") {
+						sessionStorage.removeItem("gameId");
+						localStorage.removeItem("gameId");
+						setBoardStatus("You are not part of this game.");
+						router.replace("/lobby");
 						window.clearInterval(presencePoll);
 					}
 				});
