@@ -109,7 +109,7 @@ export default function Lobby() {
   const [newLobbyIsPrivate, setNewLobbyIsPrivate] = useState(false);
   const [newLobbyPassword, setNewLobbyPassword] = useState("");
   const [createLobbyError, setCreateLobbyError] = useState("");
-  const [statusMessage, setStatusMessage] = useState("");
+  const [statusMessage, setStatusMessage] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null);
   
   // Password change fields
   const [currentPassword, setCurrentPassword] = useState("");
@@ -119,6 +119,7 @@ export default function Lobby() {
   
   // friend requests
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const previousFriendRequestIdsRef = React.useRef<Set<number>>(new Set());
   const [lobbies, setLobbies] = useState<LobbyItem[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
 
@@ -239,7 +240,13 @@ export default function Lobby() {
   }, [loadLobbies]);
 
   useEffect(() => {
-    void loadFriendsAndRequests();
+    const interval = window.setInterval(() => {
+      void loadFriendsAndRequests();
+    }, 2000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
   }, [loadFriendsAndRequests]);
 
   useEffect(() => {
@@ -250,15 +257,33 @@ export default function Lobby() {
     sessionStorage.removeItem("lobbyFlashMessage");
 
     if (flashReason === "kicked") {
-      setStatusMessage("You were kicked from the lobby.");
+      setStatusMessage({ text: "You were kicked from the lobby.", type: "info"});
     } else if (flashReason === "closed") {
-      setStatusMessage("Lobby was closed by the host.");
+      setStatusMessage({ text: "Lobby was closed by the host.", type: "info"});
     }
   }, []);
 
   useEffect(() => {
+    const currentIds = new Set(friendRequests.map((request) => request.id));
+
+    const newRequest = friendRequests.find(
+      (request) => !previousFriendRequestIdsRef.current.has(request.id)
+    );
+
+    if (newRequest) {
+      setStatusMessage({ text: `${newRequest.username} sent you a friend request.`, type: "success"});
+    }
+
+    previousFriendRequestIdsRef.current = currentIds;
+  }, [friendRequests]);
+
+  useEffect(() => {
     if (!statusMessage) return;
-    const timeout = setTimeout(() => setStatusMessage(""), 5000);
+
+    const timeout = setTimeout(() => {
+      setStatusMessage(null);
+    }, 5000);
+
     return () => clearTimeout(timeout);
   }, [statusMessage]);
 
@@ -406,7 +431,7 @@ export default function Lobby() {
       }
 
       if (status === 409 && message.includes("active lobby or game")) {
-        setStatusMessage("You are already in an active lobby or game.");
+        setStatusMessage({ text: "You are already in an active lobby or game.", type: "error" });
         return;
       }
 
@@ -423,7 +448,7 @@ export default function Lobby() {
   
     if (searchedUserId === null) {
       setSearchResults([]);
-      setStatusMessage("Please enter a valid player ID, for example USR-2 or 2.");
+      setStatusMessage({ text: "Please enter a valid player ID, for example USR-2 or 2.", type: "error" });
       return;
     }
   
@@ -433,13 +458,13 @@ export default function Lobby() {
   
       if (!foundUser) {
         setSearchResults([]);
-        setStatusMessage("No user found with that player ID.");
+        setStatusMessage({ text: "No user found with that player ID.", type: "error" });
         return;
       }
   
       if (userId && Number(userId) === foundUser.id) {
         setSearchResults([]);
-        setStatusMessage("You cannot add yourself as a friend.");
+        setStatusMessage({ text: "You cannot add yourself as a friend.", type: "error" });
         return;
       }
   
@@ -455,7 +480,7 @@ export default function Lobby() {
       }
   
       setSearchResults([]);
-      setStatusMessage("Could not search for users.");
+      setStatusMessage({ text: "Could not search for users.", type: "error" });
     }
   };
 
@@ -463,7 +488,7 @@ export default function Lobby() {
     const receiverId = parseUserIdFromSearch(targetUserId);
   
     if (receiverId === null) {
-      setStatusMessage("Invalid user ID.");
+      setStatusMessage({ text: "Invalid user ID.", type: "error" });
       return;
     }
   
@@ -472,7 +497,7 @@ export default function Lobby() {
         receiverId,
       });
   
-      setStatusMessage(`Friend request sent to ${username}.`);
+      setStatusMessage({ text: `Friend request sent to ${username}.`, type: "success" });
       setShowFriendSearch(false);
       setSearchQuery("");
       setSearchResults([]);
@@ -481,9 +506,9 @@ export default function Lobby() {
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error("Sending friend request failed:", error.message);
-        setStatusMessage(error.message);
+        setStatusMessage({ text: error.message, type: "error" });
       } else {
-        setStatusMessage("Could not send friend request.");
+        setStatusMessage({ text: "Could not send friend request.", type: "error" });
       }
     }
   };
@@ -495,14 +520,14 @@ export default function Lobby() {
         {},
       );
   
-      setStatusMessage("Friend request accepted.");
+      setStatusMessage({ text: "Friend request accepted.", type: "success" });
       await loadFriendsAndRequests();
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error("Accepting friend request failed:", error.message);
-        setStatusMessage(error.message);
+        setStatusMessage({ text: error.message, type: "error" });
       } else {
-        setStatusMessage("Could not accept friend request.");
+        setStatusMessage({ text: "Could not accept friend request.", type: "error" });
       }
     }
   };
@@ -514,21 +539,21 @@ export default function Lobby() {
         {},
       );
   
-      setStatusMessage("Friend request declined.");
+      setStatusMessage({ text: "Friend request declined.", type: "info" });
       await loadFriendsAndRequests();
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error("Declining friend request failed:", error.message);
-        setStatusMessage(error.message);
+        setStatusMessage({ text: error.message, type: "error" });
       } else {
-        setStatusMessage("Could not decline friend request.");
+        setStatusMessage({ text: "Could not decline friend request.", type: "error" });
       }
     }
   };
 
   const handleRefreshFriends = async () => {
     await loadFriendsAndRequests();
-    setStatusMessage("Friends and requests refreshed.");
+    setStatusMessage({ text: "Friends and requests refreshed.", type: "success" });
   };
 
   const handleOpenProfile = (targetUserId: number) => {
@@ -736,7 +761,15 @@ export default function Lobby() {
           </button>
         </div>
       </div>
-      {statusMessage && <p className={styles.statusMessage}>{statusMessage}</p>}
+      {statusMessage && <p className={`${styles.statusMessage} ${
+          statusMessage.type === "success"
+            ? styles.statusSuccess
+            : statusMessage.type === "info"
+            ? styles.statusInfo
+            : styles.statusError
+        }`}
+      >
+        {statusMessage.text}</p>}
 
       {/* Main Content */}
       <div className={styles.main}>
