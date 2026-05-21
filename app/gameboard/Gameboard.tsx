@@ -240,7 +240,7 @@ export default function Gameboard() {
 	const [dicePopupValue, setDicePopupValue] = useState<number | null>(null);
 	const [diceWonResources, setDiceWonResources] = useState<Resources | null>(null);
 	const previousResourcesRef = useRef<Map<number, Resources>>(new Map());
-	const diceResourceBaselinesRef = useRef<Map<string, Map<number, Resources>>>(new Map());
+	const diceResourceBaselinesRef = useRef<Map<number, Map<number, Resources>>>(new Map());
 	const [initialPlacementWonResources, setInitialPlacementWonResources] = useState<Resources | null>(null);
 	const [stolenResourcePopup, setStolenResourcePopup] = useState<{ resource: ResourceType; sourceName: string | null; targetName: string | null } | null>(null);
 	const [showMonopolyResourceSelector, setShowMonopolyResourceSelector] = useState<boolean>(false);
@@ -267,7 +267,7 @@ export default function Gameboard() {
 	const dicePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const stolenResourcePopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const botAiFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const lastDiceRolledAtRef = useRef<string | null | undefined>(undefined);
+	const lastDiceRolledAtRef = useRef<number | null | undefined>(undefined);
 	const lastTradeRequestedAtRef = useRef<string | null>(null);
 	const lastTradeRequestIdRef = useRef<string | null>(null);
 	const currentGameVersionRef = useRef<number | null>(null);
@@ -480,7 +480,16 @@ export default function Gameboard() {
 		});
 	};
 
-	const rememberDiceResourceBaseline = (diceRolledAt: string): void => {
+	const getDiceRolledAtTimestamp = (diceRolledAt: string | null | undefined): number | null => {
+		if (typeof diceRolledAt !== "string") {
+			return null;
+		}
+
+		const parsedTimestamp = Date.parse(diceRolledAt);
+		return Number.isNaN(parsedTimestamp) ? null : parsedTimestamp;
+	};
+
+	const rememberDiceResourceBaseline = (diceRolledAt: number): void => {
 		if (diceResourceBaselinesRef.current.has(diceRolledAt)) {
 			return;
 		}
@@ -489,17 +498,19 @@ export default function Gameboard() {
 
 	const showNewDiceRollFromGameDto = (gameDto: GameGetDTO, serverPlayers: PlayerGetDTO[]): void => {
 		const nextDiceRolledAt = gameDto?.diceRolledAt ?? null;
+		const nextDiceRolledAtTimestamp = getDiceRolledAtTimestamp(nextDiceRolledAt);
 		const nextDiceValue = typeof gameDto?.diceValue === "number" ? gameDto.diceValue : null;
 		if (
 			nextDiceRolledAt === null
-			|| nextDiceRolledAt === lastDiceRolledAtRef.current
+			|| nextDiceRolledAtTimestamp === null
+			|| nextDiceRolledAtTimestamp === lastDiceRolledAtRef.current
 			|| nextDiceValue === null
 		) {
 			return;
 		}
 
-		lastDiceRolledAtRef.current = nextDiceRolledAt;
-		rememberDiceResourceBaseline(nextDiceRolledAt);
+		lastDiceRolledAtRef.current = nextDiceRolledAtTimestamp;
+		rememberDiceResourceBaseline(nextDiceRolledAtTimestamp);
 		const previousLocalPlayer = findLocalStatePlayer(
 			latestStateRef.current.players,
 			sessionUserIdRef.current,
@@ -513,7 +524,7 @@ export default function Gameboard() {
 		);
 
 		if (previousLocalPlayer && nextLocalPlayer) {
-			const diceBaseline = diceResourceBaselinesRef.current.get(nextDiceRolledAt);
+			const diceBaseline = diceResourceBaselinesRef.current.get(nextDiceRolledAtTimestamp);
 			const previousResources =
 				diceBaseline?.get(previousLocalPlayer.id) ??
 				previousResourcesRef.current.get(previousLocalPlayer.id) ??
@@ -950,6 +961,7 @@ export default function Gameboard() {
 				}
 
 					const nextDiceRolledAt = syncDto.diceRolledAt ?? null;
+					const nextDiceRolledAtTimestamp = getDiceRolledAtTimestamp(nextDiceRolledAt);
 					const nextDiceValue = typeof syncDto.diceValue === "number" ? syncDto.diceValue : null;
 					setCurrentPlayerMustDiscardFromServer(
 						typeof syncDto.currentPlayerMustDiscard === "boolean" ? syncDto.currentPlayerMustDiscard : null
@@ -957,10 +969,12 @@ export default function Gameboard() {
 
 				if (
 					nextDiceRolledAt !== null
-					&& nextDiceRolledAt !== lastDiceRolledAtRef.current
+						&& nextDiceRolledAtTimestamp !== null
+						&& nextDiceRolledAtTimestamp !== lastDiceRolledAtRef.current
 					&& nextDiceValue !== null
 				) {
-					rememberDiceResourceBaseline(nextDiceRolledAt);
+						lastDiceRolledAtRef.current = nextDiceRolledAtTimestamp;
+						rememberDiceResourceBaseline(nextDiceRolledAtTimestamp);
 					setState((previousState) => ({
 						...previousState,
 						diceResult: nextDiceValue,
