@@ -1101,11 +1101,13 @@
   display: flex;
   flex-wrap: nowrap;
   gap: 0.7rem;
-  overflow-x: auto;
-  padding-bottom: 0.15rem;
+  overflow: visible;
+  padding: 0.85rem 1.15rem 0.45rem;
+  margin: -0.85rem -1.15rem -0.45rem;
 }
 
 .devCardActionButton {
+  position: relative;
   flex: 0 0 auto;
   width: 172px;
   border: 2px solid rgba(84, 62, 32, 0.28);
@@ -1118,6 +1120,8 @@
   background: rgba(255, 255, 255, 0.94);
   color: #2d2115;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  transform-origin: center bottom;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
 .devCardActionButtonPlayable {
@@ -1127,12 +1131,21 @@
 
 .devCardActionButtonPlayable:hover {
   border-color: rgba(66, 88, 160, 0.72);
-  box-shadow: 0 0 0 2px rgba(66, 88, 160, 0.16);
+  box-shadow: 0 12px 24px rgba(31, 38, 73, 0.24), 0 0 0 2px rgba(66, 88, 160, 0.16);
+  transform: translateY(-8px) scale(1.14);
+  z-index: 2;
 }
 
 .devCardActionButtonLocked {
   opacity: 0.75;
   cursor: not-allowed;
+}
+
+.devCardActionButtonLocked:hover {
+  opacity: 0.92;
+  box-shadow: 0 12px 24px rgba(55, 43, 31, 0.18);
+  transform: translateY(-8px) scale(1.5);
+  z-index: 2;
 }
 
 .devCardActionLabel {

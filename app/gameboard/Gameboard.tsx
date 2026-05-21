@@ -418,6 +418,7 @@ export default function Gameboard() {
 	const applyGameDtoToState = (gameDto: GameGetDTO): void => {
 		const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
 		showNewDiceRollFromGameDto(gameDto, serverPlayers);
+		applyLatestTradeRequestFromGameDto(gameDto);
 		if (gameDto.bankResources) {
 			setBankResourcesState(gameDto.bankResources as Resources);
 		}
@@ -560,6 +561,24 @@ export default function Gameboard() {
 		}
 		processedTradeEventsRef.current.add(key);
 		applyGameEventRef.current(event);
+	};
+
+	const applyLatestTradeRequestFromGameDto = (gameDto?: Pick<GameGetDTO, "tradeRequestedAt" | "latestTradeRequest"> | null): void => {
+		const nextTradeRequestedAt = gameDto?.tradeRequestedAt ?? null;
+		if (nextTradeRequestedAt === null || nextTradeRequestedAt === lastTradeRequestedAtRef.current) {
+			return;
+		}
+
+		lastTradeRequestedAtRef.current = nextTradeRequestedAt;
+		if (!gameDto?.latestTradeRequest) {
+			return;
+		}
+
+		try {
+			applyTradeGameEventOnce(JSON.parse(gameDto.latestTradeRequest) as GameEventDTO);
+		} catch (error) {
+			console.error("Failed to parse latest trade request", error);
+		}
 	};
 
 	useEffect(() => {
