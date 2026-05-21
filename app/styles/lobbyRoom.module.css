@@ -174,6 +174,30 @@
   color: rgb(229, 231, 235);
   cursor: not-allowed;
 }
+
+.inviteFriendsButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  border: none;
+  border-radius: 0.5rem;
+  font: inherit;
+  cursor: pointer;
+  background: rgb(22, 163, 74);
+  color: white;
+  transition: background-color 0.2s ease;
+}
+
+.inviteFriendsButton:hover {
+  background: rgb(21, 128, 61);
+}
+
+.inviteFriendsButton:disabled {
+  background: rgb(156, 163, 175);
+  color: rgb(229, 231, 235);
+  cursor: not-allowed;
+}
   
   .participantList {
     display: flex;
@@ -409,5 +433,137 @@
 
 .transferButton:disabled {
   background: rgb(156, 163, 175);
+  cursor: not-allowed;
+}
+
+.inviteModalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.inviteModal {
+  width: min(520px, 100%);
+  background: rgba(202, 138, 4, 0.92);
+  backdrop-filter: blur(8px);
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
+  padding: 1rem;
+}
+
+.inviteModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.inviteModalTitle {
+  margin: 0;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.inviteModalCloseButton {
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 0.5rem;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.inviteModalCloseButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.inviteModalEmptyText {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.inviteFriendList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
+
+.inviteFriendRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.9);
+  color: rgb(31, 41, 55);
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.inviteFriendName {
+  font-weight: 600;
+}
+
+.inviteFriendStatus {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgb(22, 101, 52);
+  background: rgb(220, 252, 231);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+}
+
+.inviteModalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+.inviteModalCancelButton,
+.inviteModalSendButton {
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.9rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inviteModalCancelButton {
+  background: rgb(71, 85, 105);
+  color: white;
+}
+
+.inviteModalCancelButton:hover {
+  background: rgb(51, 65, 85);
+}
+
+.inviteModalSendButton {
+  background: rgb(22, 163, 74);
+  color: white;
+}
+
+.inviteModalSendButton:hover {
+  background: rgb(21, 128, 61);
+}
+
+.inviteModalCancelButton:disabled,
+.inviteModalSendButton:disabled {
+  background: rgb(156, 163, 175);
+  color: rgb(229, 231, 235);
   cursor: not-allowed;
 }

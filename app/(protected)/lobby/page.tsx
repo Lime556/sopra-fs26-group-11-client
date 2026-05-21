@@ -68,6 +68,18 @@ export default function Lobby() {
     createdAt?: string;
   }
 
+  interface LobbyInvitationGetDTO {
+    id: number;
+    lobbyId: number;
+    lobbyName?: string;
+    senderId: number;
+    senderUsername?: string;
+    receiverId: number;
+    receiverUsername?: string;
+    status: string;
+    createdAt?: string;
+  }
+
   interface UserGetDTO {
     id: number;
     username: string;
@@ -120,6 +132,8 @@ export default function Lobby() {
   // friend requests
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const previousFriendRequestIdsRef = React.useRef<Set<number>>(new Set());
+  const [lobbyInvitations, setLobbyInvitations] = useState<LobbyInvitationGetDTO[]>([]);
+  const previousLobbyInvitationIdsRef = React.useRef<Set<number>>(new Set());
   const [lobbies, setLobbies] = useState<LobbyItem[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
 
@@ -209,13 +223,15 @@ export default function Lobby() {
 
   const loadFriendsAndRequests = useCallback(async () => {
     try {
-      const [friendsData, requestsData] = await Promise.all([
+      const [friendsData, requestsData, invitationsData] = await Promise.all([
         apiService.get<FriendGetDTO[]>("/friends"),
         apiService.get<FriendRequestGetDTO[]>("/friend-requests"),
+        apiService.get<LobbyInvitationGetDTO[]>("/lobby-invitations"),
       ]);
   
       setFriends(friendsData.map(mapFriendFromApi));
       setFriendRequests(requestsData.map(mapFriendRequestFromApi));
+      setLobbyInvitations(invitationsData.filter((invitation) => invitation.status === "PENDING"));
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error("Failed to load friends:", error.message);
@@ -276,6 +292,23 @@ export default function Lobby() {
 
     previousFriendRequestIdsRef.current = currentIds;
   }, [friendRequests]);
+
+  useEffect(() => {
+    const currentIds = new Set(lobbyInvitations.map((invitation) => invitation.id));
+
+    const newInvitation = lobbyInvitations.find(
+      (invitation) => !previousLobbyInvitationIdsRef.current.has(invitation.id)
+    );
+
+    if (newInvitation) {
+      setStatusMessage({
+        text: `${newInvitation.senderUsername ?? "A friend"} invited you to ${newInvitation.lobbyName ?? `Lobby ${newInvitation.lobbyId}`}.`,
+        type: "success",
+      });
+    }
+
+    previousLobbyInvitationIdsRef.current = currentIds;
+  }, [lobbyInvitations]);
 
   useEffect(() => {
     if (!statusMessage) return;
@@ -556,6 +589,36 @@ export default function Lobby() {
     setStatusMessage({ text: "Friends and requests refreshed.", type: "success" });
   };
 
+  const handleAcceptLobbyInvitation = async (invitation: LobbyInvitationGetDTO) => {
+    try {
+      await apiService.put(`/lobby-invitations/${invitation.id}/accept`, {});
+      setStatusMessage({ text: `Joined ${invitation.lobbyName ?? `Lobby ${invitation.lobbyId}`}.`, type: "success" });
+      router.push(`/lobby/${invitation.lobbyId}`);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setStatusMessage({ text: error.message, type: "error" });
+      } else {
+        setStatusMessage({ text: "Could not accept lobby invitation.", type: "error" });
+      }
+    }
+  };
+
+  const handleDenyLobbyInvitation = async (invitation: LobbyInvitationGetDTO) => {
+    try {
+      await apiService.put(`/lobby-invitations/${invitation.id}/decline`, {});
+      setLobbyInvitations((previousInvitations) =>
+        previousInvitations.filter((existingInvitation) => existingInvitation.id !== invitation.id)
+      );
+      setStatusMessage({ text: "Lobby invitation declined.", type: "info" });
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setStatusMessage({ text: error.message, type: "error" });
+      } else {
+        setStatusMessage({ text: "Could not decline lobby invitation.", type: "error" });
+      }
+    }
+  };
+
   const handleOpenProfile = (targetUserId: number) => {
     if (!targetUserId) {
       return;
@@ -773,6 +836,49 @@ export default function Lobby() {
 
       {/* Main Content */}
       <div className={styles.main}>
+        {lobbyInvitations.length > 0 && (
+          <div className={styles.inviteRequestPanel}>
+            <p className={styles.panelTitle}>Pending Lobby Invites ({lobbyInvitations.length})</p>
+            <div className={styles.listColumn}>
+              {lobbyInvitations.map((invitation) => (
+                <div key={invitation.id} className={styles.requestItem}>
+                  <div className={styles.requestItemTop}>
+                    <div className={styles.avatarSmall}>
+                      {(invitation.senderUsername ?? "?")[0]}
+                    </div>
+                    <div>
+                      <p className={styles.resultName}>{invitation.senderUsername ?? "Unknown"}</p>
+                      <p className={styles.requestMessage}>
+                        invited you to {invitation.lobbyName ?? `Lobby ${invitation.lobbyId}`} (ID: {invitation.lobbyId})
+                      </p>
+                      <p className={styles.requestDate}>
+                        {invitation.createdAt ? new Date(invitation.createdAt).toLocaleString() : ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className={styles.requestActions}>
+                    <button
+                      type="button"
+                      onClick={() => void handleAcceptLobbyInvitation(invitation)}
+                      className={styles.successButton}
+                    >
+                      Accept
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDenyLobbyInvitation(invitation)}
+                      className={styles.secondaryButton}
+                    >
+                      Deny
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className={styles.layout}>
 
           {/* Left Sidebar - Navigation */}
