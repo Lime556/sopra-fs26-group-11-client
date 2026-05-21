@@ -4,12 +4,14 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import styles from "@/styles/gameboard.module.css";
 import { BoardColumn } from "../gameboard/components/BoardColumn";
-import { boardCoordinatesById } from "../gameboard/constants";
+import { TradeModal } from "../gameboard/components/TradeModal";
+import { bankResources, boardCoordinatesById } from "../gameboard/constants";
 import { findDesertHexId, createInitialGameState } from "../gameboard/mappers";
-import { type GameState, type HexTile, type PortVisual, type Player } from "../gameboard/types";
+import { type GameState, type HexTile, type PortVisual, type Player, type Resources } from "../gameboard/types";
 import { createCanonicalEdgeKey, getCornerPoint, toPixel } from "../gameboard/geometry";
 import { LogOut, Send } from "lucide-react";
 import { TutorialOverlay } from "../tutorial/TutorialOverlay";
+import { tutorialSteps } from "../tutorial/tutorialSteps";
 
 
 const tutorialHexTypes: HexTile["type"][] = [
@@ -115,14 +117,14 @@ const tutorialPlayer: Player = {
   name: "Tutorial Player",
   color: "#b4233a",
   resources: {
-    wood: 1,
-    brick: 0,
+    wood: 4,
+    brick: 2,
     wool: 1,
-    wheat: 0,
+    wheat: 2,
     ore: 1,
   },
   victoryPoints: 2,
-  developmentCards: [],
+  developmentCards: ["knight"],
   knightsPlayed: 0,
   developmentCardVictoryPoints: 0,
   freeRoadBuildsRemaining: 0,
@@ -142,15 +144,53 @@ const tutorialState: GameState = {
   gamePhase: "ACTIVE",
 };
 
+const tutorialPlayerGiveResources: Resources = {
+  wood: 1,
+  brick: 0,
+  wool: 0,
+  wheat: 0,
+  ore: 0,
+};
+
+const tutorialPlayerReceiveResources: Resources = {
+  wood: 0,
+  brick: 1,
+  wool: 0,
+  wheat: 0,
+  ore: 0,
+};
+
+const tutorialBankGiveResources: Resources = {
+  wood: 4,
+  brick: 0,
+  wool: 0,
+  wheat: 0,
+  ore: 0,
+};
+
+const tutorialBankReceiveResources: Resources = {
+  wood: 0,
+  brick: 1,
+  wool: 0,
+  wheat: 0,
+  ore: 0,
+};
+
 export default function TutorialPage() {
   const router = useRouter();
   const [isTutorialPopupVisible, setIsTutorialPopupVisible] = useState(true);
+  const [currentTutorialStepIndex, setCurrentTutorialStepIndex] = useState(0);
+  const currentTutorialStep = tutorialSteps[currentTutorialStepIndex];
+  const shouldShowDevelopmentCards = currentTutorialStep?.id === "development-cards";
+  const shouldShowTradeModal = currentTutorialStep?.id === "trading";
 
   const noop = () => {
     // Tutorial board is static in this mode.
   };
 
-  const hexById = new Map(tutorialState.hexes.map((hex) => [hex.id, hex]));
+  const hexById = useMemo(() => {
+    return new Map(tutorialState.hexes.map((hex) => [hex.id, hex]));
+  }, []);
 
   const renderedRoadSegments = useMemo(() => {
     return tutorialState.players.flatMap((player) => {
@@ -183,7 +223,7 @@ export default function TutorialPage() {
 
   return (
     <div className={`${styles.layout} ${styles.tutorialLayout}`}>
-    <div data-tutorial="board">
+    <div className={styles.tutorialBoardArea} data-tutorial="board">
       <BoardColumn
         boardStatus="Tutorial mode enabled"
         state={tutorialState}
@@ -204,9 +244,10 @@ export default function TutorialPage() {
         handleSettlementCornerClick={noop}
         handleCityCornerClick={noop}
         handleBuyDevelopmentCard={noop}
-        developmentCards={[]}
-        isDevCardPlayMode={false}
-        showDevelopmentCardsPreview={false}
+        developmentCards={tutorialPlayer.developmentCards}
+        isDevCardPlayMode={shouldShowDevelopmentCards}
+        showDevelopmentCardsPreview={shouldShowDevelopmentCards}
+        developmentCardsTutorialTarget={shouldShowDevelopmentCards ? "development-cards-panel" : undefined}
         handleToggleDevCardPlayMode={noop}
         handlePlayDevelopmentCard={noop}
         handleRollDice={noop}
@@ -359,9 +400,33 @@ export default function TutorialPage() {
 
       {isTutorialPopupVisible ? (
         <TutorialOverlay
+          currentStepIndex={currentTutorialStepIndex}
+          onStepChange={setCurrentTutorialStepIndex}
           onClose={() => setIsTutorialPopupVisible(false)}
         />
       ) : null}
+      <TradeModal
+        isVisible={shouldShowTradeModal}
+        tradeMode="player"
+        playerGiveResources={tutorialPlayerGiveResources}
+        playerReceiveResources={tutorialPlayerReceiveResources}
+        bankGiveResources={tutorialBankGiveResources}
+        bankReceiveResources={tutorialBankReceiveResources}
+        bankResources={bankResources}
+        currentPlayer={tutorialPlayer}
+        targetPlayerId={null}
+        ports={tutorialPorts}
+        hexById={hexById}
+        onClose={noop}
+        onSetTradeMode={noop}
+        onAdjustPlayerGiveResource={noop}
+        onAdjustPlayerReceiveResource={noop}
+        onAdjustBankGiveResource={noop}
+        onAdjustBankReceiveResource={noop}
+        onBankTrade={noop}
+        onPlayerTrade={noop}
+        tutorialTarget="trade-modal"
+      />
     </div>
   );
 }

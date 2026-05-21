@@ -3,7 +3,7 @@ import styles from "@/styles/gameboard.module.css";
 import { Player } from "../types";
 
 interface PlayerGameStats {
-	cardsPlayedCount: number;
+	developmentCardsCount: number;
 	knightsPlayedCount: number;
 	roadsBuiltCount: number;
 	settlementsBuiltCount: number;
@@ -22,7 +22,7 @@ interface EndGameOverlayProps {
 }
 
 const emptyStats: PlayerGameStats = {
-	cardsPlayedCount: 0,
+	developmentCardsCount: 0,
 	knightsPlayedCount: 0,
 	roadsBuiltCount: 0,
 	settlementsBuiltCount: 0,
@@ -106,7 +106,7 @@ export function EndGameOverlay({
 							<div className={styles.endGameLeaderboardHeader}>Rank</div>
 							<div className={styles.endGameLeaderboardHeader}>Player</div>
 							<div className={styles.endGameLeaderboardHeader}>VP</div>
-							<div className={styles.endGameLeaderboardHeader}>Cards</div>
+							<div className={styles.endGameLeaderboardHeader}>Dev Cards</div>
 							<div className={styles.endGameLeaderboardHeader}>Knights</div>
 							<div className={styles.endGameLeaderboardHeader}>Roads</div>
 							<div className={styles.endGameLeaderboardHeader}>Settlements</div>
@@ -128,7 +128,7 @@ export function EndGameOverlay({
 											{isWinner ? <span className={styles.endGameWinnerBadge}>Winner</span> : null}
 										</div>
 										<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{player.victoryPoints}</div>
-										<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.cardsPlayedCount}</div>
+										<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.developmentCardsCount}</div>
 										<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.knightsPlayedCount}</div>
 										<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.roadsBuiltCount}</div>
 										<div className={`${styles.endGameLeaderboardCell} ${rowClass}`}>{playerStats.settlementsBuiltCount}</div>
@@ -145,15 +145,15 @@ export function EndGameOverlay({
 					<h2 className={styles.endGameSectionTitle}>📊 Game Stats</h2>
 					<div className={styles.endGameStatsGrid}>
 						<div className={styles.endGameStatItem}>
-							<span>Cards Played</span>
-							<strong>{gameSummaryStats.cardsPlayedCount}</strong>
+							<span>Dev Cards Held</span>
+							<strong>{gameSummaryStats.developmentCardsCount}</strong>
 						</div>
 						<div className={styles.endGameStatItem}>
 							<span>Knights Played</span>
 							<strong>{gameSummaryStats.knightsPlayedCount}</strong>
 						</div>
 						<div className={styles.endGameStatItem}>
-							<span>Buildings Built</span>
+							<span>Buildings</span>
 							<strong>{gameSummaryStats.buildingsBuiltCount}</strong>
 						</div>
 						<div className={styles.endGameStatItem}>

@@ -31,8 +31,18 @@
   overflow-y: visible;
 }
 
-.tutorialLayout .boardViewport {
+.tutorialBoardArea {
+  min-width: 0;
+  min-height: calc(100dvh - 2rem);
+  display: grid;
+}
+
+.tutorialBoardArea .boardColumn {
   min-height: 0;
+}
+
+.tutorialLayout .boardViewport {
+  min-height: clamp(420px, 62dvh, 720px);
 }
 
 .boardColumn {
@@ -357,7 +367,7 @@
 }
 
 .board {
-  width: auto;
+  width: 96%;
   height: 96%;
   max-width: 96%;
   filter: drop-shadow(0 18px 28px var(--shadow));
@@ -2035,11 +2045,6 @@
     0 0 0 9999px rgba(10, 15, 22, 0.6); /* Darkens everything except the spotlight area */
   border: 4px solid #facc15;
   outline: 2px solid rgba(255, 230, 150, 0.35);
-  transition:
-    top 350ms cubic-bezier(0.22, 1, 0.36, 1),
-    left 350ms cubic-bezier(0.22, 1, 0.36, 1),
-    width 350ms cubic-bezier(0.22, 1, 0.36, 1),
-    height 350ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .tutorialTooltip {
@@ -2059,9 +2064,6 @@
   box-shadow: 0 18px 34px rgba(11, 8, 4, 0.36);
   pointer-events: auto;
   isolation: isolate;
-  transition:
-    top 350ms cubic-bezier(0.22, 1, 0.36, 1),
-    left 350ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .tutorialTooltipTitle {
