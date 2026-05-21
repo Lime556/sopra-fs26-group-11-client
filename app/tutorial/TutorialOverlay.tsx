@@ -64,41 +64,196 @@ export function TutorialOverlay({ currentStepIndex, onStepChange, onClose }: Pro
       };
     }
 
-    const spaceBelow =
-      window.innerHeight - targetRect.bottom;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
 
-    const shouldRenderAbove =
-      spaceBelow < TOOLTIP_HEIGHT + 40;
+    const spaceBelow = viewportHeight - targetRect.bottom;
+    const spaceAbove = targetRect.top;
+    const spaceRight = viewportWidth - targetRect.right;
+    const spaceLeft = targetRect.left;
 
-    let top = shouldRenderAbove
-      ? targetRect.top - TOOLTIP_HEIGHT - 20
-      : targetRect.bottom + 20;
+    const comfortableVerticalSpace =
+      TOOLTIP_HEIGHT + 80;
 
-    let left =
-      targetRect.left + targetRect.width / 2;
+    const canFitBelow =
+      spaceBelow >= comfortableVerticalSpace;
 
-    // Prevent overflow on left/right edges
-    left = Math.max(
-      TOOLTIP_WIDTH / 2 + VIEWPORT_PADDING,
-      left
-    );
+    const canFitAbove =
+      spaceAbove >= comfortableVerticalSpace;
 
-    left = Math.min(
-      window.innerWidth -
-        TOOLTIP_WIDTH / 2 -
-        VIEWPORT_PADDING,
-      left
-    );
+    const canFitRight =
+      spaceRight >= TOOLTIP_WIDTH + 40;
 
-    // Prevent overflow top
-    top = Math.max(VIEWPORT_PADDING, top);
+    const canFitLeft =
+      spaceLeft >= TOOLTIP_WIDTH + 40;
 
-    return {
-      top,
-      left,
-      transform: "translateX(-50%)",
-    };
-  }, [targetRect]);
+    /* -------------------------------- */
+    /* PREFER SIDE POSITIONING FIRST    */
+    /* if vertical space is tight       */
+    /* -------------------------------- */
+
+    if (!canFitBelow && !canFitAbove) {
+      if (canFitRight) {
+        let top =
+          targetRect.top +
+          targetRect.height / 2;
+
+        top = Math.max(
+          TOOLTIP_HEIGHT / 2 + VIEWPORT_PADDING,
+          top
+        );
+
+        top = Math.min(
+          viewportHeight -
+            TOOLTIP_HEIGHT / 2 -
+            VIEWPORT_PADDING,
+          top
+        );
+
+        return {
+          top,
+          left: targetRect.right + 24,
+          transform: "translateY(-50%)",
+        };
+      }
+
+      if (canFitLeft) {
+        let top =
+          targetRect.top +
+          targetRect.height / 2;
+
+        top = Math.max(
+          TOOLTIP_HEIGHT / 2 + VIEWPORT_PADDING,
+          top
+        );
+
+        top = Math.min(
+          viewportHeight -
+            TOOLTIP_HEIGHT / 2 -
+            VIEWPORT_PADDING,
+          top
+        );
+
+        return {
+          top,
+          left: targetRect.left - TOOLTIP_WIDTH - 24,
+          transform: "translateY(-50%)",
+        };
+      }
+    }
+
+    /* -------------------------------- */
+    /* BELOW                            */
+    /* -------------------------------- */
+
+    if (canFitBelow) {
+      let left =
+        targetRect.left + targetRect.width / 2;
+
+      left = Math.max(
+        TOOLTIP_WIDTH / 2 + VIEWPORT_PADDING,
+        left
+      );
+
+      left = Math.min(
+        viewportWidth -
+          TOOLTIP_WIDTH / 2 -
+          VIEWPORT_PADDING,
+        left
+      );
+
+      return {
+        top: targetRect.bottom + 20,
+        left,
+        transform: "translateX(-50%)",
+      };
+    }
+
+    /* -------------------------------- */
+    /* ABOVE                            */
+    /* -------------------------------- */
+
+    if (canFitAbove) {
+      let left =
+        targetRect.left + targetRect.width / 2;
+
+      left = Math.max(
+        TOOLTIP_WIDTH / 2 + VIEWPORT_PADDING,
+        left
+      );
+
+      left = Math.min(
+        viewportWidth -
+          TOOLTIP_WIDTH / 2 -
+          VIEWPORT_PADDING,
+        left
+      );
+
+      return {
+        top: targetRect.top - TOOLTIP_HEIGHT - 20,
+        left,
+        transform: "translateX(-50%)",
+      };
+    }
+
+    /* -------------------------------- */
+    /* RIGHT                            */
+    /* -------------------------------- */
+
+    if (canFitRight) {
+      let top =
+        targetRect.top +
+        targetRect.height / 2;
+
+      top = Math.max(
+        TOOLTIP_HEIGHT / 2 + VIEWPORT_PADDING,
+        top
+      );
+
+      top = Math.min(
+        viewportHeight -
+          TOOLTIP_HEIGHT / 2 -
+          VIEWPORT_PADDING,
+        top
+      );
+
+      return {
+        top,
+        left: targetRect.right + 32,
+        transform: "translateY(-50%)",
+      };
+    }
+
+    /* -------------------------------- */
+    /* LEFT                             */
+    /* -------------------------------- */
+
+    if (canFitLeft) {
+      let top =
+        targetRect.top +
+        targetRect.height / 2;
+
+      top = Math.max(
+        TOOLTIP_HEIGHT / 2 + VIEWPORT_PADDING,
+        top
+      );
+
+      top = Math.min(
+        viewportHeight -
+          TOOLTIP_HEIGHT / 2 -
+          VIEWPORT_PADDING,
+        top
+      );
+
+      return {
+        top,
+        left:
+          targetRect.left -
+          TOOLTIP_WIDTH -
+          32,
+        transform: "translateY(-50%)",
+      };
+    }}, [targetRect]);
 
   const goNext = () => {
     if (currentStepIndex >= tutorialSteps.length - 1) {

@@ -20,11 +20,25 @@ export const tutorialSteps: TutorialStep[] = [
       "This is the Catan board. Hex tiles adjacent to buildings produce resources when their dice number is rolled. The desert tile produces no resources, which is where the robber is placed at the start of the game. The robber blocks resource production on the tile it occupies.",
   },
   {
+    id: "ambience-panel",
+    target: "ambience-panel",
+    title: "Ambience Effects",
+    description:
+      "To make the game more immersive, you can enable ambience effects that reflect the current weather and time of day. These effects only change the visual appearance and do not impact gameplay.",
+  },
+  {
+    id: "bot-ai-panel",
+    target: "bot-ai-panel",
+    title: "Bot AI Settings",
+    description:
+      "Here you can enable the Bot AI consultant, which relies on the HuggingFace API and makes bot moves smarter. When turned off, bots will make random valid moves.",
+  },
+  {
     id: "players",
     target: "players-panel",
     title: "Player Overview",
     description:
-      "Here you can see the players and their assigned color. The four fields show the amount of resources and development cards they have, the number of knight cards played and the length of their longest road. The top right corner shows their victory points. The yellow background indicates the current player.",
+      "Here you can see the players and their assigned color. The four fields show the amount of resources and development cards they have, the number of knight cards played and the length of their longest road. The top right corner shows their public victory points and in the brackets the total points including development cards. The yellow background indicates the current player.",
   },
   {
     id: "victory-points",
@@ -58,7 +72,7 @@ export const tutorialSteps: TutorialStep[] = [
     target: "development-cards-panel",
     title: "Development Cards",
     description:
-      "• Knight: Move the robber and steal 1 random resource from a player next to the robber’s new hex.\n • Victory Point: Gives you 1 victory point.\n• Road Building: Place 2 free roads.\n• Year of Plenty: Take 2 resource cards from the bank.\n• Monopoly: Choose a resource type and take all cards of that type from the other players.\nDevelopment cards appear with different frequencies.",
+      "• Knight: Move the robber and steal 1 random resource from a player next to the robber’s new hex.\n • Victory Point: Secretly gives you 1 victory point. This card is not playable, since the point is added automatically.\n• Road Building: Place 2 free roads.\n• Year of Plenty: Take 2 resource cards from the bank.\n• Monopoly: Choose a resource type and take all cards of that type from the other players.\nDevelopment cards appear with different frequencies.",
   },
   {
     id: "bank",
