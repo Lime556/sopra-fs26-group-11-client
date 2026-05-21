@@ -58,6 +58,7 @@ import {
 	type GameChatMessageDTO,
 	type GameEventDTO,
 	type GameGetDTO,
+	type GameHeartbeatDTO,
 	type GameState,
 	type HexTile,
 	type Player,
@@ -973,8 +974,6 @@ export default function Gameboard() {
 						&& nextDiceRolledAtTimestamp !== lastDiceRolledAtRef.current
 					&& nextDiceValue !== null
 				) {
-						lastDiceRolledAtRef.current = nextDiceRolledAtTimestamp;
-						rememberDiceResourceBaseline(nextDiceRolledAtTimestamp);
 					setState((previousState) => ({
 						...previousState,
 						diceResult: nextDiceValue,
@@ -1118,7 +1117,7 @@ export default function Gameboard() {
 				}
 
 				heartbeatInFlight = true;
-				const gameDto = await apiService.post<GameGetDTO>(`/games/${gameId}/heartbeat`, {});
+				const gameDto = await apiService.post<GameHeartbeatDTO>(`/games/${gameId}/heartbeat`, {});
 				if (cancelled) {
 					return "ok";
 				}
