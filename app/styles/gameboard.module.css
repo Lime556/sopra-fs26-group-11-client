@@ -836,6 +836,18 @@
   padding: 0.45rem;
   cursor: pointer;
   margin-bottom: 0.45rem;
+  transition: background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.tradeRequestButton:hover {
+  background: #965f1f;
+  box-shadow: 0 6px 14px rgba(75, 47, 17, 0.24);
+  transform: translateY(-1px);
+}
+
+.tradeRequestButton:focus-visible {
+  outline: 3px solid rgba(255, 221, 143, 0.9);
+  outline-offset: 2px;
 }
 
 .chatRow {
@@ -883,6 +895,18 @@
   font-weight: 700;
   padding: 0.5rem;
   cursor: pointer;
+  transition: background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.leaveButton:hover {
+  background: #982722;
+  box-shadow: 0 6px 14px rgba(87, 24, 20, 0.24);
+  transform: translateY(-1px);
+}
+
+.leaveButton:focus-visible {
+  outline: 3px solid rgba(255, 194, 190, 0.9);
+  outline-offset: 2px;
 }
 
 .actionStrip {
