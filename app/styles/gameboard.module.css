@@ -1031,7 +1031,7 @@
 
 .devCardActionButton {
   flex: 0 0 auto;
-  width: 86px;
+  width: 172px;
   border: 2px solid rgba(84, 62, 32, 0.28);
   border-radius: 10px;
   padding: 0.26rem;
@@ -2768,7 +2768,7 @@
   }
 
   .devCardActionButton {
-    width: 72px;
+    width: 144px;
   }
 
   .endGameStatsGrid {

@@ -98,6 +98,22 @@ const sumResourceCount = (bundle?: Partial<Resources> | null): number =>
 const formatResourceCount = (count: number): string =>
 	`${count} resource${count === 1 ? "" : "s"}`;
 
+const cloneResources = (resources: Resources): Resources => ({
+	wood: resources.wood,
+	brick: resources.brick,
+	wool: resources.wool,
+	wheat: resources.wheat,
+	ore: resources.ore,
+});
+
+const snapshotPlayerResources = (players: Player[]): Map<number, Resources> => {
+	const snapshot = new Map<number, Resources>();
+	players.forEach((player) => {
+		snapshot.set(player.id, cloneResources(player.resources));
+	});
+	return snapshot;
+};
+
 const findLocalStatePlayer = (players: Player[], sessionUserId: string, sessionUsername: string): Player | null => {
 	const parsedSessionUserId = Number.parseInt(sessionUserId ?? "", 10);
 	const hasSessionUserId = Number.isFinite(parsedSessionUserId);
@@ -223,6 +239,7 @@ export default function Gameboard() {
 	const [dicePopupValue, setDicePopupValue] = useState<number | null>(null);
 	const [diceWonResources, setDiceWonResources] = useState<Resources | null>(null);
 	const previousResourcesRef = useRef<Map<number, Resources>>(new Map());
+	const diceResourceBaselinesRef = useRef<Map<string, Map<number, Resources>>>(new Map());
 	const [initialPlacementWonResources, setInitialPlacementWonResources] = useState<Resources | null>(null);
 	const [stolenResourcePopup, setStolenResourcePopup] = useState<{ resource: ResourceType; sourceName: string | null; targetName: string | null } | null>(null);
 	const [showMonopolyResourceSelector, setShowMonopolyResourceSelector] = useState<boolean>(false);
@@ -461,6 +478,13 @@ export default function Gameboard() {
 		});
 	};
 
+	const rememberDiceResourceBaseline = (diceRolledAt: string): void => {
+		if (diceResourceBaselinesRef.current.has(diceRolledAt)) {
+			return;
+		}
+		diceResourceBaselinesRef.current.set(diceRolledAt, snapshotPlayerResources(latestStateRef.current.players));
+	};
+
 	const showNewDiceRollFromGameDto = (gameDto: GameGetDTO, serverPlayers: PlayerGetDTO[]): void => {
 		const nextDiceRolledAt = gameDto?.diceRolledAt ?? null;
 		const nextDiceValue = typeof gameDto?.diceValue === "number" ? gameDto.diceValue : null;
@@ -473,6 +497,7 @@ export default function Gameboard() {
 		}
 
 		lastDiceRolledAtRef.current = nextDiceRolledAt;
+		rememberDiceResourceBaseline(nextDiceRolledAt);
 		const previousLocalPlayer = findLocalStatePlayer(
 			latestStateRef.current.players,
 			sessionUserIdRef.current,
@@ -486,7 +511,9 @@ export default function Gameboard() {
 		);
 
 		if (previousLocalPlayer && nextLocalPlayer) {
+			const diceBaseline = diceResourceBaselinesRef.current.get(nextDiceRolledAt);
 			const previousResources =
+				diceBaseline?.get(previousLocalPlayer.id) ??
 				previousResourcesRef.current.get(previousLocalPlayer.id) ??
 				previousLocalPlayer.resources;
 			const nextResources = mapResourcesFromServer(nextLocalPlayer);
@@ -495,6 +522,12 @@ export default function Gameboard() {
 			setDiceWonResources(createEmptyTradeResources());
 		}
 
+		if (diceResourceBaselinesRef.current.size > 4) {
+			const oldestKey = diceResourceBaselinesRef.current.keys().next().value;
+			if (oldestKey) {
+				diceResourceBaselinesRef.current.delete(oldestKey);
+			}
+		}
 		showDiceResultPopup(nextDiceValue);
 	};
 	const showNewDiceRollFromGameDtoRef = useRef(showNewDiceRollFromGameDto);
@@ -907,6 +940,7 @@ export default function Gameboard() {
 					&& nextDiceRolledAt !== lastDiceRolledAtRef.current
 					&& nextDiceValue !== null
 				) {
+					rememberDiceResourceBaseline(nextDiceRolledAt);
 					setState((previousState) => ({
 						...previousState,
 						diceResult: nextDiceValue,
