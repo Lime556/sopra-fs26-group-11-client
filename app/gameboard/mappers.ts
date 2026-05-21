@@ -1,5 +1,5 @@
 import { boardCoordinatesById, fallbackPlayerColors } from "./constants";
-import { BoardGetDTO, BoatGetDTO, GameState, HexTile, PlayerGetDTO, PortType, PortVisual, ResourceType, Resources } from "./types";
+import { BoardGetDTO, BoatGetDTO, GameState, HexTile, PlayerGetDTO, PortGetDTO, PortType, PortVisual, ResourceType, Resources } from "./types";
 
 export function createInitialGameState(): GameState {
 	return {
@@ -45,24 +45,34 @@ export function mapServerPortType(type: string | undefined): PortType {
 }
 
 export function mapBoardDtoToPorts(boardDto: BoardGetDTO): PortVisual[] {
-	if (!Array.isArray(boardDto.boats)) {
+	const sourcePorts: Array<PortGetDTO | BoatGetDTO> = Array.isArray(boardDto.ports)
+		? boardDto.ports
+		: Array.isArray(boardDto.boats)
+			? boardDto.boats
+			: [];
+
+	if (sourcePorts.length === 0) {
 		return [];
 	}
 
-	return boardDto.boats
+	return sourcePorts
 		.filter(
-			(boat): boat is BoatGetDTO =>
-				boat !== undefined
-				&& boat !== null
-				&& typeof boat.hexId === "number"
-				&& typeof boat.firstCorner === "number"
-				&& typeof boat.secondCorner === "number"
+			(port): port is PortGetDTO | BoatGetDTO =>
+				port !== undefined
+				&& port !== null
+				&& typeof port.hexId === "number"
+				&& (
+					(Array.isArray((port as PortGetDTO).corners) && (port as PortGetDTO).corners!.length >= 2)
+					|| (typeof (port as BoatGetDTO).firstCorner === "number" && typeof (port as BoatGetDTO).secondCorner === "number")
+				)
 		)
-		.map((boat, index) => ({
-			id: boat.id ?? index + 1,
-			type: mapServerPortType(boat.boatType),
-			hexId: boat.hexId as number,
-			corners: [boat.firstCorner as number, boat.secondCorner as number],
+		.map((port, index) => ({
+			id: port.id ?? index + 1,
+			type: mapServerPortType((port as PortGetDTO).type ?? (port as BoatGetDTO).boatType),
+			hexId: port.hexId as number,
+			corners: Array.isArray((port as PortGetDTO).corners) && (port as PortGetDTO).corners!.length >= 2
+				? [(port as PortGetDTO).corners![0], (port as PortGetDTO).corners![1]]
+				: [(port as BoatGetDTO).firstCorner as number, (port as BoatGetDTO).secondCorner as number],
 		}));
 }
 

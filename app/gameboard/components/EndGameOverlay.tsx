@@ -81,7 +81,7 @@ export function EndGameOverlay({
 			<div className={styles.endGameCard}>
 				<div className={`${styles.endGameResultBanner} ${resultClassName}`}>
 					<div className={styles.endGameResultIcon} aria-hidden="true">
-						{currentPlayerWon ? "🏆" : currentPlayerLost ? "💀" : "👑"}
+						{currentPlayerWon ? "🏆" : currentPlayerLost ? "😪" : "👑"}
 					</div>
 					<div>
 						<h1 className={styles.endGameTitle}>{resultTitle}</h1>

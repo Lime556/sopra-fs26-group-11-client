@@ -111,7 +111,7 @@ export function BoardColumn({
 }: BoardColumnProps) {
 	const playableDevelopmentCards = developmentCards.filter((card) => card !== "victory_point");
 	const canUseActionPhase = tutorialMode || (isMyTurn && state.turnPhase === "ACTION" && !isSetupPhase);
-	const canPlayDevelopmentCard = canUseActionPhase && playableDevelopmentCards.length > 0;
+	const canOpenDevelopmentCards = canUseActionPhase && developmentCards.length > 0;
 	const canUseSetupPlacement = tutorialMode || (isMyTurn && isSetupPhase);
 
 	const currentPlayer = state.players.find(p => p.id === state.currentPlayerId);
@@ -267,13 +267,16 @@ export function BoardColumn({
 							portDistance
 						);
 
-						let edgeAngle = (Math.atan2(corner2.y - corner1.y, corner2.x - corner1.x) * 180) / Math.PI;
-						if (port.id === 1 || port.id === 2) {
+						const outwardX = portX - hexCenterX;
+						const outwardY = portY - hexCenterY;
+						const edgeAngleRadians = Math.atan2(corner2.y - corner1.y, corner2.x - corner1.x);
+						let edgeAngle = (edgeAngleRadians * 180) / Math.PI;
+						const mastDirectionX = Math.cos(edgeAngleRadians - Math.PI / 2);
+						const mastDirectionY = Math.sin(edgeAngleRadians - Math.PI / 2);
+						if (mastDirectionX * outwardX + mastDirectionY * outwardY < 0) {
 							edgeAngle += 180;
 						}
 
-						const outwardX = portX - hexCenterX;
-						const outwardY = portY - hexCenterY;
 						const edgeX = corner2.x - corner1.x;
 						const edgeY = corner2.y - corner1.y;
 						const perpX = -edgeY;
@@ -641,13 +644,13 @@ export function BoardColumn({
 
 						<button
 							type="button"
-							className={`${styles.actionSquareButton} ${!tutorialMode && !canPlayDevelopmentCard ? styles.buttonDisabled : styles.devCardButton}`}
+							className={`${styles.actionSquareButton} ${!tutorialMode && !canOpenDevelopmentCards ? styles.buttonDisabled : styles.devCardButton}`}
 							onClick={handleToggleDevCardPlayMode}
-							disabled={!tutorialMode && !canPlayDevelopmentCard}
+							disabled={!tutorialMode && !canOpenDevelopmentCards}
 						>
 							<span className={styles.actionEmoji}>🃏</span>
 							<span className={styles.actionLabel}>{isDevCardPlayMode ? "Cancel Dev" : "Play Dev Card"}</span>
-							{canPlayDevelopmentCard && developmentCards.length > 0 ? (
+							{canOpenDevelopmentCards ? (
 								<span className={styles.devCardCountBadge} aria-label={`${developmentCards.length} development cards`}>
 									{developmentCards.length}
 								</span>
