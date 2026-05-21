@@ -272,7 +272,9 @@ export default function Lobby() {
     if (!flashReason) return;
     sessionStorage.removeItem("lobbyFlashMessage");
 
-    if (flashReason === "kicked") {
+    if (flashReason === "left") {
+      setStatusMessage({ text: "You left the lobby.", type: "info"});
+    } else if (flashReason === "kicked") {
       setStatusMessage({ text: "You were kicked from the lobby.", type: "info"});
     } else if (flashReason === "closed") {
       setStatusMessage({ text: "Lobby was closed by the host.", type: "info"});
@@ -539,7 +541,7 @@ export default function Lobby() {
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error("Sending friend request failed:", error.message);
-        setStatusMessage({ text: error.message, type: "error" });
+        setStatusMessage({ text: "Could not send friend request.", type: "error" });
       } else {
         setStatusMessage({ text: "Could not send friend request.", type: "error" });
       }
@@ -558,7 +560,7 @@ export default function Lobby() {
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error("Accepting friend request failed:", error.message);
-        setStatusMessage({ text: error.message, type: "error" });
+        setStatusMessage({ text: "Could not accept friend request.", type: "error" });
       } else {
         setStatusMessage({ text: "Could not accept friend request.", type: "error" });
       }
@@ -577,7 +579,7 @@ export default function Lobby() {
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error("Declining friend request failed:", error.message);
-        setStatusMessage({ text: error.message, type: "error" });
+        setStatusMessage({ text: "Could not decline friend request.", type: "error" });
       } else {
         setStatusMessage({ text: "Could not decline friend request.", type: "error" });
       }
@@ -596,7 +598,7 @@ export default function Lobby() {
       router.push(`/lobby/${invitation.lobbyId}`);
     } catch (error: unknown) {
       if (error instanceof Error) {
-        setStatusMessage({ text: error.message, type: "error" });
+        setStatusMessage({ text: "Could not accept lobby invitation.", type: "error" });
       } else {
         setStatusMessage({ text: "Could not accept lobby invitation.", type: "error" });
       }
@@ -612,7 +614,7 @@ export default function Lobby() {
       setStatusMessage({ text: "Lobby invitation declined.", type: "info" });
     } catch (error: unknown) {
       if (error instanceof Error) {
-        setStatusMessage({ text: error.message, type: "error" });
+        setStatusMessage({ text: "Could not decline lobby invitation.", type: "error" });
       } else {
         setStatusMessage({ text: "Could not decline lobby invitation.", type: "error" });
       }
@@ -658,9 +660,9 @@ export default function Lobby() {
       setPasswordMessage("Password updated successfully.");
     } catch (error: unknown) {
       if (error instanceof Error) {
-        setPasswordMessage(error.message);
+        setPasswordMessage("Could not update password.");
       } else {
-        setPasswordMessage("Failed to update password.");
+        setPasswordMessage("Could not update password.");
       }
     }
   };
@@ -706,10 +708,14 @@ export default function Lobby() {
       router.push(`/lobby/${createdLobby.id}`);
     } catch (error: unknown) {
       if (error instanceof Error) {
-        setCreateLobbyError(error.message);
-      } else {
-        setCreateLobbyError("Failed to create lobby");
+        const appError = error as { status?: number };
+        if (appError.status === 409) {
+          setCreateLobbyError("You are already in an active lobby or game. Close it first before creating a new lobby.");
+          return;
+        }
       }
+
+      setCreateLobbyError("Failed to create lobby");
     }
   };
 

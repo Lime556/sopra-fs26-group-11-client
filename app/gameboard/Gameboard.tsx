@@ -2045,8 +2045,8 @@ export default function Gameboard() {
 				addToLog(`${myPlayer.name} placed a setup settlement. Place your attached road.`);
 				
 			} catch (error) {
-				const message = error instanceof Error ? error.message : "Unknown error";
-				addToLog(`Could not place setup settlement: ${message}`);
+				console.error("Failed to place setup settlement:", error);
+				addToLog("Could not place setup settlement.");
 				return;
 			}
 
@@ -2448,7 +2448,7 @@ export default function Gameboard() {
 		} catch (error) { // The resource distribution and bank updates will be handled by the backend and reflected in the next syncGameState call.
 			const appError = error as Partial<ApplicationError>;
 			if (appError.status === 409) {
-				addToLog("Cannot roll dice: " + (appError.message || "Invalid turn phase"));
+				addToLog("Cannot roll dice right now.");
 			} else {
 				addToLog("Failed to roll dice.");
 			}
@@ -2500,7 +2500,7 @@ export default function Gameboard() {
 		} catch (error) {
 			const appError = error as Partial<ApplicationError>;
 			if (appError.status === 409) {
-				addToLog("Cannot discard resources: " + (appError.message || "Invalid discard."));
+				addToLog("Cannot discard resources right now.");
 			} else {
 				addToLog("Failed to discard resources.");
 			}
@@ -3043,8 +3043,8 @@ export default function Gameboard() {
 			}
 			movedSuccessfully = true;
 		} catch (error) {
-			const appError = error as Partial<ApplicationError>;
-			addToLog(appError.message || "Could not move the robber. Please try again.");
+			console.error("Failed to move the robber:", error);
+			addToLog("Could not move the robber.");
 			return;
 		} finally {
 			setRobberMoveInFlight(false);
@@ -3322,8 +3322,8 @@ export default function Gameboard() {
 				setPlacementMode(null);
 				addToLog(`${myPlayer.name} placed a setup road.`);
 			} catch (error) {
-				const message = error instanceof Error ? error.message : "Unknown error";
-				addToLog(`Could not place setup road: ${message}`);
+				console.error("Failed to place setup road:", error);
+				addToLog("Could not place setup road.");
 				return;
 			}
 
@@ -3410,8 +3410,8 @@ export default function Gameboard() {
 			});
 
 		} catch (error) {
-			const appError = error as Partial<ApplicationError>;
-			addToLog(appError.message || "Failed to end turn. Please try again.");
+			console.error("Failed to end turn:", error);
+			addToLog("Could not end turn.");
 		} finally {
 			actionPendingRef.current = false;
 		}

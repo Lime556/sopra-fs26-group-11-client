@@ -62,7 +62,8 @@ export default function UserProfileModal({
       })
       .catch((err: Error) => {
         if (cancelled) return;
-        setError(err.message ?? "Failed to load profile.");
+        console.error("Failed to load profile:", err.message);
+        setError("Could not load profile.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
