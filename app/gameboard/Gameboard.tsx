@@ -7,7 +7,7 @@ import { useSearchParams } from "next/navigation";
 //import SockJS from "sockjs-client";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
-import { LogOut, Send } from "lucide-react";
+import { AlertTriangle, Send } from "lucide-react";
 import styles from "@/styles/gameboard.module.css";
 import { ApplicationError } from "@/types/error";
 import { BoardColumn } from "./components/BoardColumn";
@@ -233,6 +233,7 @@ export default function Gameboard() {
 	const [activeOutgoingTradeCounteroffers, setActiveOutgoingTradeCounteroffers] = useState<Record<number, CounterOfferData>>({});
 	const [tradeTargetPlayerId, setTradeTargetPlayerId] = useState<number | null>(null);
 	const [chatMessage, setChatMessage] = useState<string>("");
+	const [showReturnToLobbyConfirm, setShowReturnToLobbyConfirm] = useState<boolean>(false);
 	const [winnerPlayerName, setWinnerPlayerName] = useState<string | null>(null);
 	const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
 	const [showDicePopup, setShowDicePopup] = useState<boolean>(false);
@@ -4031,13 +4032,46 @@ export default function Gameboard() {
 							<Send size={16} />
 						</button>
 					</div>
-					<button className={styles.leaveButton} onClick={() => router.push("/lobby")}>
-						<LogOut size={16} />
-						<span>Leave Lobby</span>
+					<button
+						type="button"
+						className={styles.leaveButton}
+						onClick={() => setShowReturnToLobbyConfirm(true)}
+					>
+						<AlertTriangle size={18} />
+						<span>Return to Lobby</span>
 					</button>
 				</section>
 			</aside>
 			</div>
+			{showReturnToLobbyConfirm ? (
+				<div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-label="Return to lobby confirmation">
+					<div className={styles.returnLobbyDialog}>
+						<div className={styles.returnLobbyIcon} aria-hidden="true">
+							<AlertTriangle size={30} />
+						</div>
+						<h2 className={styles.returnLobbyTitle}>Return to Lobby?</h2>
+						<p className={styles.returnLobbyText}>
+							You will leave the current game view and go back to the lobby.
+						</p>
+						<div className={styles.returnLobbyActions}>
+							<button
+								type="button"
+								className={styles.returnLobbyCancelButton}
+								onClick={() => setShowReturnToLobbyConfirm(false)}
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								className={styles.returnLobbyConfirmButton}
+								onClick={() => router.push("/lobby")}
+							>
+								Return to Lobby
+							</button>
+						</div>
+					</div>
+				</div>
+			) : null}
 		</>
 	);
 }
