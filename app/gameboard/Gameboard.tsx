@@ -1507,7 +1507,7 @@ export default function Gameboard() {
 	const winnerDisplayName = winnerPlayerName;
 	const perPlayerGameStats = useMemo(() => {
 		const statsByPlayerId = new Map<number, {
-			cardsPlayedCount: number;
+			developmentCardsCount: number;
 			knightsPlayedCount: number;
 			roadsBuiltCount: number;
 			settlementsBuiltCount: number;
@@ -1515,44 +1515,64 @@ export default function Gameboard() {
 			buildingsBuiltCount: number;
 		}>();
 
-		const escapeForRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		const countUniqueRoads = (player: Player): number => {
+			const uniqueRoadKeys = new Set<string>();
+			player.roadsOnEdges.forEach((road) => {
+				const hex = hexById.get(road.hexId);
+				if (!hex) {
+					return;
+				}
+				uniqueRoadKeys.add(createCanonicalEdgeKey(hex, road.edge));
+			});
+			return uniqueRoadKeys.size;
+		};
 
 		state.players.forEach((player) => {
-			const escapedPlayerName = escapeForRegex(player.name);
-			const cardsPlayedCount = gameLog.filter((entry) => new RegExp(`${escapedPlayerName}.*(development card|dev card)`, "i").test(entry)).length;
-			const knightsPlayedCount = gameLog.filter((entry) => new RegExp(`${escapedPlayerName}.*knight`, "i").test(entry)).length;
-			const roadsBuiltCount = player.roadsOnEdges.length;
+			const developmentCardsCount = player.developmentCards.length;
+			const knightsPlayedCount = player.knightsPlayed;
+			const roadsBuiltCount = countUniqueRoads(player);
 			const settlementsBuiltCount = player.settlementsOnCorners.length;
 			const citiesBuiltCount = player.citiesOnCorners.length;
 
 			statsByPlayerId.set(player.id, {
-				cardsPlayedCount,
+				developmentCardsCount,
 				knightsPlayedCount,
 				roadsBuiltCount,
 				settlementsBuiltCount,
 				citiesBuiltCount,
-				buildingsBuiltCount: roadsBuiltCount + settlementsBuiltCount + citiesBuiltCount,
+				buildingsBuiltCount: settlementsBuiltCount + citiesBuiltCount,
 			});
 		});
 
 		return statsByPlayerId;
-	}, [gameLog, state.players]);
+	}, [hexById, state.players]);
 	const gameSummaryStats = useMemo(() => {
-		const cardsPlayedCount = gameLog.filter((entry) => /development card|dev card/i.test(entry)).length;
-		const knightsPlayedCount = gameLog.filter((entry) => /knight/i.test(entry)).length;
-		const roadsBuiltCount = state.players.reduce((sum, player) => sum + player.roadsOnEdges.length, 0);
+		const countUniqueRoads = (player: Player): number => {
+			const uniqueRoadKeys = new Set<string>();
+			player.roadsOnEdges.forEach((road) => {
+				const hex = hexById.get(road.hexId);
+				if (!hex) {
+					return;
+				}
+				uniqueRoadKeys.add(createCanonicalEdgeKey(hex, road.edge));
+			});
+			return uniqueRoadKeys.size;
+		};
+		const developmentCardsCount = state.players.reduce((sum, player) => sum + player.developmentCards.length, 0);
+		const knightsPlayedCount = state.players.reduce((sum, player) => sum + player.knightsPlayed, 0);
+		const roadsBuiltCount = state.players.reduce((sum, player) => sum + countUniqueRoads(player), 0);
 		const settlementsBuiltCount = state.players.reduce((sum, player) => sum + player.settlementsOnCorners.length, 0);
 		const citiesBuiltCount = state.players.reduce((sum, player) => sum + player.citiesOnCorners.length, 0);
 
 		return {
-			cardsPlayedCount,
+			developmentCardsCount,
 			knightsPlayedCount,
 			roadsBuiltCount,
 			settlementsBuiltCount,
 			citiesBuiltCount,
-			buildingsBuiltCount: roadsBuiltCount + settlementsBuiltCount + citiesBuiltCount,
+			buildingsBuiltCount: settlementsBuiltCount + citiesBuiltCount,
 		};
-	}, [gameLog, state.players]);
+	}, [hexById, state.players]);
 
 	const addToLog = (message: string) => {
 		setGameLog((previous) => {
