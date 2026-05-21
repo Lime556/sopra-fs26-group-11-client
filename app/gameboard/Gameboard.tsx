@@ -974,8 +974,6 @@ export default function Gameboard() {
 						&& nextDiceRolledAtTimestamp !== lastDiceRolledAtRef.current
 					&& nextDiceValue !== null
 				) {
-						lastDiceRolledAtRef.current = nextDiceRolledAtTimestamp;
-						rememberDiceResourceBaseline(nextDiceRolledAtTimestamp);
 					setState((previousState) => ({
 						...previousState,
 						diceResult: nextDiceValue,
