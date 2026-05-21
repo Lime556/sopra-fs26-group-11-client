@@ -103,7 +103,7 @@ export default function FriendsTab({
               type="text"
               value={searchQuery}
               onChange={(e) => onSearchQueryChange(e.target.value)}
-              placeholder="Search by Player ID (e.g. USR-12345)"
+              placeholder="Search by Player ID or username"
               className={styles.input}
             />
             <button onClick={onSearchFriend} className={styles.primaryButton}>

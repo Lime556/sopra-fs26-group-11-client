@@ -479,36 +479,38 @@ export default function Lobby() {
   };
 
   const handleSearchFriend = async () => {
-    const searchedUserId = parseUserIdFromSearch(searchQuery);
-  
-    if (searchedUserId === null) {
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery) {
       setSearchResults([]);
-      setStatusMessage({ text: "Please enter a valid player ID, for example USR-2 or 2.", type: "error" });
+      setStatusMessage({ text: "Please enter a player ID or username.", type: "error" });
       return;
     }
+
+    const searchedUserId = parseUserIdFromSearch(searchQuery);
   
     try {
       const users = await apiService.get<UserGetDTO[]>("/users");
-      const foundUser = users.find((user) => user.id === searchedUserId);
-  
-      if (!foundUser) {
+
+      const matchedUsers = searchedUserId !== null
+        ? users.filter((user) => user.id === searchedUserId)
+        : users.filter((user) => user.username.toLowerCase().includes(trimmedQuery.toLowerCase()));
+
+      const filteredUsers = userId
+        ? matchedUsers.filter((user) => user.id !== Number(userId))
+        : matchedUsers;
+
+      if (filteredUsers.length === 0) {
         setSearchResults([]);
-        setStatusMessage({ text: "No user found with that player ID.", type: "error" });
+        setStatusMessage({ text: "No user found with that player ID or username.", type: "error" });
         return;
       }
-  
-      if (userId && Number(userId) === foundUser.id) {
-        setSearchResults([]);
-        setStatusMessage({ text: "You cannot add yourself as a friend.", type: "error" });
-        return;
-      }
-  
-      setSearchResults([
-        {
-          id: `USR-${foundUser.id}`,
-          username: foundUser.username,
-        },
-      ]);
+
+      setSearchResults(
+        filteredUsers.map((user) => ({
+          id: `USR-${user.id}`,
+          username: user.username,
+        }))
+      );
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error("Friend search failed:", error.message);
