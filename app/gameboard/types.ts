@@ -115,6 +115,19 @@ export interface GameGetDTO {
 	robberMovedAfterSevenRoll?: boolean;
 }
 
+export interface GameHeartbeatDTO {
+	id: number;
+	gameVersion?: number | null;
+	players?: PlayerGetDTO[];
+	currentTurnIndex?: number | null;
+	turnPhase?: string | null;
+	gamePhase?: string | null;
+	winner?: PlayerGetDTO | null;
+	finishedAt?: string | null;
+	gameFinished?: boolean | null;
+	robberMovedAfterSevenRoll?: boolean;
+}
+
 export interface GameStateDTO {
     currentPlayerId: number;
     currentTurnIndex?: number | null;
