@@ -37,9 +37,8 @@ export class ApiService {
       } catch {
         // If parsing fails, keep using res.statusText
       }
-      const detailedMessage = `${errorMessage} (${res.status}: ${errorDetail})`;
       const error: ApplicationError = new Error(
-        detailedMessage,
+        errorDetail,
       ) as ApplicationError;
       error.info = JSON.stringify(
         { status: res.status, statusText: res.statusText },
