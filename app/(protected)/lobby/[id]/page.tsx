@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { LogOut, Users, Bot, Crown, Play, UserMinus, UserPlus, X } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
@@ -62,6 +62,7 @@ export default function LobbyRoom() {
   const [selectedInviteUserIds, setSelectedInviteUserIds] = useState<number[]>([]);
   const [sendingInvites, setSendingInvites] = useState(false);
   const currentUserId = userId ? Number(userId) : null;
+  const isLeavingLobbyRef = useRef(false);
 
   const handleOpenProfile = (targetUserId: number | null) => {
     if (!targetUserId) {
@@ -72,7 +73,7 @@ export default function LobbyRoom() {
     setShowUserProfileModal(true);
   };
 
-  const redirectWithFlash = useCallback((reason: "kicked" | "closed") => {
+  const redirectWithFlash = useCallback((reason: "left" | "kicked" | "closed") => {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("lobbyFlashMessage", reason);
     }
@@ -106,6 +107,10 @@ export default function LobbyRoom() {
         if (currentUserId !== null) {
           const stillInLobby = updatedLobby.participants.some((p) => p.userId === currentUserId);
           if (!stillInLobby) {
+            if (isLeavingLobbyRef.current) {
+              redirectWithFlash("left");
+              return;
+            }
             redirectWithFlash("kicked");
             return;
           }
@@ -255,9 +260,11 @@ export default function LobbyRoom() {
     if (!lobby) return;
     try {
       setLeaving(true);
+      isLeavingLobbyRef.current = true;
       await apiService.post(`/lobbies/${lobby.id}/leave`, null);
-      router.push("/lobby");
+      redirectWithFlash("left");
     } catch (err) {
+      isLeavingLobbyRef.current = false;
       const status = err instanceof Error ? (err as { status?: number }).status : undefined;
       if (status === 409) {
         try {
