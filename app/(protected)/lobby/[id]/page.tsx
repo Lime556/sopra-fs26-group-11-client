@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { LogOut, Users, Bot, Crown, Play, UserMinus } from "lucide-react";
+import { LogOut, Users, Bot, Crown, Play, UserMinus, UserPlus, X } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
 import UserProfileModal from "@/components/lobby/UserProfileModal";
@@ -32,6 +32,12 @@ interface GameStartGetDTO {
   gameId: number;
 }
 
+interface FriendGetDTO {
+  id: number;
+  username: string;
+  userStatus?: string;
+}
+
 export default function LobbyRoom() {
   const router = useRouter();
   const params = useParams();
@@ -51,6 +57,10 @@ export default function LobbyRoom() {
   const [hostTransferMessage, setHostTransferMessage] = useState("");
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
   const [selectedProfileUserId, setSelectedProfileUserId] = useState<number>(0);
+  const [friends, setFriends] = useState<FriendGetDTO[]>([]);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [selectedInviteUserIds, setSelectedInviteUserIds] = useState<number[]>([]);
+  const [sendingInvites, setSendingInvites] = useState(false);
   const currentUserId = userId ? Number(userId) : null;
 
   const handleOpenProfile = (targetUserId: number | null) => {
@@ -139,6 +149,27 @@ export default function LobbyRoom() {
     return () => clearTimeout(timeout);
   }, [hostTransferMessage]);
 
+  useEffect(() => {
+    const loadFriends = async () => {
+      try {
+        const friendsData = await apiService.get<FriendGetDTO[]>("/friends");
+        setFriends(friendsData);
+      } catch (err) {
+        console.error("Failed to load friends.", err);
+      }
+    };
+
+    void loadFriends();
+
+    const interval = setInterval(() => {
+      void loadFriends();
+    }, 3000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [apiService]);
+
   const currentParticipants = lobby?.currentParticipants ?? 0;
   const maxPlayers = lobby?.capacity ?? 4;
   const sortedParticipants = lobby
@@ -163,6 +194,12 @@ export default function LobbyRoom() {
     currentParticipant !== undefined &&
     currentParticipant.id === lobby.hostParticipantId;
   const canAddBot = isHost && currentParticipants < maxPlayers;
+  const invitedOrInLobbyIds = new Set(
+    (lobby?.participants ?? [])
+      .filter((participant) => participant.userId !== null)
+      .map((participant) => participant.userId as number)
+  );
+  const invitableFriends = friends.filter((friend) => !invitedOrInLobbyIds.has(friend.id));
 
   const startGame = async () => {
     if (!lobby) return;
@@ -325,6 +362,56 @@ export default function LobbyRoom() {
     }
   };
 
+  const handleToggleInviteSelection = (friendId: number) => {
+    setSelectedInviteUserIds((previousIds) => {
+      if (previousIds.includes(friendId)) {
+        return previousIds.filter((id) => id !== friendId);
+      }
+      return [...previousIds, friendId];
+    });
+  };
+
+  const handleOpenInviteModal = () => {
+    setSelectedInviteUserIds([]);
+    setShowInviteModal(true);
+  };
+
+  const handleCloseInviteModal = () => {
+    if (sendingInvites) {
+      return;
+    }
+    setShowInviteModal(false);
+    setSelectedInviteUserIds([]);
+  };
+
+  const handleSendInvites = async () => {
+    if (!lobby || selectedInviteUserIds.length === 0) {
+      return;
+    }
+
+    try {
+      setSendingInvites(true);
+      setStartInfo("");
+
+      const inviteCalls = selectedInviteUserIds.map((receiverId) =>
+        apiService.post(`/lobbies/${lobby.id}/invites`, { receiverId })
+      );
+
+      await Promise.all(inviteCalls);
+      setStartInfo("Lobby invitations sent.");
+      setShowInviteModal(false);
+      setSelectedInviteUserIds([]);
+    } catch (err) {
+      if (err instanceof Error) {
+        setStartInfo(err.message);
+      } else {
+        setStartInfo("Failed to send one or more invitations.");
+      }
+    } finally {
+      setSendingInvites(false);
+    }
+  };
+
   if (error) {
     return <div className={styles.stateMessage}>{error}</div>;
   }
@@ -366,6 +453,15 @@ export default function LobbyRoom() {
             </div>
 
             <div className={styles.topActions}>
+              <button
+                type="button"
+                onClick={handleOpenInviteModal}
+                className={styles.inviteFriendsButton}
+                disabled={invitableFriends.length === 0}
+              >
+                <UserPlus className="w-5 h-5" />
+                Invite Friends
+              </button>
               {isHost && (
                 <button
                   onClick={() => void closeLobby()}
@@ -525,6 +621,64 @@ export default function LobbyRoom() {
         onClose={() => setShowUserProfileModal(false)}
         onOpenSettings={() => router.push("/lobby")}
       />
+
+      {showInviteModal && (
+        <div className={styles.inviteModalBackdrop} onClick={handleCloseInviteModal}>
+          <div className={styles.inviteModal} onClick={(event) => event.stopPropagation()}>
+            <div className={styles.inviteModalHeader}>
+              <h3 className={styles.inviteModalTitle}>Invite Friends</h3>
+              <button
+                type="button"
+                className={styles.inviteModalCloseButton}
+                onClick={handleCloseInviteModal}
+                disabled={sendingInvites}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {invitableFriends.length === 0 ? (
+              <p className={styles.inviteModalEmptyText}>No available friends to invite right now.</p>
+            ) : (
+              <div className={styles.inviteFriendList}>
+                {invitableFriends.map((friend) => {
+                  const selected = selectedInviteUserIds.includes(friend.id);
+                  return (
+                    <label key={friend.id} className={styles.inviteFriendRow}>
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => handleToggleInviteSelection(friend.id)}
+                      />
+                      <span className={styles.inviteFriendName}>{friend.username}</span>
+                      <span className={styles.inviteFriendStatus}>{friend.userStatus ?? "UNKNOWN"}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className={styles.inviteModalActions}>
+              <button
+                type="button"
+                className={styles.inviteModalCancelButton}
+                onClick={handleCloseInviteModal}
+                disabled={sendingInvites}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.inviteModalSendButton}
+                disabled={sendingInvites || selectedInviteUserIds.length === 0}
+                onClick={() => void handleSendInvites()}
+              >
+                {sendingInvites ? "Sending..." : "Send Invites"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

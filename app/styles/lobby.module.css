@@ -581,6 +581,58 @@
     padding: 18px;
     margin-bottom: 18px;
   }
+
+  .inviteRequestPanel {
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 18px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+
+  .inviteRequestPanel .panelTitle {
+    margin: 0 0 8px;
+    font-size: 14px;
+  }
+
+  .inviteRequestPanel .listColumn {
+    gap: 10px;
+  }
+
+  .inviteRequestPanel .requestItem {
+    border-radius: 14px;
+    padding: 10px 12px;
+  }
+
+  .inviteRequestPanel .requestItemTop {
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .inviteRequestPanel .requestActions {
+    gap: 8px;
+  }
+
+  .inviteRequestPanel .requestMessage {
+    margin: 4px 0 0;
+    line-height: 1.25;
+  }
+
+  .inviteRequestPanel .requestDate {
+    margin: 4px 0 0;
+  }
+
+  .inviteRequestPanel .avatarSmall {
+    width: 34px;
+    height: 34px;
+    font-size: 13px;
+  }
+
+  .inviteRequestPanel .successButton,
+  .inviteRequestPanel .secondaryButton {
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 13px;
+  }
   
   .panelTitle {
     margin: 0 0 12px;

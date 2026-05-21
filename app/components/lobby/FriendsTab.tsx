@@ -229,15 +229,6 @@ export default function FriendsTab({
                 <p className={styles.friendMeta}>{friend.status}</p>
               </div>
             </div>
-
-            <button
-              className={styles.successButton}
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
-            >
-              Invite
-            </button>
           </div>
         ))}
       </div>
