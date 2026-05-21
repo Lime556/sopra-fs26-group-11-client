@@ -60,6 +60,16 @@ export interface PortVisual {
 	corners: [number, number];
 }
 
+export interface PortGetDTO {
+	id?: number;
+	hexId?: number;
+	type?: string;
+	boatType?: string;
+	corners?: [number, number] | number[];
+	firstCorner?: number;
+	secondCorner?: number;
+}
+
 export type TradeMode = "bank" | "player";
 
 export interface BoardGetDTO {
@@ -67,7 +77,7 @@ export interface BoardGetDTO {
 	hexTiles: string[];
 	intersections: boolean[];
 	edges: boolean[];
-	ports: string[];
+	ports?: PortGetDTO[];
 	boats?: BoatGetDTO[];
 	hexTile_DiceNumbers: number[];
 }

@@ -267,13 +267,16 @@ export function BoardColumn({
 							portDistance
 						);
 
-						let edgeAngle = (Math.atan2(corner2.y - corner1.y, corner2.x - corner1.x) * 180) / Math.PI;
-						if (port.id === 1 || port.id === 2) {
+						const outwardX = portX - hexCenterX;
+						const outwardY = portY - hexCenterY;
+						const edgeAngleRadians = Math.atan2(corner2.y - corner1.y, corner2.x - corner1.x);
+						let edgeAngle = (edgeAngleRadians * 180) / Math.PI;
+						const mastDirectionX = Math.cos(edgeAngleRadians - Math.PI / 2);
+						const mastDirectionY = Math.sin(edgeAngleRadians - Math.PI / 2);
+						if (mastDirectionX * outwardX + mastDirectionY * outwardY < 0) {
 							edgeAngle += 180;
 						}
 
-						const outwardX = portX - hexCenterX;
-						const outwardY = portY - hexCenterY;
 						const edgeX = corner2.x - corner1.x;
 						const edgeY = corner2.y - corner1.y;
 						const perpX = -edgeY;
