@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { GameEventDTO, Player, Resources } from "../types";
 import { resourceEmojiByType, resourceTypes } from "../constants";
 import styles from "@/styles/gameboard.module.css";
@@ -37,6 +38,12 @@ const formatResources = (bundle: Partial<Resources> | undefined): string => {
 	return parts.length > 0 ? parts.join(" + ") : "nothing";
 };
 
+interface SelectedTradePartner {
+	playerId: number;
+	isCounter: boolean;
+	key: string;
+}
+
 export function TradeRequestSummaryPopup({
 	isVisible,
 	tradeRequest,
@@ -47,15 +54,55 @@ export function TradeRequestSummaryPopup({
 	onDenyCounteroffer,
 	onClose,
 }: TradeRequestSummaryPopupProps) {
+	const selectableTrades = useMemo<SelectedTradePartner[]>(() => {
+		return responses.flatMap((response) => {
+			const hasCounterData = !!response.counterOffer && !!response.counterRequest;
+			const trades: SelectedTradePartner[] = [];
+
+			if (response.status === "ACCEPTED" || response.status === "COUNTEROFFER" || (response.status === "DENIED" && hasCounterData)) {
+				trades.push({
+					playerId: response.playerId,
+					isCounter: false,
+					key: `${response.playerId}-original`,
+				});
+			}
+
+			if (response.status === "COUNTEROFFER") {
+				trades.push({
+					playerId: response.playerId,
+					isCounter: true,
+					key: `${response.playerId}-counter`,
+				});
+			}
+
+			return trades;
+		});
+	}, [responses]);
+	const [selectedTrade, setSelectedTrade] = useState<SelectedTradePartner | null>(null);
+
+	useEffect(() => {
+		setSelectedTrade((previous) => {
+			if (selectableTrades.length === 0) {
+				return null;
+			}
+
+			if (previous && selectableTrades.some((trade) => trade.key === previous.key)) {
+				return previous;
+			}
+
+			return selectableTrades[0];
+		});
+	}, [selectableTrades, tradeRequest?.tradeRequestId]);
+
 	if (!isVisible || !tradeRequest || !sourcePlayer || currentPlayer?.id !== sourcePlayer.id) {
 		return null;
 	}
 
 	const giveResources = tradeRequest.giveResources ?? createZeroResources();
 	const receiveResources = tradeRequest.receiveResources ?? createZeroResources();
-	const actionableResponses = responses.filter((response) => 
-		response.status === "ACCEPTED" || 
-		response.status === "COUNTEROFFER" || 
+	const actionableResponses = responses.filter((response) =>
+		response.status === "ACCEPTED" ||
+		response.status === "COUNTEROFFER" ||
 		(response.status === "DENIED" && !!response.counterOffer && !!response.counterRequest)
 	);
 
@@ -110,7 +157,7 @@ export function TradeRequestSummaryPopup({
 				</div>
 
 				<p className={styles.tradeRequestNote}>
-					Choose one player who accepted. Pending and denied responses are shown for reference.
+					Choose one accepted player, then complete the trade. Pending and denied responses are shown for reference.
 					Offer {formatResources(giveResources)} for {formatResources(receiveResources)}.
 				</p>
 
@@ -120,10 +167,18 @@ export function TradeRequestSummaryPopup({
 						const isCounterStatus = response.status === "COUNTEROFFER";
 						// A response is actionable if it's ACCEPTED, or if it's a COUNTEROFFER,
 						// or if it was a DENIED counteroffer (meaning the original trade is still an option).
-						const isActionable = response.status === "ACCEPTED" || isCounterStatus || (response.status === "DENIED" && hasCounterData);						const statusColor = isCounterStatus ? "#eab308" : undefined;
+						const isActionable = response.status === "ACCEPTED" || isCounterStatus || (response.status === "DENIED" && hasCounterData);
+						const originalSelectionKey = `${response.playerId}-original`;
+						const counterSelectionKey = `${response.playerId}-counter`;
+						const isOriginalSelected = selectedTrade?.key === originalSelectionKey;
+						const isCounterSelected = selectedTrade?.key === counterSelectionKey;
+						const statusColor = isCounterStatus ? "#eab308" : undefined;
 
 						return (
-							<div key={`response-${response.playerId}`} className={styles.tradeResponseRow}>
+							<div
+								key={`response-${response.playerId}`}
+								className={`${styles.tradeResponseRow} ${isOriginalSelected || isCounterSelected ? styles.tradeResponseRowSelected : ""}`}
+							>
 								<div className={styles.tradeResponseInfo} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
 									<div className={styles.tradeResponsePlayerName}>{response.playerName}</div>
 									<span 
@@ -153,19 +208,21 @@ export function TradeRequestSummaryPopup({
 											<button
 												type="button"
 												className={styles.tradeResponseActionButton}
-												onClick={() => onFinalizeTrade(response.playerId, false)}
+												data-selected={isOriginalSelected}
+												onClick={() => setSelectedTrade({ playerId: response.playerId, isCounter: false, key: originalSelectionKey })}
 											>
-												{isCounterStatus ? "Trade (Original)" : `Trade with ${response.playerName}`}
+												{isOriginalSelected ? "Selected" : isCounterStatus ? "Select Original" : `Select ${response.playerName}`}
 											</button>
 										)}
 										{isCounterStatus && (
 											<button
 												type="button"
 												className={styles.tradeResponseActionButton}
-												onClick={() => onFinalizeTrade(response.playerId, true)}
-												style={{ backgroundColor: "#eab308", border: "1px solid #ca8a04" }}
+												data-selected={isCounterSelected}
+												onClick={() => setSelectedTrade({ playerId: response.playerId, isCounter: true, key: counterSelectionKey })}
+												style={{ backgroundColor: isCounterSelected ? "#7c5d04" : "#eab308", border: "1px solid #ca8a04" }}
 											>
-												Accept Counter
+												{isCounterSelected ? "Counter Selected" : "Select Counter"}
 											</button>
 										)}
 									</div>
@@ -187,6 +244,17 @@ export function TradeRequestSummaryPopup({
 
 				{actionableResponses.length === 0 ? (
 					<div className={styles.tradeResponseEmptyState}>No players have accepted yet.</div>
+				) : null}
+				{selectedTrade ? (
+					<div className={styles.tradeSummaryActions}>
+						<button
+							type="button"
+							className={styles.tradeActionButton}
+							onClick={() => onFinalizeTrade(selectedTrade.playerId, selectedTrade.isCounter)}
+						>
+							Complete trade with selected player
+						</button>
+					</div>
 				) : null}
 			</div>
 		</div>

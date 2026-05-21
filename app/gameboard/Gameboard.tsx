@@ -48,6 +48,11 @@ import {
 	rememberRoadsInCache,
 } from "./roads";
 import {
+	calculateWonResources,
+	resolveDevelopmentCards,
+	shouldDelayDiscardModal,
+} from "./stateHelpers";
+import {
 	type BoardGetDTO,
 	type GameAmbienceDTO,
 	type GameChatMessageDTO,
@@ -82,14 +87,6 @@ const createEmptyTradeResources = (): Resources => ({
 	wool: 0,
 	wheat: 0,
 	ore: 0,
-});
-
-const calculateWonResources = (before: Resources, after: Resources): Resources => ({
-	wood: Math.max(0, after.wood - before.wood),
-	brick: Math.max(0, after.brick - before.brick),
-	wool: Math.max(0, after.wool - before.wool),
-	wheat: Math.max(0, after.wheat - before.wheat),
-	ore: Math.max(0, after.ore - before.ore),
 });
 
 const findGainedResource = (before: Resources, after: Resources): ResourceType | null =>
@@ -245,6 +242,7 @@ export default function Gameboard() {
 	const [currentPlayerMustDiscardFromServer, setCurrentPlayerMustDiscardFromServer] = useState<boolean | null>(null);
 	const syncedChatMessageCountRef = useRef<number>(0);
 	const syncedEventLogsRef = useRef<Set<string>>(new Set());
+	const processedTradeEventsRef = useRef<Set<string>>(new Set());
 	const roadCacheRef = useRef<Map<number, Set<string>>>(new Map());
 	const botActionInFlightRef = useRef(false);
 	const [bankResourcesState, setBankResourcesState] = useState(bankResources);
@@ -260,6 +258,7 @@ export default function Gameboard() {
 	const latestStateRef = useRef<GameState>(state);
 	const sessionUserIdRef = useRef<string>(sessionUserId);
 	const sessionUsernameRef = useRef<string>(sessionUsername);
+	const lastDevelopmentCardPlayAtRef = useRef<number>(0);
 	const ports = Array.isArray(state.ports) ? state.ports : [];
 	latestStateRef.current = state;
 	sessionUserIdRef.current = sessionUserId;
@@ -338,6 +337,12 @@ export default function Gameboard() {
 	const mapServerPlayersToStatePlayers = (serverPlayers: PlayerGetDTO[], previousPlayers: Player[]): Player[] =>
 		serverPlayers.map((serverPlayer, index) => {
 			const previousPlayer = previousPlayers.find((p) => p.id === serverPlayer.id);
+			const expectingAuthoritativeEmpty = Date.now() - lastDevelopmentCardPlayAtRef.current < 8000;
+			const parsedCurrentSessionUserId = Number.parseInt(sessionUserIdRef.current ?? "", 10);
+			const hasCurrentSessionUserId = Number.isFinite(parsedCurrentSessionUserId);
+			const isLocalServerPlayer =
+				(hasCurrentSessionUserId && serverPlayer.userId === parsedCurrentSessionUserId)
+				|| serverPlayer.name === sessionUsernameRef.current;
 			const cachedRoads = Array.from(roadCacheRef.current.get(serverPlayer.id) ?? [])
 				.map((entry: unknown) => (typeof entry === "string" ? parseRoadEntry(entry) : entry))
 				.filter((entry: unknown): entry is { hexId: number; edge: number } => entry !== null);
@@ -373,7 +378,14 @@ export default function Gameboard() {
 				color: serverPlayer.color ?? previousPlayer?.color ?? fallbackColorForPlayer(index),
 				resources: mapResourcesFromServer(serverPlayer),
 				victoryPoints: serverPlayer.victoryPoints ?? 0,
-				developmentCards: serverPlayer.developmentCards ?? previousPlayer?.developmentCards ?? [],
+				developmentCards: resolveDevelopmentCards(
+					serverPlayer.developmentCards,
+					previousPlayer?.developmentCards ?? [],
+					{
+						preserveEmptyServerCards: isLocalServerPlayer,
+						expectingAuthoritativeEmpty,
+					}
+				),
 				knightsPlayed: serverPlayer.knightsPlayed ?? previousPlayer?.knightsPlayed ?? 0,
 				developmentCardVictoryPoints: serverPlayer.developmentCardVictoryPoints ?? previousPlayer?.developmentCardVictoryPoints ?? 0,
 				freeRoadBuildsRemaining: serverPlayer.freeRoadBuildsRemaining ?? previousPlayer?.freeRoadBuildsRemaining ?? 0,
@@ -387,6 +399,7 @@ export default function Gameboard() {
 
 	const applyGameDtoToState = (gameDto: GameGetDTO): void => {
 		const serverPlayers = Array.isArray(gameDto.players) ? gameDto.players : [];
+		showNewDiceRollFromGameDto(gameDto, serverPlayers);
 		if (gameDto.bankResources) {
 			setBankResourcesState(gameDto.bankResources as Resources);
 		}
@@ -413,6 +426,7 @@ export default function Gameboard() {
 				developmentDeck: gameDto.developmentDeck ?? previousState.developmentDeck,
 			};
 		});
+		refreshResourceSnapshot(serverPlayers);
 		setWinnerPlayerName(gameDto?.winner?.name ?? null);
 		setIsGameFinished(Boolean(gameDto?.gameFinished) || Boolean(gameDto?.finishedAt));
 	};
@@ -439,6 +453,79 @@ export default function Gameboard() {
 			setStolenResourcePopup(null);
 			stolenResourcePopupTimeoutRef.current = null;
 		}, 2600);
+	};
+
+	const refreshResourceSnapshot = (serverPlayers: PlayerGetDTO[]): void => {
+		serverPlayers.forEach((player) => {
+			previousResourcesRef.current.set(player.id, mapResourcesFromServer(player));
+		});
+	};
+
+	const showNewDiceRollFromGameDto = (gameDto: GameGetDTO, serverPlayers: PlayerGetDTO[]): void => {
+		const nextDiceRolledAt = gameDto?.diceRolledAt ?? null;
+		const nextDiceValue = typeof gameDto?.diceValue === "number" ? gameDto.diceValue : null;
+		if (
+			nextDiceRolledAt === null
+			|| nextDiceRolledAt === lastDiceRolledAtRef.current
+			|| nextDiceValue === null
+		) {
+			return;
+		}
+
+		lastDiceRolledAtRef.current = nextDiceRolledAt;
+		const previousLocalPlayer = findLocalStatePlayer(
+			latestStateRef.current.players,
+			sessionUserIdRef.current,
+			sessionUsernameRef.current
+		);
+		const nextLocalPlayer = findMatchingServerPlayer(
+			serverPlayers,
+			previousLocalPlayer,
+			sessionUserIdRef.current,
+			sessionUsernameRef.current
+		);
+
+		if (previousLocalPlayer && nextLocalPlayer) {
+			const previousResources =
+				previousResourcesRef.current.get(previousLocalPlayer.id) ??
+				previousLocalPlayer.resources;
+			const nextResources = mapResourcesFromServer(nextLocalPlayer);
+			setDiceWonResources(calculateWonResources(previousResources, nextResources) as Resources);
+		} else {
+			setDiceWonResources(createEmptyTradeResources());
+		}
+
+		showDiceResultPopup(nextDiceValue);
+	};
+	const showNewDiceRollFromGameDtoRef = useRef(showNewDiceRollFromGameDto);
+	showNewDiceRollFromGameDtoRef.current = showNewDiceRollFromGameDto;
+
+	const getTradeEventKey = (event: GameEventDTO): string | null => {
+		if (event.type !== "PLAYER_TRADE" && (event.type as string) !== "PLAYER_TRADE_FINALIZE") {
+			return null;
+		}
+
+		return [
+			event.type,
+			event.tradeAction ?? "FINALIZE",
+			event.tradeRequestId ?? "no-request-id",
+			event.sourcePlayerId ?? "no-source",
+			event.targetPlayerId ?? "no-target",
+			JSON.stringify(event.giveResources ?? {}),
+			JSON.stringify(event.receiveResources ?? {}),
+		].join("|");
+	};
+
+	const applyTradeGameEventOnce = (event: GameEventDTO): void => {
+		const key = getTradeEventKey(event);
+		if (!key) {
+			return;
+		}
+		if (processedTradeEventsRef.current.has(key)) {
+			return;
+		}
+		processedTradeEventsRef.current.add(key);
+		applyGameEventRef.current(event);
 	};
 
 	useEffect(() => {
@@ -557,6 +644,7 @@ export default function Gameboard() {
 
 		syncedChatMessageCountRef.current = 0;
 		syncedEventLogsRef.current = new Set();
+		processedTradeEventsRef.current = new Set();
 		roadCacheRef.current = new Map();
 
 		const readStoredGameId = (): number | null => {
@@ -622,43 +710,7 @@ export default function Gameboard() {
 					lastSeenChatMessageCount = serverChatMessages.length;
 					lastSeenEventLogCount = serverEventLogs.length;
 
-					const nextDiceRolledAt = gameDto?.diceRolledAt ?? null;
-					const nextDiceValue = typeof gameDto?.diceValue === "number" ? gameDto.diceValue : null;
-
-					const isNewDiceRoll =
-						nextDiceRolledAt !== null &&
-						nextDiceRolledAt !== lastDiceRolledAtRef.current &&
-						nextDiceValue !== null;
-
-					if (isNewDiceRoll) {
-						lastDiceRolledAtRef.current = nextDiceRolledAt;
-
-						const previousLocalPlayer = findLocalStatePlayer(
-							latestStateRef.current.players,
-							sessionUserIdRef.current,
-							sessionUsernameRef.current
-						);
-
-						const nextLocalPlayer = findMatchingServerPlayer(
-							serverPlayers,
-							previousLocalPlayer,
-							sessionUserIdRef.current,
-							sessionUsernameRef.current
-						);
-						if (isNewDiceRoll && previousLocalPlayer && nextLocalPlayer) {
-							const previousResources =
-								previousResourcesRef.current.get(previousLocalPlayer.id) ??
-								previousLocalPlayer.resources;
-
-							const nextResources = mapResourcesFromServer(nextLocalPlayer);
-
-							setDiceWonResources(
-								calculateWonResources(previousResources, nextResources)
-							);
-
-							showDiceResultPopup(nextDiceValue);
-						}
-					}
+					showNewDiceRollFromGameDtoRef.current(gameDto, serverPlayers);
 
 					if (gameDto?.bankResources) {
 						setBankResourcesState(gameDto.bankResources as Resources);
@@ -696,12 +748,7 @@ export default function Gameboard() {
 						diceResult: gameDto?.diceValue ?? previousState.diceResult,
 					}));
 
-					serverPlayers.forEach((player) => {
-						previousResourcesRef.current.set(
-							player.id,
-							mapResourcesFromServer(player)
-						);
-					});
+					refreshResourceSnapshot(serverPlayers);
 
 					const nextTradeRequestedAt = gameDto?.tradeRequestedAt ?? null;
 					if (nextTradeRequestedAt !== null && nextTradeRequestedAt !== lastTradeRequestedAtRef.current) {
@@ -709,7 +756,7 @@ export default function Gameboard() {
 						if (gameDto?.latestTradeRequest) {
 							try {
 								const payload = JSON.parse(gameDto.latestTradeRequest) as GameEventDTO;
-								applyGameEventRef.current(payload);
+								applyTradeGameEventOnce(payload);
 							} catch {
 								// Ignore malformed trade snapshots; eventLog still contains the raw entry.
 							}
@@ -752,6 +799,7 @@ export default function Gameboard() {
 									}
 								}
 								if (structuredEntry && structuredEntry.payload && (structuredEntry.payload.type === "PLAYER_TRADE" || (structuredEntry.payload.type as string) === "PLAYER_TRADE_FINALIZE")) {
+									applyTradeGameEventOnce(structuredEntry.payload);
 									return;
 								}
 
@@ -879,7 +927,7 @@ export default function Gameboard() {
 							const payload = JSON.parse(syncDto.latestTradeRequest) as GameEventDTO;
 
 							// Trigger the event handler to update responses (Accept/Deny) or finalize the UI
-							applyGameEventRef.current(payload);
+							applyTradeGameEventOnce(payload);
 						} catch (e) {
 							console.error("Failed to parse trade request from sync", e);
 						}
@@ -1306,7 +1354,7 @@ export default function Gameboard() {
 			return;
 		}
 
-		const botActionDelayMs = state.turnPhase === "ROLL_DICE" ? 3000 : 500;
+		const botActionDelayMs = state.turnPhase === "ROLL_DICE" ? 0 : 3000;
 		const timeout = window.setTimeout(() => {
 			if (botActionInFlightRef.current) {
 				return;
@@ -2332,6 +2380,16 @@ export default function Gameboard() {
 		const moveRobber =
 			mustMoveRobberFromServer
 			&& !mustDiscard;
+
+		if (shouldDelayDiscardModal({
+			mustDiscard,
+			diceResult: state.diceResult,
+			showDicePopup,
+			dicePopupValue,
+		})) {
+			setDiscardModalOpen(false);
+			return;
+		}
 	
 		setDiscardModalOpen(mustDiscard);
 	
@@ -2342,7 +2400,7 @@ export default function Gameboard() {
 		if (!mustDiscard) {
 			setDiscardChoices({});
 		}
-	}, [state.turnPhase, isMyTurn, myPlayer?.id, myPlayerResourceTotal, mustMoveRobberFromServer, currentPlayerMustDiscardFromServer]);
+	}, [state.turnPhase, state.diceResult, isMyTurn, myPlayer?.id, myPlayerResourceTotal, mustMoveRobberFromServer, currentPlayerMustDiscardFromServer, showDicePopup, dicePopupValue]);
 
 	const isDiscardWaitingPopupVisible =
 		state.turnPhase === "DISCARD"
@@ -2360,9 +2418,13 @@ export default function Gameboard() {
 			}
 			actionPendingRef.current = true;
 			setInitialPlacementWonResources(null);
+			state.players.forEach((player) => {
+				previousResourcesRef.current.set(player.id, player.resources);
+			});
 			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/roll-dice`, withExpectedGameVersion({}));
 			rememberServerGameVersion(gameDto);
 			const serverPlayers = Array.isArray(gameDto.players)? gameDto.players: [];
+			showNewDiceRollFromGameDto(gameDto, serverPlayers);
 		
 			if (typeof gameDto.diceValue === "number") {
 				setState((previousState) => ({
@@ -2379,6 +2441,7 @@ export default function Gameboard() {
 						gameDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
 				}));
 			}
+			refreshResourceSnapshot(serverPlayers);
 		
 			addToLog("Dice rolled.");
 
@@ -2618,6 +2681,29 @@ export default function Gameboard() {
 				setActiveOutgoingTradeRequest(tradeRequest);
 				setActiveOutgoingTradeResponses(pendingResponses);
 				setShowTradeSummaryPopup(true);
+			}
+			(gameDto.eventLog ?? []).forEach((entry) => {
+				const structuredEntry = parseStructuredEventLogEntry(entry);
+				if (
+					structuredEntry?.payload
+					&& structuredEntry.payload.tradeRequestId === tradeRequestId
+					&& (
+						structuredEntry.payload.type === "PLAYER_TRADE"
+						|| (structuredEntry.payload.type as string) === "PLAYER_TRADE_FINALIZE"
+					)
+				) {
+					applyTradeGameEventOnce(structuredEntry.payload);
+				}
+			});
+			if (gameDto.latestTradeRequest) {
+				try {
+					const latestTradeEvent = JSON.parse(gameDto.latestTradeRequest) as GameEventDTO;
+					if (latestTradeEvent.tradeRequestId === tradeRequestId) {
+						applyTradeGameEventOnce(latestTradeEvent);
+					}
+				} catch {
+					// Event log processing above is the primary path for the direct response.
+				}
 			}
 			addToLog(logMessage);
 			setShowTradePopup(false);
@@ -2911,13 +2997,15 @@ export default function Gameboard() {
 						robberHexId: gameDto.robberTileIndex ?? previousState.robberHexId,
 						robberMovedAfterSevenRoll:
 							gameDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
-					};
-				});
+						};
+					});
+				refreshResourceSnapshot(serverPlayers);
 			} else {
 				const eventPayload: GameEventDTO = {
 					type: "DEVELOPMENT_CARD_PLAYED_KNIGHT",
 					...robberPayload,
 				};
+				lastDevelopmentCardPlayAtRef.current = Date.now();
 				const gameDto = await apiService.post<GameGetDTO>(
 					`/games/${activeGameId}/actions/development-card/play-knight`,
 					withExpectedGameVersion(eventPayload as unknown as Record<string, unknown>)
@@ -2940,6 +3028,7 @@ export default function Gameboard() {
 					robberMovedAfterSevenRoll:
 						gameDto.robberMovedAfterSevenRoll ?? previousState.robberMovedAfterSevenRoll,
 				}));
+				refreshResourceSnapshot(serverPlayers);
 			}
 		
 			if (targetPlayer) {
@@ -2984,11 +3073,13 @@ export default function Gameboard() {
 		}
 
 		try {
+			lastDevelopmentCardPlayAtRef.current = Date.now();
 			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/development-card/play-monopoly`, withExpectedGameVersion({
 				sourcePlayerId: myPlayer.id,
 				giveResource: resource, // The backend expects 'giveResource' for the resource to claim
 			}));
 			rememberServerGameVersion(gameDto);
+			applyGameDtoToState(gameDto);
 			addToLog(`${myPlayer.name} played Monopoly (${resource}).`);
 		} catch {
 			addToLog("Could not play Monopoly card. Please try again.");
@@ -3009,12 +3100,14 @@ export default function Gameboard() {
 		}
 
 		try {
+			lastDevelopmentCardPlayAtRef.current = Date.now();
 			const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/development-card/play-year-of-plenty`, withExpectedGameVersion({
 				sourcePlayerId: myPlayer.id,
 				giveResource: resources[0],
 				secondResource: resources[1],
 			}));
 			rememberServerGameVersion(gameDto);
+			applyGameDtoToState(gameDto);
 			addToLog(`${myPlayer.name} played Year of Plenty.`);
 		} catch {
 			addToLog("Could not play Year of Plenty card. Please try again.");
@@ -3083,10 +3176,12 @@ export default function Gameboard() {
 			}
 
 			if (card === "road_building") {
+				lastDevelopmentCardPlayAtRef.current = Date.now();
 				const gameDto = await apiService.post<GameGetDTO>(`/games/${activeGameId}/actions/development-card/play-road-building`, withExpectedGameVersion({
 					sourcePlayerId: myPlayer.id,
 				}));
 				rememberServerGameVersion(gameDto);
+				applyGameDtoToState(gameDto);
 				setPlacementMode("road");
 				addToLog(`${myPlayer.name} played Road Building. Place 2 roads for free.`);
 				return;
