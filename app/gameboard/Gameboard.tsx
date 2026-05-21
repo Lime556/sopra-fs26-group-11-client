@@ -7,7 +7,7 @@ import { useSearchParams } from "next/navigation";
 //import SockJS from "sockjs-client";
 import { useApi } from "@/hooks/useApi";
 import useLocalStorage from "@/hooks/useLocalStorage";
-import { LogOut, Send } from "lucide-react";
+import { AlertTriangle, Send } from "lucide-react";
 import styles from "@/styles/gameboard.module.css";
 import { ApplicationError } from "@/types/error";
 import { BoardColumn } from "./components/BoardColumn";
@@ -97,6 +97,22 @@ const sumResourceCount = (bundle?: Partial<Resources> | null): number =>
 
 const formatResourceCount = (count: number): string =>
 	`${count} resource${count === 1 ? "" : "s"}`;
+
+const cloneResources = (resources: Resources): Resources => ({
+	wood: resources.wood,
+	brick: resources.brick,
+	wool: resources.wool,
+	wheat: resources.wheat,
+	ore: resources.ore,
+});
+
+const snapshotPlayerResources = (players: Player[]): Map<number, Resources> => {
+	const snapshot = new Map<number, Resources>();
+	players.forEach((player) => {
+		snapshot.set(player.id, cloneResources(player.resources));
+	});
+	return snapshot;
+};
 
 const findLocalStatePlayer = (players: Player[], sessionUserId: string, sessionUsername: string): Player | null => {
 	const parsedSessionUserId = Number.parseInt(sessionUserId ?? "", 10);
@@ -217,12 +233,14 @@ export default function Gameboard() {
 	const [activeOutgoingTradeCounteroffers, setActiveOutgoingTradeCounteroffers] = useState<Record<number, CounterOfferData>>({});
 	const [tradeTargetPlayerId, setTradeTargetPlayerId] = useState<number | null>(null);
 	const [chatMessage, setChatMessage] = useState<string>("");
+	const [showReturnToLobbyConfirm, setShowReturnToLobbyConfirm] = useState<boolean>(false);
 	const [winnerPlayerName, setWinnerPlayerName] = useState<string | null>(null);
 	const [isGameFinished, setIsGameFinished] = useState<boolean>(false);
 	const [showDicePopup, setShowDicePopup] = useState<boolean>(false);
 	const [dicePopupValue, setDicePopupValue] = useState<number | null>(null);
 	const [diceWonResources, setDiceWonResources] = useState<Resources | null>(null);
 	const previousResourcesRef = useRef<Map<number, Resources>>(new Map());
+	const diceResourceBaselinesRef = useRef<Map<string, Map<number, Resources>>>(new Map());
 	const [initialPlacementWonResources, setInitialPlacementWonResources] = useState<Resources | null>(null);
 	const [stolenResourcePopup, setStolenResourcePopup] = useState<{ resource: ResourceType; sourceName: string | null; targetName: string | null } | null>(null);
 	const [showMonopolyResourceSelector, setShowMonopolyResourceSelector] = useState<boolean>(false);
@@ -461,6 +479,13 @@ export default function Gameboard() {
 		});
 	};
 
+	const rememberDiceResourceBaseline = (diceRolledAt: string): void => {
+		if (diceResourceBaselinesRef.current.has(diceRolledAt)) {
+			return;
+		}
+		diceResourceBaselinesRef.current.set(diceRolledAt, snapshotPlayerResources(latestStateRef.current.players));
+	};
+
 	const showNewDiceRollFromGameDto = (gameDto: GameGetDTO, serverPlayers: PlayerGetDTO[]): void => {
 		const nextDiceRolledAt = gameDto?.diceRolledAt ?? null;
 		const nextDiceValue = typeof gameDto?.diceValue === "number" ? gameDto.diceValue : null;
@@ -473,6 +498,7 @@ export default function Gameboard() {
 		}
 
 		lastDiceRolledAtRef.current = nextDiceRolledAt;
+		rememberDiceResourceBaseline(nextDiceRolledAt);
 		const previousLocalPlayer = findLocalStatePlayer(
 			latestStateRef.current.players,
 			sessionUserIdRef.current,
@@ -486,7 +512,9 @@ export default function Gameboard() {
 		);
 
 		if (previousLocalPlayer && nextLocalPlayer) {
+			const diceBaseline = diceResourceBaselinesRef.current.get(nextDiceRolledAt);
 			const previousResources =
+				diceBaseline?.get(previousLocalPlayer.id) ??
 				previousResourcesRef.current.get(previousLocalPlayer.id) ??
 				previousLocalPlayer.resources;
 			const nextResources = mapResourcesFromServer(nextLocalPlayer);
@@ -495,6 +523,12 @@ export default function Gameboard() {
 			setDiceWonResources(createEmptyTradeResources());
 		}
 
+		if (diceResourceBaselinesRef.current.size > 4) {
+			const oldestKey = diceResourceBaselinesRef.current.keys().next().value;
+			if (oldestKey) {
+				diceResourceBaselinesRef.current.delete(oldestKey);
+			}
+		}
 		showDiceResultPopup(nextDiceValue);
 	};
 	const showNewDiceRollFromGameDtoRef = useRef(showNewDiceRollFromGameDto);
@@ -907,6 +941,7 @@ export default function Gameboard() {
 					&& nextDiceRolledAt !== lastDiceRolledAtRef.current
 					&& nextDiceValue !== null
 				) {
+					rememberDiceResourceBaseline(nextDiceRolledAt);
 					setState((previousState) => ({
 						...previousState,
 						diceResult: nextDiceValue,
@@ -3997,13 +4032,46 @@ export default function Gameboard() {
 							<Send size={16} />
 						</button>
 					</div>
-					<button className={styles.leaveButton} onClick={() => router.push("/lobby")}>
-						<LogOut size={16} />
-						<span>Leave Lobby</span>
+					<button
+						type="button"
+						className={styles.leaveButton}
+						onClick={() => setShowReturnToLobbyConfirm(true)}
+					>
+						<AlertTriangle size={18} />
+						<span>Return to Lobby</span>
 					</button>
 				</section>
 			</aside>
 			</div>
+			{showReturnToLobbyConfirm ? (
+				<div className={styles.modalOverlay} role="dialog" aria-modal="true" aria-label="Return to lobby confirmation">
+					<div className={styles.returnLobbyDialog}>
+						<div className={styles.returnLobbyIcon} aria-hidden="true">
+							<AlertTriangle size={30} />
+						</div>
+						<h2 className={styles.returnLobbyTitle}>Return to Lobby?</h2>
+						<p className={styles.returnLobbyText}>
+							You will leave the current game view and go back to the lobby.
+						</p>
+						<div className={styles.returnLobbyActions}>
+							<button
+								type="button"
+								className={styles.returnLobbyCancelButton}
+								onClick={() => setShowReturnToLobbyConfirm(false)}
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								className={styles.returnLobbyConfirmButton}
+								onClick={() => router.push("/lobby")}
+							>
+								Return to Lobby
+							</button>
+						</div>
+					</div>
+				</div>
+			) : null}
 		</>
 	);
 }
