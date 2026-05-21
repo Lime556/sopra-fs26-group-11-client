@@ -3905,6 +3905,7 @@ export default function Gameboard() {
 					<ul className={styles.playerList}>
 						{state.players.map((player) => {
 							const playerIsMe = myPlayer?.id === player.id;
+							const publicVictoryPoints = player.victoryPoints - player.developmentCardVictoryPoints;
 
 							return (
 								<li
@@ -3921,7 +3922,9 @@ export default function Gameboard() {
 												{player.online === false ? "Offline" : "Online"}
 											</span>
 										</div>
-										<span className={styles.playerVpBadge}>{player.victoryPoints}</span>
+										<span className={styles.playerVpBadge}>
+											{playerIsMe ? `(${player.victoryPoints}) ${publicVictoryPoints}` : publicVictoryPoints}
+										</span>
 									</div>
 
 									<div className={styles.playerStatsGrid}>
