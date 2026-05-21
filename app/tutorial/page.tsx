@@ -7,7 +7,7 @@ import { BoardColumn } from "../gameboard/components/BoardColumn";
 import { TradeModal } from "../gameboard/components/TradeModal";
 import { bankResources, boardCoordinatesById } from "../gameboard/constants";
 import { findDesertHexId, createInitialGameState } from "../gameboard/mappers";
-import { type GameState, type HexTile, type PortVisual, type Player, type Resources } from "../gameboard/types";
+import { type GameAmbienceDTO, type GameState, type HexTile, type PortVisual, type Player, type Resources } from "../gameboard/types";
 import { createCanonicalEdgeKey, getCornerPoint, toPixel } from "../gameboard/geometry";
 import { LogOut, Send } from "lucide-react";
 import { TutorialOverlay } from "../tutorial/TutorialOverlay";
@@ -123,10 +123,10 @@ const tutorialPlayer: Player = {
     wheat: 2,
     ore: 1,
   },
-  victoryPoints: 2,
-  developmentCards: ["knight"],
+  victoryPoints: 3,
+  developmentCards: ["knight", "victory_point", "road_building", "year_of_plenty", "monopoly"],
   knightsPlayed: 0,
-  developmentCardVictoryPoints: 0,
+  developmentCardVictoryPoints: 1,
   freeRoadBuildsRemaining: 0,
   settlementsOnCorners: [{ hexId: 6, corner: 2 }],
   citiesOnCorners: [{ hexId: 15, corner: 5 }],
@@ -183,6 +183,7 @@ export default function TutorialPage() {
   const currentTutorialStep = tutorialSteps[currentTutorialStepIndex];
   const shouldShowDevelopmentCards = currentTutorialStep?.id === "development-cards";
   const shouldShowTradeModal = currentTutorialStep?.id === "trading";
+  const publicVictoryPoints = tutorialPlayer.victoryPoints - tutorialPlayer.developmentCardVictoryPoints;
 
   const noop = () => {
     // Tutorial board is static in this mode.
@@ -221,6 +222,57 @@ export default function TutorialPage() {
     });
   }, [hexById]);
 
+  const ambienceEmojiByWeather: Record<GameAmbienceDTO["weather"], string> = {
+    SUNNY: "☀️",
+    CLOUDY: "☁️",
+    RAINY: "🌧️",
+    LIGHTNING: "⚡",
+    SNOWING: "❄️",
+    FOGGY: "🌫️",
+    UNKNOWN: "🌙",
+  };
+
+  const ambienceLabelByTimeOfDay: Record<GameAmbienceDTO["timeOfDay"], string> = {
+    SUNRISE: "Sunrise",
+    DAY: "Day",
+    SUNSET: "Sunset",
+    NIGHT: "Night",
+    UNKNOWN: "Ambience",
+  };
+
+  const isClearNight = (ambience: GameAmbienceDTO): boolean =>
+    ambience.weather === "SUNNY" && ambience.timeOfDay === "NIGHT";
+
+  const getAmbienceIcon = (ambience: GameAmbienceDTO): string =>
+    isClearNight(ambience) ? "🌙" : ambienceEmojiByWeather[ambience.weather];
+
+  const getAmbienceLabel = (ambience: GameAmbienceDTO): string => {
+    if (isClearNight(ambience)) {
+      return "Clear night";
+    }
+    if (ambience.weather === "LIGHTNING" && ambience.timeOfDay === "NIGHT") {
+      return "Stormy night";
+    }
+    return ambienceLabelByTimeOfDay[ambience.timeOfDay];
+  };
+
+  const [displayedAmbience] = useState<GameAmbienceDTO>({
+      weather: "SUNNY",
+      timeOfDay: "DAY",
+      description: "Bright tutorial weather",
+    });
+  const [ambienceEffectsEnabled, setAmbienceEffectsEnabled] = useState(true);
+  const [botAiEnabled, setBotAiEnabled] = useState(false);
+  const [botAiFeedback, setBotAiFeedback] = useState<"fallback" | "consultant" | null>(null);
+
+  const toggleAmbienceEffects = (): void => {
+    setAmbienceEffectsEnabled((previous) => !previous);
+  };
+
+  const toggleBotAi = (): void => {
+    setBotAiEnabled((previous) => !previous);
+  };
+
   return (
     <div className={`${styles.layout} ${styles.tutorialLayout}`}>
     <div className={styles.tutorialBoardArea} data-tutorial="board">
@@ -257,10 +309,50 @@ export default function TutorialPage() {
         handleEndTurn={noop}
         mustMoveRobberBeforeEndTurn={false}
         tutorialMode={true}
+        ambience={displayedAmbience}
+        weatherEffectsEnabled={ambienceEffectsEnabled}
       />
       </div>
 
       <aside className={styles.rightPanel}>
+        {displayedAmbience ? (
+          <section className={styles.ambiencePanel} aria-label={displayedAmbience.description} data-tutorial="ambience-panel" >
+            <div className={styles.ambienceSummary}>
+              <span className={styles.ambienceEmoji}>{getAmbienceIcon(displayedAmbience)}</span>
+              <span className={styles.ambienceText}>{getAmbienceLabel(displayedAmbience)}</span>
+            </div>
+            <button type="button" className={styles.ambienceToggleButton} onClick={toggleAmbienceEffects}>
+              Effects: {ambienceEffectsEnabled ? "On" : "Off"}
+            </button>
+          </section>
+        ) : null}
+        <section
+          className={`${styles.botAiPanel} ${
+            botAiFeedback === "fallback"
+              ? styles.botAiPanelFallback
+              : botAiFeedback === "consultant"
+                ? styles.botAiPanelConsultant
+                : ""
+          }`}
+          aria-label="Bot AI settings"
+          data-tutorial="bot-ai-panel"
+        >
+          <div className={styles.botAiSummary}>
+            <span className={styles.botAiLabel}>Bot AI</span>
+            <span className={styles.botAiDescription}>
+              {botAiFeedback === "fallback"
+                ? "Server fallback used"
+                : botAiFeedback === "consultant"
+                  ? "AI consultant used"
+                  : botAiEnabled
+                    ? "Hugging Face enabled"
+                    : "Deterministic fallback"}
+            </span>
+          </div>
+          <button type="button" className={styles.botAiToggleButton} onClick={toggleBotAi}>
+            {botAiEnabled ? "On" : "Off"}
+          </button>
+        </section>
         <section className={styles.sidebarCard} data-tutorial="players-panel">
           <h2 className={styles.panelTitle}>Players</h2>
           <ul className={styles.playerList}>
@@ -272,7 +364,7 @@ export default function TutorialPage() {
                   <span className={styles.meBadge}>Me</span>
                   <span className={`${styles.statusBadge} ${styles.onlineBadge}`}>Online</span>
                 </div>
-                <span className={styles.playerVpBadge}>{tutorialPlayer.victoryPoints}</span>
+                <span className={styles.playerVpBadge}> {`(${tutorialPlayer.victoryPoints}) ${publicVictoryPoints}` } </span>
               </div>
 
               <div className={styles.playerStatsGrid}>
