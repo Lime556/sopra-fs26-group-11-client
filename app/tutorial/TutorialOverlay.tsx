@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import styles from "@/styles/gameboard.module.css";
 import { tutorialSteps } from "./tutorialSteps";
 
 type Props = {
+  currentStepIndex: number;
+  onStepChange: (stepIndex: number) => void;
   onClose: () => void;
 };
 
@@ -12,13 +14,12 @@ const TOOLTIP_WIDTH = 340;
 const TOOLTIP_HEIGHT = 260;
 const VIEWPORT_PADDING = 24;
 
-export function TutorialOverlay({ onClose }: Props) {
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+export function TutorialOverlay({ currentStepIndex, onStepChange, onClose }: Props) {
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
 
   const step = tutorialSteps[currentStepIndex];
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!step.target) {
       setTargetRect(null);
       return;
@@ -34,7 +35,7 @@ export function TutorialOverlay({ onClose }: Props) {
     }
 
     element.scrollIntoView({
-      behavior: "smooth",
+      behavior: "auto",
       block: "center",
     });
 
@@ -42,14 +43,14 @@ export function TutorialOverlay({ onClose }: Props) {
       setTargetRect(element.getBoundingClientRect());
     };
 
-    // Wait for smooth scrolling to mostly finish
-    const timeout = setTimeout(updateRect, 450);
+    updateRect();
+    const animationFrame = window.requestAnimationFrame(updateRect);
 
     // Keep aligned on resize
     window.addEventListener("resize", updateRect);
 
     return () => {
-      clearTimeout(timeout);
+      window.cancelAnimationFrame(animationFrame);
       window.removeEventListener("resize", updateRect);
     };
   }, [step.target]);
@@ -105,11 +106,11 @@ export function TutorialOverlay({ onClose }: Props) {
       return;
     }
 
-    setCurrentStepIndex((prev) => prev + 1);
+    onStepChange(currentStepIndex + 1);
   };
 
   const goBack = () => {
-    setCurrentStepIndex((prev) => Math.max(0, prev - 1));
+    onStepChange(Math.max(0, currentStepIndex - 1));
   };
 
   return (

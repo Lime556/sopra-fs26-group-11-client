@@ -52,6 +52,7 @@ interface BoardColumnProps {
 	handleEndTurn: () => void;
 	mustMoveRobberBeforeEndTurn: boolean;
 	tutorialMode?: boolean;
+	developmentCardsTutorialTarget?: string;
 	ambience?: GameAmbienceDTO | null;
 	weatherEffectsEnabled?: boolean;
 }
@@ -105,6 +106,7 @@ export function BoardColumn({
 	handleBuildCityAction,
 	handleEndTurn,
 	mustMoveRobberBeforeEndTurn,
+	developmentCardsTutorialTarget,
 	ambience,
 	weatherEffectsEnabled = true,
 	tutorialMode = false,
@@ -659,7 +661,7 @@ export function BoardColumn({
 					</div>
 
 					{(isDevCardPlayMode || showDevelopmentCardsPreview) && developmentCards.length > 0 ? (
-						<div className={styles.devCardActionPanel}>
+						<div className={styles.devCardActionPanel} data-tutorial={developmentCardsTutorialTarget}>
 							<div className={styles.devCardActionTitle}>Development Cards</div>
 							<div className={styles.devCardActionList}>
 								{developmentCards.map((card, index) => {

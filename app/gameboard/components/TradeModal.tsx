@@ -23,6 +23,7 @@ interface TradeModalProps {
 	onAdjustBankReceiveResource: (resource: ResourceType, delta: number) => void;
 	onBankTrade: () => void;
 	onPlayerTrade: () => void;
+	tutorialTarget?: string;
 }
 
 export function TradeModal({
@@ -45,6 +46,7 @@ export function TradeModal({
 	onAdjustBankReceiveResource,
 	onBankTrade,
 	onPlayerTrade,
+	tutorialTarget,
 }: TradeModalProps) {
 	if (!isVisible) {
 		return null;
@@ -181,7 +183,7 @@ export function TradeModal({
 
 	return (
 		<div className={styles.modalOverlay}>
-			<div className={styles.tradeModal}>
+			<div className={styles.tradeModal} data-tutorial={tutorialTarget}>
 				<div className={styles.tradeModalHeader}>
 					<h2 className={styles.tradeModalTitle}>Trade</h2>
 					<button type="button" className={styles.tradeCloseButton} onClick={onClose}>✕</button>

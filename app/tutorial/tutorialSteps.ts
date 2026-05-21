@@ -55,6 +55,7 @@ export const tutorialSteps: TutorialStep[] = [
   },
   {
     id: "development-cards",
+    target: "development-cards-panel",
     title: "Development Cards",
     description:
       "• Knight: Move the robber and steal 1 random resource from a player next to the robber’s new hex.\n • Victory Point: Gives you 1 victory point.\n• Road Building: Place 2 free roads.\n• Year of Plenty: Take 2 resource cards from the bank.\n• Monopoly: Choose a resource type and take all cards of that type from the other players.\nDevelopment cards appear with different frequencies.",
@@ -68,6 +69,7 @@ export const tutorialSteps: TutorialStep[] = [
   },
   {
     id: "trading",
+    target: "trade-modal",
     title: "Trading",
     description:
       "Players can trade with others or with the bank to gain needed resources. The standard bank trade ratio is 4:1, but if you have a settlement or city on a port, you can trade at a better ratio for that resource type.",
