@@ -249,7 +249,7 @@ reason).
 | | 19.05.| https://github.com/Lime556/sopra-fs26-group-11-client/commit/5b13a19c624bea7767b40f9e34d68e9040507cec | Update readme to the required standard #162 | to have a standard readme is crutial for the sucess of this cours project. |
 | | 21.05. | https://github.com/Lime556/sopra-fs26-group-11-server/commit/6697e2e0eb19377dca10c0ddf8ae2a03a4d2e63d | Randomizing the port spawn #98| Having different boards with different boards make the game not solvable and fun.|
 | | 21.05. | https://github.com/Lime556/sopra-fs26-group-11-client/commit/99bc9edad68f9db53f001e4a13c4b7dd77c23c71 | Randomizing the port spawn #36 | Having different boards with different boards make the game not solvable and fun.|
-| | 21.05. | https://github.com/Lime556/sopra-fs26-group-11-client/pull/186/changes/15d5ee1c211193c32c3f7428bbc45fc71656f8a1 | Fixing dice ressource popup | Polling updated the display when not wanted and the distributed ressources display got empty to fast|
+| | 21.05. | https://github.com/Lime556/sopra-fs26-group-11-client/pull/186/changes/15d5ee1c211193c32c3f7428bbc45fc71656f8a1 | Fixing dice ressource popup #33| Polling updated the display when not wanted and the distributed ressources display got empty to fast|
 | **[@githubUser3]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
 |                    | [date]   | [Link to Commit 2] | [Brief description of the task] | [Why this contribution is relevant] |
 | **[@githubUser4]** | [date]   | [Link to Commit 1] | [Brief description of the task] | [Why this contribution is relevant] |
